@@ -13,9 +13,7 @@ const config = {
     container: {
       center: true,
       padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+    
     },
     extend: {
       colors: {
@@ -24,6 +22,14 @@ const config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        screens: {
+          xs: "320px",
+          sm: "320px",
+          md: "640px",
+          lg: "768px",
+          xl: "1024px",
+          "2xl": "1536px",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
