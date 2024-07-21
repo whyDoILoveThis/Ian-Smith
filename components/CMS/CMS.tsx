@@ -4,6 +4,11 @@ import { fbUploadImage } from "@/firebase/fbUploadImage";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { fbGetHeader } from "@/firebase/fbGetHeader";
+import Header from "../main/Header";
+import { SignOutButton } from "@clerk/nextjs";
+import { ProgressBar } from "react-loader-spinner";
+import { Button } from "../ui/button";
+import { useToast } from "@/components/ui/use-toast";
 
 const CMS = () => {
   const [image, setImage] = useState<File | null>(null); // State for file upload
@@ -11,6 +16,8 @@ const CMS = () => {
   const [headerObj, setHeaderObj] = useState<Header | null>();
   const [header, setHeader] = useState("");
   const [tagline, setTagline] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     const getHeader = async () => {
@@ -44,6 +51,7 @@ const CMS = () => {
   };
 
   const handleSubmit = async () => {
+    setLoading(true);
     if (image) {
       try {
         // Upload image to Firebase Storage
@@ -53,24 +61,35 @@ const CMS = () => {
           tagline,
           imageUrl: tempImageUrl,
         });
+        toast({
+          variant: "success",
+          title: "Success!!🎉",
+          description: "Your header section has been updated!😁",
+        });
       } catch (err) {
         console.log(err);
       }
+    } else if (imageUrl !== "") {
+      fbUpdateHeader({
+        header,
+        tagline,
+        imageUrl,
+      });
+      toast({
+        variant: "success",
+        title: "Success!!🎉",
+        description: "Your header section has been updated!😁",
+      });
     }
+    setLoading(false);
   };
+
+  console.log("header", header);
 
   return (
     <div>
       <h2 className="text-2xl">Header</h2>
-      <article className=" sm:flex sm:flex-col sm:items-center md:flex items-center ">
-        {imageUrl && (
-          <Image width={250} height={250} src={imageUrl} alt="adsfa" />
-        )}
-        <div>
-          <h1 className="text-3xl text-nowrap">{header}</h1>
-          <p>{tagline}</p>
-        </div>
-      </article>
+      <Header cmsImageUrl={imageUrl} cmsHeader={header} cmsTagline={tagline} />
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -111,10 +130,26 @@ const CMS = () => {
             value={tagline}
           />
         </div>
-        <button className="btn place-self-end" type="submit">
-          Update Header
-        </button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="btn place-self-end"
+          type="submit"
+        >
+          {loading ? (
+            <ProgressBar
+              height="27"
+              width="80"
+              borderColor="#82828274"
+              barColor="#82828274"
+              ariaLabel="progress-bar-loading"
+            />
+          ) : (
+            "Update Header"
+          )}
+        </Button>
       </form>
+      <SignOutButton />
     </div>
   );
 };

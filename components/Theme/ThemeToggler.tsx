@@ -19,7 +19,7 @@ export function ThemeToggler() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          className="focus:outline-none w-9 h-9 rounded-full"
+          className="focus-visible:ring-0 focus-visible:ring-transparent focus-visible:ring-offset-0 focus:outline-none w-9 h-9 rounded-full"
           variant="outline"
           size="sm"
         >

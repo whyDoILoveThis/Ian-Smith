@@ -9,6 +9,7 @@ import {
   SignInButton,
   SignOutButton,
 } from "@clerk/nextjs";
+import { Toaster } from "@/components/ui/toaster";
 import Nav from "@/components/main/Nav";
 import CMS from "@/components/CMS/CMS";
 
@@ -25,20 +26,38 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <main className="mt-16 flex flex-col items-center">
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <Nav />
-            {children}
-          </ThemeProvider>
-        </main>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body className={inter.className}>
+          <SignedIn>
+            <main className="mt-16 flex flex-col items-center">
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="system"
+                enableSystem
+                disableTransitionOnChange
+              >
+                <Nav />
+                <CMS />
+                <Toaster />
+              </ThemeProvider>
+            </main>
+          </SignedIn>
+          <SignedOut>
+            <main className="mt-16 flex flex-col items-center">
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="system"
+                enableSystem
+                disableTransitionOnChange
+              >
+                <Nav />
+                {children}
+              </ThemeProvider>
+            </main>
+          </SignedOut>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
