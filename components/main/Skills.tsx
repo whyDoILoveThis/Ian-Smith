@@ -1,24 +1,65 @@
-import React from "react";
-import mongo from "../../images/icon--mongodb.png";
-import firebase from "../../images/icon--firebase.png";
-import appwrite from "../../images/icon--appwrite.png";
-import react from "../../images/icon--react.png";
+"use client";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebaseConfig";
+import { AiOutlineShrink } from "react-icons/ai";
 
 const Skills = () => {
-  const images = [mongo, firebase, appwrite, react];
+  const [skills, setSkills] = useState<any[]>([]);
+  const [myIndex, setMyIndex] = useState(-99);
+  const [isSelected, setIsSelected] = useState(false);
+
+  useEffect(() => {
+    const fetchSkills = async () => {
+      const querySnapshot = await getDocs(collection(db, "skills"));
+      const skillsList = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setSkills(skillsList);
+    };
+
+    fetchSkills();
+  }, []);
+
   return (
-    <article>
-      <h2 className="text-center text-2xl font-bold mb-1">My Skills</h2>
-      <div className="flex gap-2 bg-black dark:bg-white dark:bg-opacity-10 bg-opacity-10 p-2 rounded-full">
-        {images.map((img, index) => (
-          <div
-            className="cursor-pointer flex items-center bg-black dark:bg-white dark:bg-opacity-15 bg-opacity-15 rounded-full p-2"
-            key={index}
-          >
-            <Image width={25} height={25} src={img} alt={"dffsd"} />
-          </div>
-        ))}
+    <article className="flex flex-col items-center">
+      <div className="w-fit">
+        <h2 className="text-center text-2xl font-bold mb-4 mt-10">My Skills</h2>
+        <ul className="relative flex gap-2 bg-black dark:bg-white dark:bg-opacity-10 bg-opacity-10 p-2 rounded-full">
+          {isSelected && (
+            <button
+              onClick={() => {
+                setIsSelected(false);
+                setMyIndex(-99);
+              }}
+              className="absolute -top-2 -right-2 font-bold cursor-pointer bg-black dark:bg-white dark:bg-opacity-15 bg-opacity-15 rounded-full w-fit h-fit"
+            >
+              <AiOutlineShrink />
+            </button>
+          )}
+          {skills.map((skill, index) => {
+            return (
+              <li
+                className="cursor-pointer flex items-center bg-black dark:bg-white dark:bg-opacity-15 bg-opacity-15 rounded-full p-3"
+                key={skill.id}
+                onClick={() => {
+                  setMyIndex(index);
+                  setIsSelected(true);
+                }}
+              >
+                <Image
+                  src={skill.fileURL}
+                  alt={skill.text}
+                  width={25}
+                  height={25}
+                />
+                {index === myIndex && <span>{skill.text}</span>}
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </article>
   );

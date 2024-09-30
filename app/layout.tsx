@@ -38,7 +38,9 @@ export default function RootLayout({
                 disableTransitionOnChange
               >
                 <Nav />
-                <CMS />
+                <div className="max-w-[800px]">
+                  <CMS />
+                </div>
                 <Toaster />
               </ThemeProvider>
             </main>
@@ -52,7 +54,7 @@ export default function RootLayout({
                 disableTransitionOnChange
               >
                 <Nav />
-                {children}
+                <div className="w-full max-w-[800px]">{children}</div>
               </ThemeProvider>
             </main>
           </SignedOut>

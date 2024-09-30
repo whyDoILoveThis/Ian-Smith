@@ -68,6 +68,11 @@
     }
   }
 
+  h1 {
+    @apply
+    text-4xl
+  }
+
   .bg-blur-10 {
     backdrop-filter: blur(10px);
   }
@@ -94,8 +99,16 @@
     px-2
   }
 
+  .btn-red {
+    @apply
+    dark:bg-red-700
+    dark:bg-opacity-50
+    dark:border-red-700
+  }
+
   .input {
     @apply
+    w-full
     bg-transparent
     focus:outline-none 
     p-1 
@@ -106,17 +119,11 @@
     rounded-full
   }
 
-  input[type="file"]::-webkit-file-upload-button  {
-    border: 1px  solid white;
-    @apply
-    rounded-full
-    border-black
-    border-opacity-15
-    
-    dark:border-white
-    dark:border-opacity-30
-  
+
+  .text-outline {
+    text-shadow: 0px 0px 5px black;
   }
+ 
 
  .cl-internal-4x6jej {
     display: none!important;

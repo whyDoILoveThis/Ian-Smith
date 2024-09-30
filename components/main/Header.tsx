@@ -44,11 +44,17 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
   return (
     <article className="col-flex items-center p-4 max-w-[600px] sm:flex sm:justify-center md:flex-row md:items-center ">
       {imageUrl && (
-        <Image width={250} height={250} src={imageUrl} alt="adsfa" />
+        <Image
+          className="rounded-xl"
+          width={220}
+          height={220}
+          src={imageUrl}
+          alt="adsfa"
+        />
       )}
       <div>
         <h1 className="text-3xl text-center text-nowrap">{header}</h1>
-        <p>{tagline}</p>
+        <p className="p-2 px-6">{tagline}</p>
       </div>
     </article>
   );
