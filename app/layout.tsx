@@ -38,9 +38,9 @@ export default function RootLayout({
                 disableTransitionOnChange
               >
                 <Nav />
-                <div className="max-w-[800px]">
-                  <CMS />
-                </div>
+
+                <CMS />
+
                 <Toaster />
               </ThemeProvider>
             </main>

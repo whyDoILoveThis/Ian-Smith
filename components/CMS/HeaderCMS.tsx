@@ -86,7 +86,7 @@ const HeaderCMS = () => {
   console.log("header", header);
 
   return (
-    <div className="col-flex items-center border p-4 rounded-2xl">
+    <div className="col-flex items-center border py-4 rounded-2xl">
       <h1>Header</h1>
       <Header cmsImageUrl={imageUrl} cmsHeader={header} cmsTagline={tagline} />
       <form
@@ -94,7 +94,7 @@ const HeaderCMS = () => {
           e.preventDefault();
           handleSubmit();
         }}
-        className="col-flex gap-2 items-center border rounded-2xl bg-black bg-opacity-10 p-6"
+        className="col-flex mx-4 gap-2 items-center border rounded-2xl bg-black bg-opacity-10 p-6"
       >
         <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
           <label htmlFor="headerImg">Header Img</label>

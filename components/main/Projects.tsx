@@ -40,15 +40,22 @@ const Projects = () => {
   };
 
   return (
-    <article>
-      {projects.map((project, index) => (
-        <ProjectCard
-          key={index}
-          project={project}
-          getSkillIcon={getSkillIcon}
-        />
-      ))}
-    </article>
+    <div>
+      {" "}
+      <article>
+        <h2 className="text-center text-2xl font-bold mb-4 mt-20">
+          My Projects
+        </h2>
+
+        {projects.map((project, index) => (
+          <ProjectCard
+            key={index}
+            project={project}
+            getSkillIcon={getSkillIcon}
+          />
+        ))}
+      </article>
+    </div>
   );
 };
 

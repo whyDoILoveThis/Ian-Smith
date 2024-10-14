@@ -6,7 +6,7 @@ import { SignOutButton } from "@clerk/nextjs";
 
 const CMS = () => {
   return (
-    <article className="p-4">
+    <article className="w-full max-w-[800px] p-4">
       <div className="flex justify-center gap-2">
         <h1 className="text-5xl font-bold text-center mb-4">CMS </h1>
         <SignOutButton />

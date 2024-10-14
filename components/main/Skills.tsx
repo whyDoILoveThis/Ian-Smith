@@ -27,7 +27,7 @@ const Skills = () => {
     <article className="flex flex-col items-center">
       <div className="w-fit">
         <h2 className="text-center text-2xl font-bold mb-4 mt-10">My Skills</h2>
-        <ul className="relative flex gap-2 bg-black dark:bg-white dark:bg-opacity-10 bg-opacity-10 p-2 rounded-full">
+        <ul className="max-w-fit rounded-3xl relative flex flex-wrap gap-2 bg-black dark:bg-white dark:bg-opacity-10 bg-opacity-10 p-2">
           {isSelected && (
             <button
               onClick={() => {
@@ -39,10 +39,14 @@ const Skills = () => {
               <AiOutlineShrink />
             </button>
           )}
+
           {skills.map((skill, index) => {
+            const isMyIndex = index === myIndex;
             return (
               <li
-                className="cursor-pointer flex items-center bg-black dark:bg-white dark:bg-opacity-15 bg-opacity-15 rounded-full p-3"
+                className={`${
+                  !isMyIndex && isSelected && "blur-lg"
+                } cursor-pointer flex items-center w-fit bg-black dark:bg-white dark:bg-opacity-15 bg-opacity-15 rounded-full p-3`}
                 key={skill.id}
                 onClick={() => {
                   setMyIndex(index);
@@ -55,7 +59,7 @@ const Skills = () => {
                   width={25}
                   height={25}
                 />
-                {index === myIndex && <span>{skill.text}</span>}
+                {isMyIndex && <span>{skill.text}</span>}
               </li>
             );
           })}

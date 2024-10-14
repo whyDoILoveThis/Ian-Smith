@@ -106,6 +106,13 @@
     dark:border-red-700
   }
 
+  .btn-grn {
+    @apply
+    dark:bg-green-700
+    dark:bg-opacity-50
+    dark:border-green-700
+  }
+
   .input {
     @apply
     w-full
