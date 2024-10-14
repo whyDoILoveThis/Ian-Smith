@@ -4,6 +4,7 @@ interface Project {
     title: string;
     description: string;
     moreInfo: string;
+    demoUrl: string;
     screenshots: string[];
     stack: string[];
   }

@@ -19,11 +19,15 @@ const ProjectsComponent: React.FC = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [moreInfo, setMoreInfo] = useState("");
-  const [screenshots, setScreenshots] = useState<FileList | null>(null);
+  const [demoUrl, setDemoUrl] = useState("");
+  const [error, setError] = useState<string | null>(null); // To display errors
+
+  const [screenshots, setScreenshots] = useState<File[] | null>(null);
   const [stack, setStack] = useState<string[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
 
   const fetchSkills = async () => {
     const querySnapshot = await getDocs(collection(db, "skills"));
@@ -45,7 +49,34 @@ const ProjectsComponent: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setScreenshots(e.target.files);
+      const files = Array.from(e.target.files); // Convert FileList to an array of files
+      setScreenshots(files); // Set screenshots as an array of files
+
+      const imageUrls: string[] = []; // Array to store base64 strings
+
+      files.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            imageUrls.push(reader.result); // Push base64 string to the array
+            if (imageUrls.length === files.length) {
+              setImageUrls(imageUrls); // Set the array of base64 strings when all files are processed
+            }
+          }
+        };
+        reader.readAsDataURL(file); // Read the file as a Data URL (base64)
+      });
+    }
+  };
+
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const userInput = e.target.value;
+
+    // Ensure that https:// is always present at the start of the URL
+    if (!userInput.startsWith("https://")) {
+      setDemoUrl("https://");
+    } else {
+      setDemoUrl(userInput);
     }
   };
 
@@ -74,6 +105,7 @@ const ProjectsComponent: React.FC = () => {
         title,
         description,
         moreInfo,
+        demoUrl,
         screenshots: screenshotUrls,
         stack,
       };
@@ -103,12 +135,21 @@ const ProjectsComponent: React.FC = () => {
   };
 
   return (
-    <div>
-      <article className="border col-flex items-center gap-3 rounded-2xl m-2 p-2">
-        <h1>Projects Component</h1>
-        <div className="max-w-[300px] col-flex gap-2">
+    <>
+      <article className="w-full border col-flex items-center gap-3 rounded-2xl mb-2 mt-8 p-4">
+        <h1 className="text-center">Projects Component</h1>
+        <div className="col-flex items-center gap-2">
           <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
             <label htmlFor="headerImg">Project Screenshots</label>
+            {imageUrls !== null && (
+              <div className="col-flex gap-2">
+                {imageUrls.map((imageUrl, index) => (
+                  <div key={index}>
+                    <Image width={260} height={50} src={imageUrl} alt={""} />
+                  </div>
+                ))}
+              </div>
+            )}{" "}
             <div className="relative border-2 rounded-xl border-dashed p-2 px-4">
               <input
                 multiple
@@ -122,6 +163,7 @@ const ProjectsComponent: React.FC = () => {
           </div>
           <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
             <label htmlFor="Title">Title</label>
+            <p className=" font-bold">{title && title}</p>
             <input
               className="input"
               type="text"
@@ -132,6 +174,7 @@ const ProjectsComponent: React.FC = () => {
           </div>
           <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
             <label htmlFor="Description">Description</label>
+            <p>{description && description}</p>
             <input
               className="input"
               value={description}
@@ -141,6 +184,8 @@ const ProjectsComponent: React.FC = () => {
           </div>
           <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
             <label htmlFor="More Info">More Info</label>
+            <p>{moreInfo && moreInfo}</p>
+
             <input
               className="input"
               value={moreInfo}
@@ -148,16 +193,40 @@ const ProjectsComponent: React.FC = () => {
               placeholder="More Info"
             />
           </div>
+          <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
+            <label htmlFor="Demo Url">Demo Url</label>
+            <p className="text-sm">{demoUrl && demoUrl}</p>
+            <input
+              className="input"
+              value={demoUrl || " https://"}
+              onChange={handleUrlChange}
+              placeholder="Demo Url"
+            />
+          </div>
           <div className="col-flex w-full gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
             <h2>Select Stack</h2>
             {skills.map((skill) => (
-              <div key={skill.id}>
+              <div
+                className="flex gap-2 border rounded-full w-fit p-2 px-4"
+                key={skill.id}
+              >
                 <input
                   type="checkbox"
                   value={skill.text}
                   onChange={handleStackChange}
                 />{" "}
-                {skill.text}
+                <div className="flex items-center gap-1">
+                  {skill.fileURL && (
+                    <Image
+                      className="h-fit"
+                      width={20}
+                      height={20}
+                      src={skill.fileURL}
+                      alt="left"
+                    />
+                  )}
+                  <p>{skill.text}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -176,7 +245,7 @@ const ProjectsComponent: React.FC = () => {
           />
         ))}
       </article>
-    </div>
+    </>
   );
 };
 

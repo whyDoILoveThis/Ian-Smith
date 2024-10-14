@@ -3,6 +3,7 @@ import Image from "next/image";
 import styles from "../../styles/ProjectCard.module.css";
 import chevron from "../../images/icon--chevron.png";
 import { useState } from "react";
+import { MdModeEditOutline } from "react-icons/md";
 
 interface Props {
   project: Project;
@@ -14,6 +15,7 @@ const ProjectCard = ({ project, getSkillIcon, handleDelete }: Props) => {
   const [currentScreenshot, setCurrentScreenshot] = useState(0);
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [showDeletePop, setShowDeletePop] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const nextScreenshot = () => {
     setCurrentScreenshot((prev) => (prev + 1) % project.screenshots.length);
@@ -57,12 +59,20 @@ const ProjectCard = ({ project, getSkillIcon, handleDelete }: Props) => {
               </div>
             </div>
           )}
-          <button
-            className="btn btn-red font-bold text-red-600 text-outline"
-            onClick={() => setShowDeletePop(true)}
-          >
-            ❌ Delete
-          </button>
+          <div className="flex gap-2 border p-4 pt-2 border-b-0 rounded-t-3xl">
+            <button
+              className="btn btn-red font-bold text-red-600 text-outline"
+              onClick={() => setShowDeletePop(true)}
+            >
+              ❌ Delete
+            </button>
+            <button
+              className="btn flex items-center gap-1 text-slate-300 font-bold text-outline"
+              onClick={() => setShowEdit(true)}
+            >
+              <MdModeEditOutline /> Edit
+            </button>
+          </div>
         </div>
       )}
       <div className={styles.projectWrap}>
@@ -108,11 +118,7 @@ const ProjectCard = ({ project, getSkillIcon, handleDelete }: Props) => {
               {showMoreInfo ? "Hide Info" : "More Info👇"}
             </button>
 
-            <a
-              href="https://its-git-bash.vercel.app"
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href={project.demoUrl} target="_blank" rel="noreferrer">
               <button className={styles.btn}>Demo👀</button>
             </a>
           </div>
