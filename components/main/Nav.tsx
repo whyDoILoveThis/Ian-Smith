@@ -13,7 +13,9 @@ const Nav = () => {
         </Link>
         <Link
           className="hover:underline"
-          href={"http://localhost:3001/user/user_2iqJuHsepKWDsGxo2o6rczQpvYq"}
+          href={
+            "http://its-ians-blog.vercel.app/user/user_2iqJuHsepKWDsGxo2o6rczQpvYq"
+          }
         >
           My Blogs
         </Link>
