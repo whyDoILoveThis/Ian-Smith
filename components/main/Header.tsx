@@ -3,6 +3,9 @@ import React, { useEffect, useState } from "react";
 import image from "../../images/hero--img-wG-Vs64b.png";
 import Image from "next/image";
 import { fbGetHeader } from "@/firebase/fbGetHeader";
+import Link from "next/link";
+import FacebookIcon from "../sub/FacebookIcon";
+import GithubIcon from "../sub/GithubIcon";
 
 interface Props {
   cmsImageUrl?: string;
@@ -42,19 +45,47 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
   console.log("cmsheader", header);
 
   return (
-    <article className="col-flex items-center p-4 max-w-[600px] sm:flex sm:justify-center md:flex-row md:items-center ">
+    <article className="col-flex items-center max-w-[600px] sm:flex sm:justify-center md:flex-row md:items-center md:gap-2">
       {imageUrl && (
-        <Image
-          className="rounded-xl"
-          width={220}
-          height={220}
-          src={imageUrl}
-          alt="adsfa"
-        />
+        <div className="flex items-center gap-1 bg-white md:w-[840px] bg-opacity-10 p-2 pb-8 m-2 rounded-3xl">
+          <div className="bg-white bg-opacity-5 translate-y-4 w-[115px] h-[115px] flex items-center justify-center rounded-full">
+            <Image
+              className="rounded-xl -translate-y-2 translate-x-1"
+              width={80}
+              height={100}
+              src={imageUrl}
+              alt="adsfa"
+            />
+          </div>
+          <div className="translate-y-9 flex flex-col gap-2">
+            <span className="flex flex-col ">
+              <h1 className="text-3xl mt-0.5 text-center font-bold text-nowrap">
+                {header}
+              </h1>
+              <p className="text-sm text-slate-400 self-end">26 years old</p>
+            </span>
+            <span className="flex items-center gap-1">
+              <Link
+                className="text-3xl btn btn-ghost btn-round"
+                href={"https://facebook.com"}
+              >
+                <FacebookIcon />
+              </Link>
+              <Link
+                className="text-[25px] btn btn-ghost btn-round"
+                href={"https://facebook.com"}
+              >
+                <GithubIcon />
+              </Link>
+            </span>
+          </div>
+        </div>
       )}
       <div>
-        <h1 className="text-3xl text-center text-nowrap">{header}</h1>
-        <p className="p-2 px-6">{tagline}</p>
+        <h2 className="text-center mt-2 text-xl font-bold">
+          <span className="text-blue-400">Full-Stack</span> React Developer
+        </h2>
+        <p className="text-slate-200 mt-2">{tagline}</p>
       </div>
     </article>
   );
