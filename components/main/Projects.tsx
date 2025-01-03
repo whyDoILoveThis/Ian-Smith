@@ -5,11 +5,6 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 
 const Projects = () => {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [moreInfo, setMoreInfo] = useState("");
-  const [screenshots, setScreenshots] = useState<FileList | null>(null);
-  const [stack, setStack] = useState<string[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
 
@@ -52,6 +47,7 @@ const Projects = () => {
             key={index}
             project={project}
             getSkillIcon={getSkillIcon}
+            fetchProjects={fetchProjects}
           />
         ))}
       </article>

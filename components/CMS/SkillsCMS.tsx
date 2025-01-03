@@ -76,9 +76,41 @@ const SkillsComponent: React.FC = () => {
   console.log(skills);
 
   return (
-    <div className="mt-8 col-flex items-center border rounded-2xl p-4">
+    <div className="mt-8 col-flex items-center rounded-2xl p-4">
       <h1>Skills</h1>
       <p>For best results, remember to use a perfectly square image.</p>
+      {imageUrl !== "" && (
+        <Image width={50} height={50} src={imageUrl} alt={""} />
+      )}{" "}
+      <div className="p-2 my-2 rounded-2xl col-flex gap-2 items-center max-w-[300px]">
+        <label htmlFor="headerImg">Skill Icon</label>
+        <div className="relative border-2 rounded-xl border-dashed p-2 px-4">
+          <input
+            id="headerImg"
+            className="w-full h-full opacity-0 absolute"
+            onChange={handleFileChange}
+            type="file"
+          />
+          <UploadIcon />
+        </div>{" "}
+        <div>
+          <input
+            className="input"
+            type="text"
+            value={text}
+            onChange={handleTextChange}
+            placeholder="Skill name..."
+          />
+        </div>
+        <Button
+          className="btn"
+          variant="outline"
+          size="sm"
+          onClick={handleSubmit}
+        >
+          Submit
+        </Button>
+      </div>
       <ul className="flex flex-wrap py-2 px-4 gap-2 bg-black dark:bg-white dark:bg-opacity-10 bg-opacity-10 rounded-2xl">
         {skills.map((skill) => (
           <li
@@ -96,39 +128,6 @@ const SkillsComponent: React.FC = () => {
           </li>
         ))}
       </ul>
-      {imageUrl !== "" && (
-        <Image width={50} height={50} src={imageUrl} alt={""} />
-      )}{" "}
-      <div className="border p-2 my-2 rounded-2xl col-flex gap-2 items-center max-w-[300px]">
-        <label htmlFor="headerImg">Skill Icon</label>
-        <div className="relative border-2 rounded-xl border-dashed p-2 px-4">
-          <input
-            id="headerImg"
-            className="w-full h-full opacity-0 absolute"
-            onChange={handleFileChange}
-            type="file"
-          />
-          <UploadIcon />
-        </div>{" "}
-        <div>
-          <label htmlFor="SkillText">Skill Name</label>
-          <input
-            className="input"
-            type="text"
-            value={text}
-            onChange={handleTextChange}
-            placeholder="Enter skill text"
-          />
-        </div>
-        <Button
-          className="btn"
-          variant="outline"
-          size="sm"
-          onClick={handleSubmit}
-        >
-          Submit
-        </Button>
-      </div>
     </div>
   );
 };

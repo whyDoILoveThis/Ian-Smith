@@ -1,6 +1,8 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { db } from "../../lib/firebaseConfig";
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import styles from "../../styles/ProjectCard.module.css";
+import chevron from "../../images/icon--chevron.png";
 import {
   collection,
   addDoc,
@@ -8,26 +10,65 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
-import { uuid } from "uuidv4";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import Image from "next/image";
-import UploadIcon from "../sub/UploadIcon";
+import { db } from "@/lib/firebaseConfig";
 import ProjectCard from "../main/ProjectCard";
-import Loader from "../main/Loader";
+import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
+import UploadIcon from "../sub/UploadIcon";
+import { handleUrlChange } from "@/lib/handleUrlChange";
+import LoaderSpinSmall from "../sub/LoaderSpinSmall";
 
-const ProjectsComponent: React.FC = () => {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [moreInfo, setMoreInfo] = useState("");
-  const [demoUrl, setDemoUrl] = useState("");
-  const [error, setError] = useState<string | null>(null); // To display errors
+const ProjectsCMS = () => {
+  const [newProject, setNewProject] = useState({
+    title: "",
+    description: "",
+    demoUrl: "",
+    stack: [] as string[],
+    screenshots: [] as string[],
+    moreInfo: "",
+  });
 
+  const [currentScreenshot, setCurrentScreenshot] = useState(0);
   const [screenshots, setScreenshots] = useState<File[] | null>(null);
-  const [stack, setStack] = useState<string[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [stack, setStack] = useState<string[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [checkboxStates, setCheckboxStates] = useState(stack.map(() => false));
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [demoUrl, setDemoUrl] = useState("");
+  const formErrMsgs = {
+    titleErr: "Title is required",
+    descErr: "Description is required",
+    screenshotsErr: "Must include atleast 1 screenshot",
+  };
+  const [titleError, setTitleError] = useState(false);
+  const [descrError, setDescError] = useState(false);
+  const [screenshotError, setScreenshotError] = useState(false);
+
+  useEffect(() => {
+    if (screenshots?.length && screenshots?.length > 0) {
+      setScreenshotError(false);
+    }
+  }, [screenshots]);
+
+  useEffect(() => {
+    if (newProject.title !== "") {
+      setTitleError(false);
+    }
+  }, [newProject.title]);
+
+  useEffect(() => {
+    if (newProject.description !== "") {
+      setDescError(false);
+    }
+  }, [newProject.description]);
+
+  const handleCheckboxChange = (index: number) => {
+    setCheckboxStates((prev) =>
+      prev.map((checked, i) => (i === index ? !checked : checked))
+    );
+  };
 
   const fetchSkills = async () => {
     const querySnapshot = await getDocs(collection(db, "skills"));
@@ -47,36 +88,31 @@ const ProjectsComponent: React.FC = () => {
 
   useEffect(() => {}, [projects]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const files = Array.from(e.target.files); // Convert FileList to an array of files
-      setScreenshots(files); // Set screenshots as an array of files
+      const files = Array.from(e.target.files); // Convert FileList to an array
+      console.log("files", files);
 
-      const imageUrls: string[] = []; // Array to store base64 strings
+      setScreenshots(files); // Update screenshots as an array of files
 
-      files.forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === "string") {
-            imageUrls.push(reader.result); // Push base64 string to the array
-            if (imageUrls.length === files.length) {
-              setImageUrls(imageUrls); // Set the array of base64 strings when all files are processed
+      // Convert files to base64 using Promise.all
+      const readFileAsDataURL = (file: File): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === "string") {
+              resolve(reader.result); // Resolve with the base64 string
             }
-          }
-        };
-        reader.readAsDataURL(file); // Read the file as a Data URL (base64)
-      });
-    }
-  };
+          };
+          reader.onerror = reject; // Handle errors
+          reader.readAsDataURL(file); // Read the file
+        });
 
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const userInput = e.target.value;
-
-    // Ensure that https:// is always present at the start of the URL
-    if (!userInput.startsWith("https://")) {
-      setDemoUrl("https://");
-    } else {
-      setDemoUrl(userInput);
+      const imgurls = await Promise.all(
+        files.map((file) => readFileAsDataURL(file))
+      );
+      setImageUrls(imgurls); // Update state after all files are processed
+      console.log("Updated imageUrls:", imgurls);
     }
   };
 
@@ -91,27 +127,50 @@ const ProjectsComponent: React.FC = () => {
 
   const handleSubmit = async () => {
     setIsLoading(true);
+    if (!newProject.title || !newProject.description || !screenshots) {
+      !newProject.title && setTitleError(true);
+      !newProject.description && setDescError(true);
+      !screenshots && setScreenshotError(true);
+      setIsLoading(false);
+      return;
+    }
     if (screenshots) {
       const storage = getStorage();
       const screenshotUrls = await Promise.all(
-        Array.from(screenshots).map(async (file) => {
+        Array.from(screenshots).map(async (file, index) => {
+          setLoadingMessage(`Uploading image ${index}...`);
           const storageRef = ref(storage, `screenshots/${file.name}`);
           await uploadBytes(storageRef, file);
           return getDownloadURL(storageRef);
         })
       );
+      setLoadingMessage("Adding project info...");
 
-      const newProject = {
-        title,
-        description,
-        moreInfo,
-        demoUrl,
+      const theNewProject = {
+        title: newProject.title,
+        description: newProject.description,
+        moreInfo: newProject.moreInfo,
+        demoUrl: newProject.demoUrl,
         screenshots: screenshotUrls,
         stack,
       };
 
-      await addDoc(collection(db, "projects"), newProject);
+      await addDoc(collection(db, "projects"), theNewProject);
       fetchProjects();
+      setNewProject({
+        title: "",
+        description: "",
+        demoUrl: "",
+        stack: [] as string[],
+        screenshots: [] as string[],
+        moreInfo: "",
+      });
+      setScreenshots(null);
+      setImageUrls([]);
+      setStack([]);
+      setDemoUrl("https://");
+      setCheckboxStates(skills.map(() => false));
+      setLoadingMessage("👍 Project Added!");
       setIsLoading(false);
     }
   };
@@ -134,107 +193,184 @@ const ProjectsComponent: React.FC = () => {
     return skill ? skill.fileURL : "";
   };
 
-  return (
-    <>
-      <article className="w-full border col-flex items-center gap-3 rounded-2xl mb-2 mt-8 p-4">
-        <h1 className="text-center">Projects Component</h1>
-        <div className="col-flex items-center gap-2">
-          <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
-            <label htmlFor="headerImg">Project Screenshots</label>
-            {imageUrls !== null && (
-              <div className="col-flex gap-2">
-                {imageUrls.map((imageUrl, index) => (
-                  <div key={index}>
-                    <Image width={260} height={50} src={imageUrl} alt={""} />
-                  </div>
-                ))}
-              </div>
-            )}{" "}
-            <div className="relative border-2 rounded-xl border-dashed p-2 px-4">
-              <input
-                multiple
-                id="headerImg"
-                className="w-full h-full opacity-0 absolute"
-                onChange={handleFileChange}
-                type="file"
-              />
-              <UploadIcon />
-            </div>{" "}
-          </div>
-          <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
-            <label htmlFor="Title">Title</label>
-            <p className=" font-bold">{title && title}</p>
-            <input
-              className="input"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-            />
-          </div>
-          <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
-            <label htmlFor="Description">Description</label>
-            <p>{description && description}</p>
-            <input
-              className="input"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Description"
-            />
-          </div>
-          <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
-            <label htmlFor="More Info">More Info</label>
-            <p>{moreInfo && moreInfo}</p>
+  const handleInputChange = (field: keyof typeof newProject, value: string) => {
+    setNewProject((prev) => ({ ...prev, [field]: value }));
+  };
 
-            <input
-              className="input"
-              value={moreInfo}
-              onChange={(e) => setMoreInfo(e.target.value)}
-              placeholder="More Info"
-            />
-          </div>
-          <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
-            <label htmlFor="Demo Url">Demo Url</label>
-            <p className="text-sm">{demoUrl && demoUrl}</p>
-            <input
-              className="input"
-              value={demoUrl || " https://"}
-              onChange={handleUrlChange}
-              placeholder="Demo Url"
-            />
-          </div>
-          <div className="col-flex w-full gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
-            <h2>Select Stack</h2>
-            {skills.map((skill) => (
-              <div
-                className="flex gap-2 border rounded-full w-fit p-2 px-4"
-                key={skill.id}
-              >
-                <input
-                  type="checkbox"
-                  value={skill.text}
-                  onChange={handleStackChange}
-                />{" "}
-                <div className="flex items-center gap-1">
-                  {skill.fileURL && (
-                    <Image
-                      className="h-fit"
-                      width={20}
-                      height={20}
-                      src={skill.fileURL}
-                      alt="left"
-                    />
-                  )}
-                  <p>{skill.text}</p>
+  useEffect(() => {
+    setNewProject((prev) => ({ ...prev, demoUrl: demoUrl }));
+  }, [demoUrl]);
+
+  const nextScreenshot = () => {
+    setCurrentScreenshot(
+      (prev) => (prev + 1) % (imageUrls.length || 1) // Prevent divide-by-zero
+    );
+  };
+
+  const prevScreenshot = () => {
+    setCurrentScreenshot(
+      (prev) => (prev - 1 + (imageUrls.length || 1)) % (imageUrls.length || 1)
+    );
+  };
+
+  console.log("imageUrls");
+
+  return (
+    <article>
+      <li className={styles.project}>
+        <div className={styles.projectWrap}>
+          <div className={styles.screenshotWrap}>
+            <article className={styles.screenshotHolder}>
+              <div className={styles.imageCycler}>
+                {imageUrls.length > 0 && (
+                  <span className="zz-20">
+                    <button
+                      onClick={() => {
+                        setImageUrls([]);
+                        setScreenshots(null);
+                      }}
+                      className="absolute -bottom-7 right-20 btn btn-sm btn-squish btn-red !text-red-200 !bg-opacity-50 hover:!bg-opacity-40 transition-colors"
+                    >
+                      clear pics
+                    </button>
+                    <button
+                      onClick={prevScreenshot}
+                      className={[styles.btnArrow, styles.btnLeft].join(" ")}
+                    >
+                      <Image src={chevron} alt="left" />
+                    </button>
+                    <button
+                      onClick={nextScreenshot}
+                      className={[styles.btnArrow, styles.btnRight].join(" ")}
+                    >
+                      <Image src={chevron} alt="right" />
+                    </button>
+                  </span>
+                )}
+                {imageUrls.length > 0 && (
+                  <Image
+                    className={styles.screenshot}
+                    width={200}
+                    height={140}
+                    src={imageUrls[currentScreenshot]}
+                    alt="Screenshot"
+                  />
+                )}
+              </div>
+            </article>
+            {/** screenshot selector */}
+            {imageUrls.length <= 0 && (
+              <div className="col-flex w-full h-full items-center justify-center gap-2">
+                <label htmlFor="headerImg" className="text-slate-300">
+                  Project Screenshots
+                </label>
+                <div className="relative border-2 rounded-xl border-dashed p-2 px-4">
+                  <input
+                    multiple
+                    id="headerImg"
+                    className="w-full h-full opacity-0 absolute"
+                    onChange={handleFileChange}
+                    type="file"
+                  />
+                  <UploadIcon />
                 </div>
               </div>
-            ))}
+            )}
+            {screenshotError && (
+              <p className="absolute bottom-1 btn btn-nohover btn-sm btn-squish btn-red">
+                {formErrMsgs.screenshotsErr}
+              </p>
+            )}
           </div>
-          <button className="btn place-self-end" onClick={handleSubmit}>
-            {isLoading ? <Loader /> : <p>Submit</p>}
-          </button>
+          <div className={`${styles.infoWrap}`}>
+            {titleError && (
+              <p className="btn btn-nohover btn-sm btn-squish btn-red translate-y-3">
+                {formErrMsgs.titleErr}
+              </p>
+            )}
+            <input
+              value={newProject.title}
+              onChange={(e) => handleInputChange("title", e.target.value)}
+              placeholder="Project Title"
+              className={`${styles.name} w-full bg-black bg-opacity-10 focus:outline-none border border-white border-opacity-50 rounded-md p-1 px-4`}
+            />
+            {descrError && (
+              <p className="btn btn-nohover btn-sm btn-squish btn-red translate-y-3">
+                {formErrMsgs.descErr}
+              </p>
+            )}
+            <textarea
+              value={newProject.description}
+              onChange={(e) => handleInputChange("description", e.target.value)}
+              placeholder="Project Description"
+              className={`${styles.description} bg-black bg-opacity-10 focus:outline-none border border-white border-opacity-50 rounded-md p-1 px-4`}
+            />
+            <input
+              value={demoUrl || " https://"}
+              onChange={(e) => handleUrlChange(e, setDemoUrl)}
+              placeholder="Demo URL"
+              className={`bg-black bg-opacity-10 focus:outline-none border border-white border-opacity-50 rounded-md p-1 px-4`}
+            />
+            <textarea
+              value={newProject.moreInfo}
+              onChange={(e) => handleInputChange("moreInfo", e.target.value)}
+              placeholder="More Info"
+              className={`${styles.moreInfo} mb-2 bg-black bg-opacity-10 focus:outline-none border border-white border-opacity-50 rounded-md p-1 px-4 mt-2`}
+            />
+            <div className={styles.btnWrap}>
+              <span className="col-flex">
+                <button className={styles.btn} onClick={handleSubmit}>
+                  {isLoading ? <LoaderSpinSmall /> : <span>Add Project</span>}
+                </button>
+                <p>{loadingMessage}</p>
+              </span>
+            </div>
+          </div>
+          <ul className={styles.stackWrap}>
+            {stack.map((skill) => (
+              <li key={skill}>
+                <Image
+                  width={25}
+                  height={25}
+                  src={getSkillIcon(skill)}
+                  alt={skill}
+                />
+              </li>
+            ))}
+          </ul>
         </div>
-      </article>
+        <div className="flex flex-wrap max-w-[75%] gap-2 p-2 mx-8 bg-white bg-opacity-5 rounded-t-none rounded-2xl ">
+          <h2 className="w-full text-center font-bold text-lg">Select Stack</h2>
+          {skills.map((skill, index) => (
+            <div
+              className="flex gap-2 border rounded-full w-fit p-2 px-4"
+              key={skill.id}
+            >
+              <input
+                type="checkbox"
+                value={skill.text}
+                checked={checkboxStates[index]}
+                onChange={(e) => {
+                  handleStackChange(e);
+                  handleCheckboxChange(index);
+                }}
+              />{" "}
+              <div className="flex items-center gap-1">
+                {skill.fileURL && (
+                  <Image
+                    className="h-fit"
+                    width={20}
+                    height={20}
+                    src={skill.fileURL}
+                    alt="left"
+                  />
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </li>
+
       <article>
         {projects.map((project, index) => (
           <ProjectCard
@@ -242,11 +378,12 @@ const ProjectsComponent: React.FC = () => {
             project={project}
             getSkillIcon={getSkillIcon}
             handleDelete={handleDelete}
+            fetchProjects={fetchProjects}
           />
         ))}
       </article>
-    </>
+    </article>
   );
 };
 
-export default ProjectsComponent;
+export default ProjectsCMS;
