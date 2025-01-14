@@ -61,6 +61,8 @@ const SkillsComponent: React.FC = () => {
 
       await addDoc(collection(db, "skills"), newSkill);
       fetchSkills();
+      setText("");
+      setImageUrl("");
     }
   };
 
@@ -76,13 +78,15 @@ const SkillsComponent: React.FC = () => {
   console.log(skills);
 
   return (
-    <div className="mt-8 col-flex items-center rounded-2xl p-4">
-      <h1>Skills</h1>
+    <div className="mt-4 col-flex items-center rounded-2xl p-4">
       <p>For best results, remember to use a perfectly square image.</p>
-      {imageUrl !== "" && (
-        <Image width={50} height={50} src={imageUrl} alt={""} />
-      )}{" "}
-      <div className="p-2 my-2 rounded-2xl col-flex gap-2 items-center max-w-[300px]">
+      <div className="flex gap-1 items-center">
+        {imageUrl !== "" && (
+          <Image width={50} height={50} src={imageUrl} alt={""} />
+        )}
+        <p>{text !== "" && text}</p>
+      </div>
+      <div className="bg-slate-500 bg-opacity-20 p-2 my-2 rounded-2xl col-flex gap-2 items-center max-w-[300px]">
         <label htmlFor="headerImg">Skill Icon</label>
         <div className="relative border-2 rounded-xl border-dashed p-2 px-4">
           <input
@@ -102,14 +106,9 @@ const SkillsComponent: React.FC = () => {
             placeholder="Skill name..."
           />
         </div>
-        <Button
-          className="btn"
-          variant="outline"
-          size="sm"
-          onClick={handleSubmit}
-        >
-          Submit
-        </Button>
+        <button className="btn btn-green place-self-end" onClick={handleSubmit}>
+          Add Skill
+        </button>
       </div>
       <ul className="flex flex-wrap py-2 px-4 gap-2 bg-black dark:bg-white dark:bg-opacity-10 bg-opacity-10 rounded-2xl">
         {skills.map((skill) => (
@@ -124,7 +123,12 @@ const SkillsComponent: React.FC = () => {
               height={25}
             />
             <span>{skill.text}</span>
-            <button onClick={() => handleDelete(skill.id)}>❌</button>
+            <button
+              className="btn btn-round btn-red"
+              onClick={() => handleDelete(skill.id)}
+            >
+              ❌
+            </button>
           </li>
         ))}
       </ul>

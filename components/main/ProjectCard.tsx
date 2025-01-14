@@ -17,6 +17,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import Loader from "./Loader";
+import ItsTooltip from "../ui/its-tooltip";
 
 interface Props {
   project: Project;
@@ -46,6 +47,7 @@ const ProjectCard = ({
   const [loadingMsg, setLoadingMsg] = useState("");
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [loadedImages, setLoadedImages] = useState<number[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     // Ensure editedProject syncs with the current project prop
@@ -342,6 +344,7 @@ const ProjectCard = ({
                         ? "1"
                         : "0.5",
                     }}
+                    onClick={() => setIsFullscreen(true)}
                   />
                 </div>
               )}
@@ -474,12 +477,14 @@ const ProjectCard = ({
           {!showEdit &&
             project.stack.map((skill) => (
               <li key={skill}>
-                <Image
-                  width={25}
-                  height={25}
-                  src={getSkillIcon(skill)}
-                  alt={skill}
-                />
+                <ItsTooltip delay={600} tooltipText={skill}>
+                  <Image
+                    width={25}
+                    height={25}
+                    src={getSkillIcon(skill)}
+                    alt={skill}
+                  />
+                </ItsTooltip>
               </li>
             ))}
         </ul>
@@ -511,6 +516,46 @@ const ProjectCard = ({
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {isFullscreen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
+          <button
+            className="absolute top-20 right-4 text-white text-2xl btn btn-round btn-red"
+            onClick={() => setIsFullscreen(false)}
+          >
+            ✖
+          </button>
+          <button
+            className="absolute left-4 text-white text-2xl btn btn-round"
+            onClick={() => prevScreenshot(project.screenshots)}
+          >
+            <Image
+              className="rotate-90 -translate-x-0.5"
+              width={25}
+              height={25}
+              src={chevron}
+              alt="left"
+            />
+          </button>
+          <button
+            className="absolute right-4 text-white text-2xl btn btn-round"
+            onClick={() => nextScreenshot(project.screenshots)}
+          >
+            <Image
+              className="-rotate-90 translate-x-0.5"
+              width={25}
+              height={25}
+              src={chevron}
+              alt="right"
+            />
+          </button>
+          <Image
+            src={project.screenshots[currentScreenshot]}
+            alt="Fullscreen Screenshot"
+            width={800}
+            height={600}
+          />
         </div>
       )}
     </li>

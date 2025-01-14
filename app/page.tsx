@@ -1,8 +1,7 @@
+"use client";
 import Header from "@/components/main/Header";
 import Projects from "@/components/main/Projects";
 import Skills from "@/components/main/Skills";
-import { SignInButton } from "@clerk/nextjs";
-import Image from "next/image";
 
 export default function Home() {
   return (
@@ -12,7 +11,6 @@ export default function Home() {
       </div>
       <Skills />
       <Projects />
-      <SignInButton mode="modal" />
     </article>
   );
 }

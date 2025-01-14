@@ -21,6 +21,8 @@ const Skills = () => {
     fetchSkills();
   }, []);
 
+  if (!skills) return <div></div>;
+
   return (
     <article className="flex flex-col items-center">
       <div className="w-fit">

@@ -87,7 +87,6 @@ const HeaderCMS = () => {
 
   return (
     <div className="col-flex items-center py-4 rounded-2xl">
-      <h1>Header</h1>
       <Header cmsImageUrl={imageUrl} cmsHeader={header} cmsTagline={tagline} />
       <form
         onSubmit={(e) => {
@@ -131,12 +130,7 @@ const HeaderCMS = () => {
             value={tagline}
           />
         </div>
-        <Button
-          variant="green"
-          size="sm"
-          className="btn place-self-end"
-          type="submit"
-        >
+        <button className="btn btn-green place-self-end" type="submit">
           {loading ? (
             <ProgressBar
               height="27"
@@ -148,7 +142,7 @@ const HeaderCMS = () => {
           ) : (
             "Update Header"
           )}
-        </Button>
+        </button>
       </form>
     </div>
   );

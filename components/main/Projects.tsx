@@ -34,6 +34,8 @@ const Projects = () => {
     return skill ? skill.fileURL : "";
   };
 
+  if (!projects || !skills) return <div></div>;
+
   return (
     <div>
       {" "}

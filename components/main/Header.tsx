@@ -6,6 +6,8 @@ import { fbGetHeader } from "@/firebase/fbGetHeader";
 import Link from "next/link";
 import FacebookIcon from "../sub/FacebookIcon";
 import GithubIcon from "../sub/GithubIcon";
+import Loader from "./Loader";
+import LoaderSpinSmall from "../sub/LoaderSpinSmall";
 
 interface Props {
   cmsImageUrl?: string;
@@ -44,11 +46,18 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
 
   console.log("cmsheader", header);
 
+  if (!imageUrl)
+    return (
+      <div className="fixed inset-0 bg-background zz-top-plus2 flex items-center justify-center">
+        <LoaderSpinSmall />
+      </div>
+    );
+
   return (
     <article className="col-flex items-center max-w-[600px] sm:flex sm:justify-center md:flex-row md:items-center md:gap-2">
       {imageUrl && (
-        <div className="flex items-center gap-1 bg-white md:w-[840px] bg-opacity-10 p-2 pb-8 m-2 rounded-3xl">
-          <div className="bg-white bg-opacity-5 translate-y-4 w-[115px] h-[115px] flex items-center justify-center rounded-full">
+        <div className="flex items-center gap-1 bg-white dark:bg-opacity-10 bg-opacity-50 p-2 pb-8 m-2 rounded-3xl">
+          <div className="bg-white dark:bg-opacity-5 bg-opacity-20 translate-y-4 w-[115px] h-[115px] flex items-center justify-center rounded-full">
             <Image
               className="rounded-xl -translate-y-2 translate-x-1"
               width={80}
@@ -85,7 +94,7 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
         <h2 className="text-center mt-2 text-xl font-bold">
           <span className="text-blue-400">Full-Stack</span> React Developer
         </h2>
-        <p className="text-slate-200 mt-2">{tagline}</p>
+        <p className="text-slate-700 dark:text-slate-200 mt-2">{tagline}</p>
       </div>
     </article>
   );
