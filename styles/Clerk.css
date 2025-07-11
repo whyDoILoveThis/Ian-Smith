@@ -1,3 +1,83 @@
 .cl-modalBackdrop.🔒️.cl-internal-1gaxbcg {
   align-items: center !important;
+  backdrop-filter: blur(10px);
+}
+
+.cl-internal-4x6jej {
+  display: none !important;
+  visibility: hidden !important;
+  position: relative !important;
+  top: -200px !important;
+  background-color: aqua;
+}
+
+.cl-footer.🔒️.cl-internal-nofrx8 {
+  display: none !important;
+}
+
+.cl-footerAction.cl-footerAction__signIn.🔒️.cl-internal-1rpdi70 {
+  display: none !important;
+}
+
+.cl-internal-1pr5xvn {
+  display: none;
+}
+
+.cl-card.cl-signIn-start.🔒️.cl-internal-1p733cp {
+  display: block;
+}
+
+
+.cl-internal-1dauvpw {
+ display: none !important;
+  visibility: hidden !important;
+  position: relative !important;
+  top: -200px !important;
+  background-color: aqua;
+}
+.cl-internal-df7v37 {
+  display: none !important;
+  visibility: hidden !important;
+  position: relative !important;
+  top: -200px !important;
+  background-color: aqua;
+}
+
+.cl-card.cl-signIn-start.🔒️.cl-internal-1p733cp {
+  background: rgba(0, 0, 0, 0.766);
+}
+
+.cl-formFieldLabel {
+  @apply
+  text-slate-400
+}
+
+.cl-formFieldAction {
+  @apply
+  text-slate-500
+  hover:text-slate-400
+}
+
+
+
+.cl-formButtonPrimary {
+  box-shadow: none !important;
+  @apply
+  selection:bg-transparent
+    hover:bg-opacity-30
+    dark:hover:bg-opacity-10
+    cursor-pointer
+    w-fit 
+    p-1
+    px-3
+    border
+    rounded-md
+text-green-600
+    dark:text-green-200
+    border-green-500
+    bg-green-600
+    dark:bg-green-400
+    bg-opacity-20
+    dark:bg-opacity-20
+  shadow-none;
 }
