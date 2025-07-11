@@ -18,6 +18,7 @@ const SkillsComponent: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [skills, setSkills] = useState<any[]>([]);
   const [imageUrl, setImageUrl] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const fetchSkills = async () => {
     const querySnapshot = await getDocs(collection(db, "skills"));
@@ -49,6 +50,7 @@ const SkillsComponent: React.FC = () => {
 
   const handleSubmit = async () => {
     if (file && text) {
+      setLoading(true);
       const storage = getStorage();
       const storageRef = ref(storage, `images/${file.name}`);
       await uploadBytes(storageRef, file);
@@ -63,6 +65,15 @@ const SkillsComponent: React.FC = () => {
       fetchSkills();
       setText("");
       setImageUrl("");
+      setFile(null);
+      setLoading(false);
+    } else if (!file) {
+      alert("Please select an image file and try again.");
+    } else if (!text) {
+      alert("Please enter a skill name and try again.");
+    }
+    if (!text && !file) {
+      alert("Bro it's empty!🤦‍♂️");
     }
   };
 
