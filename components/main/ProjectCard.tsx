@@ -173,6 +173,7 @@ const ProjectCard = ({
       setEditScreenshots(false);
       fetchProjects();
       setLoadingMsg("👍 Project updated!");
+      setTimeout(() => setLoadingMsg(""), 3000);
       setLoading(false);
     } catch (error) {
       console.error("Error updating project:", error);
