@@ -13,9 +13,9 @@ import {
   SignOutButton,
 } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/toaster";
-import Nav from "@/components/main/Nav";
 import CMS from "@/components/CMS/CMS";
 import Footer from "@/components/main/Footer";
+import ConnectivityWrapper from "@/components/main/ConnectivityWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -34,35 +34,35 @@ export default function RootLayout({
       <html lang="en">
         <body className={inter.className}>
           <SignedIn>
-            <main className="mt-16 flex flex-col items-center">
-              <ThemeProvider
-                attribute="class"
-                defaultTheme="system"
-                enableSystem
-                disableTransitionOnChange
-              >
-                <Nav />
-
-                <CMS />
-
-                <Toaster />
-                <Footer />
-              </ThemeProvider>
-            </main>
+            <ConnectivityWrapper>
+              <main className="flex flex-col items-center">
+                <ThemeProvider
+                  attribute="class"
+                  defaultTheme="system"
+                  enableSystem
+                  disableTransitionOnChange
+                >
+                  <CMS />
+                  <Toaster />
+                  <Footer />
+                </ThemeProvider>
+              </main>
+            </ConnectivityWrapper>
           </SignedIn>
           <SignedOut>
-            <main className="mt-16 flex flex-col items-center">
-              <ThemeProvider
-                attribute="class"
-                defaultTheme="system"
-                enableSystem
-                disableTransitionOnChange
-              >
-                <Nav />
-                <div className="w-full max-w-[800px]">{children}</div>
-                <Footer />
-              </ThemeProvider>
-            </main>
+            <ConnectivityWrapper>
+              <main className="flex flex-col items-center">
+                <ThemeProvider
+                  attribute="class"
+                  defaultTheme="system"
+                  enableSystem
+                  disableTransitionOnChange
+                >
+                  <div className="w-full max-w-[800px]">{children}</div>
+                  <Footer />
+                </ThemeProvider>
+              </main>
+            </ConnectivityWrapper>
           </SignedOut>
         </body>
       </html>
