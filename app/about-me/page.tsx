@@ -14,10 +14,33 @@
 "use client"; // ✨ THE HOLY INCANTATION ✨
 
 import Nav from "@/components/main/Nav";
+import ItsTooltip from "@/components/ui/its-tooltip";
+import { db } from "@/lib/firebaseConfig";
+import { collection, getDocs } from "firebase/firestore";
+import Image from "next/image";
 import Link from "next/link";
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 const AboutMe = () => {
+  const [skills, setSkills] = useState<Skill[]>([]);
+
+  useEffect(() => {
+    const fetchSkills = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "skills"));
+        const skillsList = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Skill, "id">),
+        }));
+        setSkills(skillsList);
+      } catch (error) {
+        console.error("Error fetching skills:", error);
+      }
+    };
+
+    fetchSkills();
+  }, []);
+
   return (
     <article className="pt-6 pb-10">
       <Nav />
@@ -27,8 +50,8 @@ const AboutMe = () => {
       >
         <div
           className="max-w-4xl w-full rounded-2xl p-8 md:p-12 bg-white/90 dark:bg-gray-900/90
-                   border border-gray-200 dark:border-gray-800 shadow-lg dark:shadow-none
-                   backdrop-blur-sm"
+                     border border-gray-200 dark:border-gray-800 shadow-lg dark:shadow-none
+                     backdrop-blur-sm"
           role="region"
         >
           {/* BIG H1 — user requested H1 every time + emojis */}
@@ -59,21 +82,32 @@ const AboutMe = () => {
                 ITS
               </div>
 
-              <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                {/* Tech badges — keep concise, emoji-rich */}
-                <span className="px-3 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700">
-                  ⚛️ React
-                </span>
-                <span className="px-3 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700">
-                  🧠 TypeScript
-                </span>
-                <span className="px-3 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700">
-                  🔧 Next.js
-                </span>
-                <span className="px-3 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700">
-                  🗄️ Node / Express
-                </span>
-              </div>
+              {/* Dynamic skill badges */}
+              {skills.length > 0 ? (
+                <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                  {skills.map((skill, index) => (
+                    <ItsTooltip tooltipText={skill.text} key={index}>
+                      <span
+                        key={skill.id}
+                        className="px-3 py-1 flex items-center gap-1 text-sm rounded-full bg-gray-100 dark:bg-gray-800
+                                   text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700"
+                      >
+                        <Image
+                          src={skill.fileURL}
+                          alt={skill.text}
+                          width={20}
+                          height={20}
+                          className="drop-shadow-sm"
+                        />{" "}
+                      </span>
+                    </ItsTooltip>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                  Loading skills…
+                </p>
+              )}
 
               <div className="flex gap-3 mt-2">
                 <a
