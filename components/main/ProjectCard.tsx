@@ -477,13 +477,14 @@ const ProjectCard = ({
             ))}
           {!showEdit &&
             project.stack.map((skill) => (
-              <li key={skill}>
+              <li className="!cursor-default" key={skill}>
                 <ItsTooltip delay={600} tooltipText={skill}>
                   <Image
                     width={25}
                     height={25}
                     src={getSkillIcon(skill)}
                     alt={skill}
+                    className="!cursor-default"
                   />
                 </ItsTooltip>
               </li>

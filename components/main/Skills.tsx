@@ -25,26 +25,31 @@ const Skills = () => {
 
   return (
     <article className="flex flex-col items-center">
-      <div className="w-fit">
-        <h2 className="text-center text-2xl font-bold mb-4 mt-10">My Skills</h2>
-        <ul className="w-fit rounded-3xl relative flex flex-wrap gap-2 bg-black dark:bg-white dark:bg-opacity-10 bg-opacity-10 p-2">
-          {skills.map((skill) => {
-            return (
-              <li
-                className={` flex flex-col gap-1 items-center w-fit bg-black
-                             dark:bg-white dark:bg-opacity-5 bg-opacity-10 rounded-2xl p-1.5 px-3 pb-0.5`}
-                key={skill.id}
-              >
-                <Image
-                  src={skill.fileURL}
-                  alt={skill.text}
-                  width={25}
-                  height={25}
-                />
-                <span className="text-sm ">{skill.text}</span>
-              </li>
-            );
-          })}
+      <div className="w-fit max-w-2xl">
+        {/* Section Title */}
+        <h2 className="text-center text-3xl md:text-4xl font-extrabold mb-6 mt-12 tracking-tight text-neutral-900 dark:text-neutral-100">
+          My Skills
+        </h2>
+
+        {/* Skills Grid */}
+        <ul className="flex flex-wrap justify-center gap-3 p-4 rounded-3xl bg-neutral-900/5 dark:bg-white/5 backdrop-blur-sm shadow-inner">
+          {skills.map((skill) => (
+            <li
+              key={skill.id}
+              className="flex flex-col items-center gap-1 w-fit rounded-2xl px-4 py-3 bg-neutral-900/5 dark:bg-white/10"
+            >
+              <Image
+                src={skill.fileURL}
+                alt={skill.text}
+                width={32}
+                height={32}
+                className="drop-shadow-sm"
+              />
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                {skill.text}
+              </span>
+            </li>
+          ))}
         </ul>
       </div>
     </article>
