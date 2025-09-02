@@ -131,10 +131,13 @@ export default function SoftwarePage({
 
         {/* Nav Links */}
         <div className="flex gap-2">
-          <Link href="/about" className={t.navbarLink}>
+          <Link href="/about-me" className={t.navbarLink}>
             ℹ️ About
           </Link>
-          <Link href="/contact" className={t.navbarLink}>
+          <Link
+            href="http://its-ians-blog.vercel.app/user/user_2iqJuHsepKWDsGxo2o6rczQpvYq"
+            className={t.navbarLink}
+          >
             📝 Blog
           </Link>
         </div>

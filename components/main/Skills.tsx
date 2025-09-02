@@ -32,7 +32,7 @@ const Skills = () => {
         </h2>
 
         {/* Skills Grid */}
-        <ul className="flex flex-wrap justify-center gap-3 p-4 rounded-3xl bg-neutral-900/5 dark:bg-white/5 backdrop-blur-sm shadow-inner">
+        <ul className="mx-2 flex flex-wrap justify-center gap-3 p-4 rounded-3xl bg-neutral-900/5 dark:bg-white/5 backdrop-blur-sm shadow-inner">
           {skills.map((skill) => (
             <li
               key={skill.id}

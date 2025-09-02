@@ -6,7 +6,7 @@ import Skills from "@/components/main/Skills";
 
 export default function Home() {
   return (
-    <article className="p-4 pt-16">
+    <article className="pt-16">
       <Nav />
       <div className="w-full col-flex items-center">
         <Header />

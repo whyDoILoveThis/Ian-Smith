@@ -117,7 +117,7 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
           </span>{" "}
           React Developer
         </h2>
-        <p className="mt-3 text-base md:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
+        <p className="mx-2 mt-3 text-base md:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
           {tagline}
         </p>
       </div>
