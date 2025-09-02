@@ -8,6 +8,7 @@ import FacebookIcon from "../sub/FacebookIcon";
 import GithubIcon from "../sub/GithubIcon";
 import Loader from "./Loader";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
+import ITSLoader from "./ItsLoader";
 
 interface Props {
   cmsImageUrl?: string;
@@ -20,6 +21,9 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
   const [headerObj, setHeaderObj] = useState<Header | null>();
   const [header, setHeader] = useState("");
   const [tagline, setTagline] = useState("");
+  // ensure loader plays for at least 7 seconds
+  const [loading, setLoading] = useState(true);
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
 
   useEffect(() => {
     const getHeader = async () => {
@@ -44,12 +48,28 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
     }
   }, [headerObj, cmsImageUrl, cmsHeader, cmsTagline]);
 
+  // start the minimum display timer on mount
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+
+    const t = setTimeout(() => setMinTimeElapsed(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // hide loader only after we have an image URL and the minimum time elapsed
+  useEffect(() => {
+    if (imageUrl && minTimeElapsed) {
+      setLoading(false);
+      document.body.style.overflow = "auto";
+    }
+  }, [imageUrl, minTimeElapsed]);
+
   console.log("cmsheader", header);
 
-  if (!imageUrl)
+  if (loading)
     return (
       <div className="fixed inset-0 bg-background zz-top-plus2 flex items-center justify-center">
-        <LoaderSpinSmall />
+        <ITSLoader />
       </div>
     );
 
@@ -90,11 +110,16 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
           </div>
         </div>
       )}
-      <div>
-        <h2 className="text-center mt-2 text-xl font-bold">
-          <span className="text-blue-400">Full-Stack</span> React Developer
+      <div className="text-center md:text-left mt-4">
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-neutral-900 dark:text-neutral-100">
+          <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+            Full-Stack
+          </span>{" "}
+          React Developer
         </h2>
-        <p className="text-slate-700 dark:text-slate-200 mt-2">{tagline}</p>
+        <p className="mt-3 text-base md:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
+          {tagline}
+        </p>
       </div>
     </article>
   );
