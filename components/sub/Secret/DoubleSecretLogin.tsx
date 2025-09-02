@@ -110,14 +110,14 @@ export default function DoubleSecretLogin() {
                 Potentially Download Harmful/Dangerous Files
               </button>
             ) : (
-              <div className="relative btn btn-red">
+              <a href="/files.zip" download className="relative btn btn-red">
                 <span className="w-fit h-fit z-[999999] opacity-0">
                   <SignInButton mode="modal" />
                 </span>
                 <p className="z-0 w-[20px] h-[20px] absolute top-2 right-4">
                   <DownloadIcon />
                 </p>
-              </div>
+              </a>
             )}
           </div>
         </div>
