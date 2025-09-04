@@ -140,3 +140,19 @@
   @apply text-xs
     px-2;
 }
+
+
+
+.btn-bot {
+  @apply 
+  rounded-full
+  size-12
+  flex
+  justify-center
+  items-center
+  p-0
+  dark:border-white
+  dark:text-white
+  dark:bg-[#0080ffeb]
+  dark:bg-opacity-100
+}
