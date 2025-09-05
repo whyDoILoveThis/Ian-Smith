@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import CloseIcon from "./CloseIcon";
 
 interface Props {
   children?: React.ReactNode;
@@ -31,16 +32,6 @@ const ItsPopover = ({ children, zIndex = "999", show, setShow }: Props) => {
                     flex flex-col items-center 
     `}
     >
-      <button
-        className="btn btn-round btn-red absolute top-20 right-10 z-50"
-        onClick={() => {
-          if (setShow) {
-            setShow(false);
-          }
-        }}
-      >
-        X
-      </button>
       <div className="w-full h-full max-w-[800px] relative  flex flex-col items-center ">
         {children}
       </div>
