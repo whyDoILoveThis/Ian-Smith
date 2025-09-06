@@ -7,6 +7,7 @@ import Skills from "@/components/main/Skills";
 import ItsPopover from "@/components/sub/ItsPopover";
 import { useState } from "react";
 import BotBtn from "@/components/main/AI/BotBtn";
+import ConfettiCelebration from "@/components/main/ConfettiCelebration";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
@@ -14,16 +15,15 @@ export default function Home() {
   return (
     <article className="pt-16">
       <Nav />
-      <div className="w-full col-flex items-center">
+      <div className="w-full col-flex items-center mb-6">
         <Header />
       </div>
-      <div className="mt-10">
-        <Skills />
+      <div className="w-full px-4">
+        <ConfettiCelebration />
       </div>
+      <Skills />
       <Projects />
-
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
-
       {showBot && (
         <ItsPopover show={showBot} setShow={setShowBot}>
           <div className="w-full px-4 pr-8 h-full">

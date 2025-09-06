@@ -151,6 +151,7 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
         </button>
 
         <ItsDropdown
+          closeWhenItemClick
           className="-translate-x-72"
           position="up-left"
           trigger={
