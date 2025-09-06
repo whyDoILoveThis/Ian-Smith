@@ -73,11 +73,17 @@ const config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+     "toast-exit": {
+      "0%":   { transform: "translateX(0)" },
+      "80%":  { transform: "translateX(20px)"}, // gentle creep
+      
+      "100%": { transform: "translateX(4000px)" },    // full send
+    },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-      },
+"toast-exit": "toast-exit 1.6s ease-in forwards",      },
     },
   },
   plugins: [require("tailwindcss-animate")],

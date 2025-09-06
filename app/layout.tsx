@@ -4,14 +4,9 @@ import "./globals.css";
 import "@/styles/ItsBtn.css";
 import "@/styles/Clerk.css";
 import "@/styles/ItsTooltip.css";
+import "@/styles/ItsTextShadow.css";
 import { ThemeProvider } from "@/components/Theme/ThemeProvider";
-import {
-  ClerkProvider,
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  SignOutButton,
-} from "@clerk/nextjs";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/toaster";
 import CMS from "@/components/CMS/CMS";
 import Footer from "@/components/main/Footer";

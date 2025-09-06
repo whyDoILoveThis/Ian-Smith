@@ -2,7 +2,7 @@ import { IoClose } from "react-icons/io5";
 interface Props {
   size?: number;
 }
-const CloseIcon = ({ size = 25 }: Props) => {
+const CloseIcon = ({ size }: Props) => {
   return <IoClose size={size} />;
 };
 

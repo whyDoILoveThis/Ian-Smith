@@ -1,0 +1,17 @@
+/* this is an extention for older versions of tailwind */
+
+.text-shadow { text-shadow: 1px 1px 2px rgba(0,0,0,0.4); }
+.text-shadow-xs { text-shadow: 0.5px 0.5px 1px rgba(0,0,0,0.3); }
+.text-shadow-sm { text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
+.text-shadow-md { text-shadow: 2px 2px 4px rgba(0,0,0,0.4); }
+.text-shadow-lg { text-shadow: 3px 3px 6px rgba(0,0,0,0.5); }
+.text-shadow-xl { text-shadow: 4px 4px 8px rgba(0,0,0,0.5); }
+.text-shadow-2xl { text-shadow: 5px 5px 10px rgba(0,0,0,0.55); }
+.text-shadow-3xl { text-shadow: 6px 6px 12px rgba(0,0,0,0.6); }
+.text-shadow-4xl { text-shadow: 8px 8px 16px rgba(0,0,0,0.65); }
+.text-shadow-5xl { text-shadow: 10px 10px 20px rgba(0,0,0,0.7); }
+.text-shadow-6xl { text-shadow: 12px 12px 24px rgba(0,0,0,0.75); }
+.text-shadow-7xl { text-shadow: 14px 14px 28px rgba(0,0,0,0.8); }
+.text-shadow-8xl { text-shadow: 16px 16px 32px rgba(0,0,0,0.85); }
+.text-shadow-9xl { text-shadow: 18px 18px 36px rgba(0,0,0,0.9); }
+.text-shadow-10xl { text-shadow: 20px 20px 40px rgba(0,0,0,0.95); }

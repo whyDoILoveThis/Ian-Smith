@@ -130,6 +130,12 @@
     items-center;
 }
 
+.btn-md {
+  @apply text-base
+    p-2
+    px-4;
+}
+
 .btn-sm {
   @apply text-sm
   p-1

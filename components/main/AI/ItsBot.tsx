@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import { v4 as uuidv4 } from "uuid";
-import CloseIcon from "../sub/CloseIcon";
+import CloseIcon from "../../sub/CloseIcon";
+import ItsDropdown from "@/components/ui/its-dropdown";
+import SettingsIcon from "@/components/sub/SettingsIcon";
 
 type Message = { role: "user" | "assistant"; content: string };
 type Conversation = { id: string; title: string; messages: Message[] };
@@ -20,6 +22,7 @@ export default function PortfolioBot({ show, setShow }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   // 🔹 Load saved convos on mount
   useEffect(() => {
@@ -126,21 +129,78 @@ export default function PortfolioBot({ show, setShow }: Props) {
     setConversations((prev) => [newConv, ...prev]);
     setActiveId(id);
   };
-
   // 🔹 Delete a conversation
   const handleDeleteConversation = (id: string) => {
-    setConversations((prev) => prev.filter((c) => c.id !== id));
-    if (id === activeId && conversations.length > 1) {
-      setActiveId(conversations[0].id);
-    } else if (conversations.length <= 1) {
-      handleNewConversation();
+    setConversations((prev) => {
+      const filtered = prev.filter((c) => c.id !== id);
+
+      // If no conversations left → create a new one
+      if (filtered.length === 0) {
+        const newConv: Conversation = {
+          id: uuidv4(),
+          title: "Conversation 1",
+          messages: [],
+        };
+        setActiveId(newConv.id);
+        return [newConv];
+      }
+
+      // If active convo was deleted → fallback to first convo
+      if (id === activeId) {
+        setActiveId(filtered[0].id);
+      }
+
+      return filtered;
+    });
+  };
+
+  const handleClearAll = () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to clear all conversations? This cannot be undone."
+    );
+    if (confirmed) {
+      localStorage.removeItem("portfolioBotConversations");
+      setConversations([]);
+      handleNewConversation(); // optional: start fresh
+      alert("All conversations have been cleared.");
     }
   };
 
   return (
-    <div className="flex flex-col md:flex-row w-full max-w-5xl h-full border rounded-lg shadow-lg bg-white dark:bg-gray-900 transition-colors">
+    <div className="flex flex-col md:flex-row w-full max-w-5xl h-full border rounded-lg rounded-b-none overflow-hidden shadow-lg bg-white dark:bg-gray-900 transition-colors">
       {/* 🔹 Sidebar (desktop) */}
       <div className="hidden md:flex w-56 border-r dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2 flex-col">
+        <div className="flex w-full justify-between items-center mb-4">
+          <button
+            className="btn btn-squish btn-sm "
+            onClick={() => {
+              if (setShow) {
+                setShow(false);
+              }
+            }}
+          >
+            close
+          </button>
+
+          <ItsDropdown
+            closeWhenItemClick
+            trigger={
+              <button className="btn btn-squish">
+                <SettingsIcon />
+              </button>
+            }
+          >
+            {" "}
+            <button
+              className="btn btn-ghost !w-full"
+              onClick={() => {
+                setEditMode(!editMode);
+              }}
+            >
+              {!editMode ? "Edit" : "Stop Edit"}
+            </button>{" "}
+          </ItsDropdown>
+        </div>
         <button
           onClick={handleNewConversation}
           className="mb-2 px-3 py-2 bg-blue-500 text-white rounded-lg"
@@ -153,66 +213,13 @@ export default function PortfolioBot({ show, setShow }: Props) {
               key={c.id}
               className={`flex justify-between items-center px-2 py-1 rounded cursor-pointer ${
                 c.id === activeId
-                  ? "bg-blue-100 dark:bg-blue-800"
+                  ? "bg-blue-100 dark:bg-blue-500/30"
                   : "hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
               onClick={() => setActiveId(c.id)}
             >
               <span className="truncate">{c.title}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteConversation(c.id);
-                }}
-                className="text-red-500 hover:text-red-700"
-              >
-                ✖
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 🔹 Mobile dropdown for convos */}
-      <div className="md:hidden border-b dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-2 flex items-center justify-between">
-        <button
-          onClick={() => setMobileMenu(!mobileMenu)}
-          className="px-3 py-2 bg-blue-500 text-white rounded-lg"
-        >
-          ☰ Chats
-        </button>
-        <button
-          className="btn btn-round !border-red-400 !border-opacity-60 dark:!border-opacity-50 !text-red-300 dark:!text-red-200 text-opacity-65 dark:text-opacity-100 z-50"
-          onClick={() => {
-            if (setShow) {
-              setShow(false);
-            }
-          }}
-        >
-          <CloseIcon />
-        </button>
-        {mobileMenu && (
-          <div className="absolute max-w-48 top-14 left-2 right-2 bg-white dark:bg-gray-900 shadow-lg rounded-lg p-2 z-50">
-            <button
-              onClick={handleNewConversation}
-              className="w-full mb-2 px-3 py-2 bg-blue-500 text-white rounded-lg"
-            >
-              ➕ New Chat
-            </button>
-            {conversations.map((c) => (
-              <div
-                key={c.id}
-                className={`flex justify-between items-center px-2 py-1 rounded cursor-pointer ${
-                  c.id === activeId
-                    ? "bg-blue-100 dark:bg-blue-800"
-                    : "hover:bg-gray-200 dark:hover:bg-gray-700"
-                }`}
-                onClick={() => {
-                  setActiveId(c.id);
-                  setMobileMenu(false);
-                }}
-              >
-                <span className="truncate">{c.title}</span>
+              {editMode && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -222,10 +229,99 @@ export default function PortfolioBot({ show, setShow }: Props) {
                 >
                   ✖
                 </button>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {editMode && (
+          <button
+            onClick={handleClearAll}
+            className="btn btn-red btn-squish place-self-end btn-sm"
+          >
+            🗑️ Clear All
+          </button>
         )}
+      </div>
+
+      {/* 🔹 Mobile dropdown for convos */}
+      <div className="md:hidden border-b dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-2 flex items-center justify-between">
+        <ItsDropdown
+          trigger={
+            <button className="px-3 py-2 bg-blue-500 text-white rounded-lg">
+              ☰ Chats
+            </button>
+          }
+        >
+          <ItsDropdown
+            closeWhenItemClick
+            trigger={
+              <button className="btn btn-squish mb-4 ">
+                <SettingsIcon />
+              </button>
+            }
+          >
+            {" "}
+            <button
+              className="btn btn-ghost !w-full"
+              onClick={() => {
+                setEditMode(!editMode);
+              }}
+            >
+              {!editMode ? "Edit" : "Stop Edit"}
+            </button>{" "}
+          </ItsDropdown>
+          <button
+            onClick={handleNewConversation}
+            className="w-full mb-2 px-3 py-2 bg-blue-500 text-white rounded-lg"
+          >
+            ➕ New Chat
+          </button>
+
+          {conversations.map((c) => (
+            <div
+              key={c.id}
+              className={`flex justify-between items-center px-2 py-1 rounded cursor-pointer ${
+                c.id === activeId
+                  ? "bg-blue-100 dark:bg-blue-800"
+                  : "hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+              onClick={() => {
+                setActiveId(c.id);
+              }}
+            >
+              <span className="truncate">{c.title}</span>
+              {editMode && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteConversation(c.id);
+                  }}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  ✖
+                </button>
+              )}
+            </div>
+          ))}
+          {editMode && (
+            <button
+              onClick={handleClearAll}
+              className="mt-4 btn btn-red btn-squish place-self-end btn-sm"
+            >
+              🗑️ Clear All
+            </button>
+          )}
+        </ItsDropdown>
+        <button
+          className="btn btn-round -translate-y-1 !border-red-400 !border-opacity-60 dark:!border-opacity-50 !text-red-300 dark:!text-red-200 text-opacity-65 dark:text-opacity-100 z-50"
+          onClick={() => {
+            if (setShow) {
+              setShow(false);
+            }
+          }}
+        >
+          <CloseIcon />
+        </button>
       </div>
 
       {/* 🔹 Main chat area */}

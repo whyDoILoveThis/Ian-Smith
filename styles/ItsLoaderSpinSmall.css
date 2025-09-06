@@ -1,0 +1,129 @@
+
+/* NEUTRALS */
+.loader-spin-small {
+  width: 15px;
+  height: 15px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(farthest-side, #b7b7b7 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #adadad);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #000 0);
+  animation: l13 1s infinite linear;
+}
+
+@keyframes l13 {
+  100% {
+    transform: rotate(1turn);
+  }
+}
+
+.loader-spin-small-silver {
+  background: radial-gradient(farthest-side, #c0c0c0 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #b0b0b0);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #c0c0c0 0);
+}
+.loader-spin-small-black {
+  background: radial-gradient(farthest-side, #555 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #222);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #111 0);
+}
+.loader-spin-small-white {
+  background: radial-gradient(farthest-side, #fff 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #ddd);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #eee 0);
+}
+
+/* RED / PINKS */
+.loader-spin-small-red {
+  background: radial-gradient(farthest-side, #ff7f7f 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #ff4c4c);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #ff0000 0);
+}
+.loader-spin-small-pink {
+  background: radial-gradient(farthest-side, #ffa9d4 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #ff82be);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #ff1979 0);
+}
+.loader-spin-small-hotpink {
+  background: radial-gradient(farthest-side, #ff69b4 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #ff1493);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #ff69b4 0);
+}
+
+/* ORANGES / YELLOWS */
+.loader-spin-small-orange {
+  background: radial-gradient(farthest-side, #ffb347 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #ff7f00);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #ff8c00 0);
+}
+.loader-spin-small-yellow {
+  background: radial-gradient(farthest-side, #fff200 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #ffd700);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #ffff00 0);
+}
+
+/* GREENS */
+.loader-spin-small-lime {
+  background: radial-gradient(farthest-side, #bfff00 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #7fff00);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #00ff00 0);
+}
+.loader-spin-small-green {
+  background: radial-gradient(farthest-side, #32cd32 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #228b22);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #008000 0);
+}
+.loader-spin-small-forestgreen {
+  background: radial-gradient(farthest-side, #228b22 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #006400);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #004d00 0);
+}
+
+/* BLUES */
+.loader-spin-small-cyan {
+  background: radial-gradient(farthest-side, #00ffff 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #00ced1);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #00bfff 0);
+}
+.loader-spin-small-blue {
+  background: radial-gradient(farthest-side, #87cefa 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #4682b4);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #4169e1 0);
+}
+.loader-spin-small-darkblue {
+  background: radial-gradient(farthest-side, #00008b 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #000080);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #00008b 0);
+}
+
+/* PURPLES */
+.loader-spin-small-purple {
+  background: radial-gradient(farthest-side, #b19cd9 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #9370db);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #8a2be2 0);
+}
+.loader-spin-small-violet {
+  background: radial-gradient(farthest-side, #ee82ee 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #da70d6);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #ba55d3 0);
+}
+
+/* BROWNS */
+.loader-spin-small-brown {
+  background: radial-gradient(farthest-side, #a52a2a 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #8b4513);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #5c4033 0);
+}
+
+/* TEALS / AQUAS */
+.loader-spin-small-teal {
+  background: radial-gradient(farthest-side, #40e0d0 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #008080);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #20b2aa 0);
+}
+.loader-spin-small-aqua {
+  background: radial-gradient(farthest-side, #00ffff 94%, #0000) top/2px 2px no-repeat,
+              conic-gradient(#0000 30%, #00ced1);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #00bfff 0);
+}
+
