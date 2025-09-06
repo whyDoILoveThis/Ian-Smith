@@ -9,6 +9,7 @@ import GithubIcon from "../sub/GithubIcon";
 import Loader from "./Loader";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
 import ITSLoader from "./ItsLoader";
+import AgeTag from "../sub/AgeTag";
 
 interface Props {
   cmsImageUrl?: string;
@@ -91,7 +92,7 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
               <h1 className="text-3xl mt-0.5 text-center font-bold text-nowrap">
                 {header}
               </h1>
-              <p className="text-sm text-slate-400 self-end">26 years old</p>
+              <AgeTag />
             </span>
             <span className="flex items-center gap-1">
               <Link
