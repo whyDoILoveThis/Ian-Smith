@@ -139,10 +139,8 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
             <BsRobot size={30} />
             {!disableHints && (
               <span
-                className={`text-sm font-semibold transition-all duration-500 ${
-                  showHint
-                    ? "w-fit opacity-100 ml-2"
-                    : "max-w-0 opacity-0 p-0 m-0"
+                className={`text-sm font-semibold transition-all duration-500 overflow-hidden ${
+                  showHint ? "w-fit ml-2" : "max-w-0 p-0 m-0"
                 }`}
               >
                 {hint}
@@ -150,33 +148,31 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
             )}
           </span>
           {/* Settings gear (shows on hover) */}
-          {hovered && (
-            <ItsDropdown
-              className="-translate-x-72"
-              position="up-left"
-              trigger={
-                <button className="w-full">
-                  {" "}
-                  <BsGear size={18} />
-                </button>
-              }
-            >
-              <button
-                className=" z-50 flex justify-center items-center bg-white/10 text-white hover:bg-white/20 transition"
-                onClick={() => saveDisableHints(!disableHints)}
-                aria-label="Toggle hints"
-              >
-                Turn Hints {disableHints ? "On" : "Off"}
-              </button>
-            </ItsDropdown>
-          )}
         </button>
+
+        <ItsDropdown
+          className="-translate-x-72"
+          position="up-left"
+          trigger={
+            <button className="w-full">
+              <BsGear size={18} />
+            </button>
+          }
+        >
+          <button
+            className=" z-50 btn btn-ghost"
+            onClick={() => saveDisableHints(!disableHints)}
+            aria-label="Toggle hints"
+          >
+            Turn Hints {disableHints ? "On" : "Off"}
+          </button>
+        </ItsDropdown>
       </div>
 
       {/* Toast */}
       {toastVisible && !disableHints && !toastDisabled && (
         <ItsToast delay={10000} onClose={() => setToastVisible(false)}>
-          <div className="flex items-center gap-4 p-4">
+          <div className="flex items-center gap-4 p-2 pt-6">
             <span>You’ve seen several hints. Disable infinite hints?</span>
             <div className="flex flex-col items-center gap-2">
               <button

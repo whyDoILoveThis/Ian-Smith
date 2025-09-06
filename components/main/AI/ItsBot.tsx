@@ -34,6 +34,7 @@ export default function PortfolioBot({ show, setShow }: Props) {
     } else {
       handleNewConversation();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 🔹 Save whenever convos change
@@ -246,6 +247,7 @@ export default function PortfolioBot({ show, setShow }: Props) {
       {/* 🔹 Mobile dropdown for convos */}
       <div className="md:hidden border-b dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-2 flex items-center justify-between">
         <ItsDropdown
+          className="-translate-y-1"
           trigger={
             <button className="px-3 py-2 bg-blue-500 text-white rounded-lg">
               ☰ Chats
