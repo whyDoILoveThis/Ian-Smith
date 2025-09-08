@@ -2,7 +2,7 @@
 import Image from "next/image";
 import styles from "../../styles/ProjectCard.module.css";
 import chevron from "../../images/icon--chevron.png";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MdModeEditOutline } from "react-icons/md";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
@@ -13,7 +13,7 @@ import {
   deleteObject,
   getDownloadURL,
   getStorage,
-  ref,
+  ref as storageRef,
   uploadBytes,
 } from "firebase/storage";
 import Loader from "./Loader";
@@ -48,6 +48,33 @@ const ProjectCard = ({
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [loadedImages, setLoadedImages] = useState<number[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (!ref.current) return;
+      const el = ref.current;
+      const hasOverflow =
+        el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
+
+      setIsOverflowing(hasOverflow);
+    };
+
+    // Wait 1 second before checking
+    const timeout = setTimeout(() => {
+      checkOverflow();
+    }, 1000);
+
+    // Also check on window resize
+    const handleResize = () => setTimeout(checkOverflow, 1000);
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [showMoreInfo, editedProject.moreInfo]);
 
   useEffect(() => {
     // Ensure editedProject syncs with the current project prop
@@ -129,7 +156,7 @@ const ProjectCard = ({
         const storage = getStorage();
         await Promise.all(
           project.screenshots.map(async (url) => {
-            const fileRef = ref(
+            const fileRef = storageRef(
               storage,
               url.replace(/.*\/o\/(.*?)\?.*/, "$1").replace(/%2F/g, "/")
             ); // Extract file path from URL
@@ -144,10 +171,13 @@ const ProjectCard = ({
       const storage = getStorage();
       screenshotUrls = await Promise.all(
         Array.from(screenshots).map(async (file, index) => {
-          const storageRef = ref(storage, `screenshots/${file.name}`);
-          await uploadBytes(storageRef, file);
+          const fileStorageRef = storageRef(
+            storage,
+            `screenshots/${file.name}`
+          );
+          await uploadBytes(fileStorageRef, file);
           setLoadingMsg(`Uploading image ${index}...`);
-          return getDownloadURL(storageRef);
+          return getDownloadURL(fileStorageRef);
         })
       );
     }
@@ -454,7 +484,10 @@ const ProjectCard = ({
             </div>
           )}
           <p
-            className={`${styles.moreInfo} ${
+            ref={ref}
+            className={`${
+              isOverflowing ? styles.moreInfoOverflow : styles.moreInfo
+            } ${
               showMoreInfo && !showEdit
                 ? "max-h-80 max-w-72"
                 : "max-h-0 max-w-0 !p-0 !border-none"

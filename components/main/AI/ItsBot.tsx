@@ -1,57 +1,188 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
+import React, { useState, useEffect, useRef } from "react";
+import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import { v4 as uuidv4 } from "uuid";
-import CloseIcon from "../../sub/CloseIcon";
-import ItsDropdown from "@/components/ui/its-dropdown";
-import SettingsIcon from "@/components/sub/SettingsIcon";
-
-type Message = { role: "user" | "assistant"; content: string };
-type Conversation = { id: string; title: string; messages: Message[] };
+import { Conversation, Message } from "./types";
+import { Sidebar } from "./Sidebar";
+import { ChatArea } from "./ChatArea";
+import { MobileSidebar } from "./MobileSidebar";
+import {
+  fbSaveConversationSessionByUser,
+  fbGetConversationSessionsByFingerprint,
+} from "@/firebase/fbConversationByUser";
 
 interface Props {
   show: boolean;
   setShow: (show: boolean) => void;
 }
 
-export default function PortfolioBot({ show, setShow }: Props) {
+export default function ItsBot({ show, setShow }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mobileMenu, setMobileMenu] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [fingerprint, setFingerprint] = useState<string | null>(null);
 
-  // 🔹 Load saved convos on mount
+  // helper key for per-user localStorage
+  const localKey = (fp?: string) => `portfolioBotConversations:${fp ?? "anon"}`;
+
+  // Initialize fingerprint and load sessions (remote first, fallback to local)
   useEffect(() => {
-    const saved = localStorage.getItem("portfolioBotConversations");
-    if (saved) {
-      const parsed: Conversation[] = JSON.parse(saved);
-      setConversations(parsed);
-      if (parsed.length > 0) setActiveId(parsed[0].id);
-    } else {
-      handleNewConversation();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let mounted = true;
+
+    const init = async () => {
+      try {
+        const fp = await FingerprintJS.load();
+        const result = await fp.get();
+        const visitorId = result.visitorId;
+        if (!mounted) return;
+        setFingerprint(visitorId);
+
+        // Try remote first
+        const remote = await fbGetConversationSessionsByFingerprint(visitorId);
+        if (remote && remote.length > 0) {
+          if (!mounted) return;
+          setConversations(remote);
+          setActiveId(remote[0]?.id ?? null);
+          // also write a local cache
+          localStorage.setItem(localKey(visitorId), JSON.stringify(remote));
+          return;
+        }
+
+        // fallback: check per-user localStorage
+        const saved = localStorage.getItem(localKey(visitorId));
+        if (saved) {
+          const parsed: Conversation[] = JSON.parse(saved);
+          if (!mounted) return;
+          setConversations(parsed);
+          setActiveId(parsed[0]?.id ?? null);
+          return;
+        }
+
+        // final fallback: start a new conversation (tag it with fingerprint)
+        const id = uuidv4();
+        const newConv: Conversation = {
+          id,
+          title: "Conversation 1",
+          messages: [],
+          fingerprint: visitorId,
+        };
+        if (!mounted) return;
+        setConversations([newConv]);
+        setActiveId(id);
+        localStorage.setItem(localKey(visitorId), JSON.stringify([newConv]));
+        // also save remote doc with initial conv so user has a doc
+        await fbSaveConversationSessionByUser(visitorId, [newConv]);
+      } catch (err) {
+        console.error("Fingerprint or session load failed", err);
+        // fallback to generic localStorage if fingerprint failed
+        const saved = localStorage.getItem(localKey());
+        if (saved) {
+          const parsed: Conversation[] = JSON.parse(saved);
+          if (!mounted) return;
+          setConversations(parsed);
+          setActiveId(parsed[0]?.id ?? null);
+        } else {
+          const id = uuidv4();
+          const newConv: Conversation = {
+            id,
+            title: "Conversation 1",
+            messages: [],
+          };
+          if (!mounted) return;
+          setConversations([newConv]);
+          setActiveId(id);
+        }
+      }
+    };
+
+    init();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // 🔹 Save whenever convos change
+  // Save to local AND remote when conversations change (grouped by fingerprint)
   useEffect(() => {
-    if (conversations.length > 0) {
-      localStorage.setItem(
-        "portfolioBotConversations",
-        JSON.stringify(conversations)
+    if (!conversations) return;
+    // save local per-user cache
+    const key = localKey(fingerprint ?? undefined);
+    localStorage.setItem(key, JSON.stringify(conversations));
+
+    // If we have a fingerprint, persist merged to firestore
+    if (fingerprint) {
+      // fbSaveConversationSessionByUser handles merging by id (no duplicates)
+      fbSaveConversationSessionByUser(fingerprint, conversations).catch((err) =>
+        console.error("Failed to save sessions:", err)
       );
     }
-  }, [conversations]);
+  }, [conversations, fingerprint]);
 
-  const activeConversation = conversations.find((c) => c.id === activeId);
+  // rest of your handlers (updateConversation, handleNewConversation, etc.)
+  const updateConversation = (
+    id: string,
+    messages: Message[],
+    title?: string
+  ) =>
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, messages, title: title ?? c.title } : c
+      )
+    );
 
-  // 🔹 Send a message
+  const handleNewConversation = (fingerprintId?: string) => {
+    const hasEmpty = conversations.some((c) => c.messages.length === 0);
+    if (hasEmpty) return;
+
+    const id = uuidv4();
+    const newConv: Conversation = {
+      id,
+      title:
+        conversations.length === 0
+          ? "Conversation 1"
+          : `Conversation ${conversations.length + 1}`,
+      messages: [],
+      fingerprint: fingerprintId ?? fingerprint ?? undefined,
+    };
+
+    setConversations((prev) => [newConv, ...prev]);
+    setActiveId(id);
+  };
+
+  const handleDeleteConversation = (id: string) => {
+    setConversations((prev) => {
+      const filtered = prev.filter((c) => c.id !== id);
+      if (filtered.length === 0) {
+        // create fresh conv tied to fingerprint
+        const id2 = uuidv4();
+        const newConv: Conversation = {
+          id: id2,
+          title: "Conversation 1",
+          messages: [],
+          fingerprint: fingerprint ?? undefined,
+        };
+        setActiveId(newConv.id);
+        return [newConv];
+      }
+      if (id === activeId) setActiveId(filtered[0].id);
+      return filtered;
+    });
+  };
+
+  const handleClearAll = () => {
+    if (window.confirm("Are you sure you want to clear all conversations?")) {
+      const key = localKey(fingerprint ?? undefined);
+      localStorage.removeItem(key);
+      setConversations([]);
+      handleNewConversation(fingerprint ?? undefined);
+    }
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    const activeConversation = conversations.find((c) => c.id === activeId);
     if (!input.trim() || !activeConversation) return;
 
     const newMessages = [
@@ -59,7 +190,6 @@ export default function PortfolioBot({ show, setShow }: Props) {
       { role: "user" as const, content: input },
     ];
 
-    // If conversation has no title, set the first user message as title
     if (activeConversation.messages.length === 0) {
       updateConversation(
         activeConversation.id,
@@ -79,16 +209,14 @@ export default function PortfolioBot({ show, setShow }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userMessages: newMessages }),
       });
-
       const data = await res.json();
       const botReply = data.reply ?? "Not sure what to say.";
-
       updateConversation(activeConversation.id, [
         ...newMessages,
         { role: "assistant" as const, content: botReply },
       ]);
     } catch (err) {
-      console.error("Chat error:", err);
+      console.error(err);
       updateConversation(activeConversation.id, [
         ...newMessages,
         {
@@ -101,292 +229,43 @@ export default function PortfolioBot({ show, setShow }: Props) {
     }
   };
 
-  // 🔹 Update conversation (messages + optional title)
-  const updateConversation = (
-    id: string,
-    messages: Message[],
-    title?: string
-  ) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, messages, title: title ?? c.title } : c
-      )
-    );
-  };
-
-  const handleNewConversation = () => {
-    const hasEmpty = conversations.some((c) => c.messages.length === 0);
-    if (hasEmpty) return;
-
-    const id = uuidv4();
-    const newConv: Conversation = {
-      id,
-      title:
-        conversations.length === 0
-          ? "Conversation 1"
-          : `Conversation ${conversations.length + 1}`,
-      messages: [],
-    };
-    setConversations((prev) => [newConv, ...prev]);
-    setActiveId(id);
-  };
-  // 🔹 Delete a conversation
-  const handleDeleteConversation = (id: string) => {
-    setConversations((prev) => {
-      const filtered = prev.filter((c) => c.id !== id);
-
-      // If no conversations left → create a new one
-      if (filtered.length === 0) {
-        const newConv: Conversation = {
-          id: uuidv4(),
-          title: "Conversation 1",
-          messages: [],
-        };
-        setActiveId(newConv.id);
-        return [newConv];
-      }
-
-      // If active convo was deleted → fallback to first convo
-      if (id === activeId) {
-        setActiveId(filtered[0].id);
-      }
-
-      return filtered;
-    });
-  };
-
-  const handleClearAll = () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to clear all conversations? This cannot be undone."
-    );
-    if (confirmed) {
-      localStorage.removeItem("portfolioBotConversations");
-      setConversations([]);
-      handleNewConversation(); // optional: start fresh
-      alert("All conversations have been cleared.");
-    }
-  };
-
   return (
     <div className="flex flex-col md:flex-row w-full max-w-5xl h-full border rounded-lg rounded-b-none overflow-hidden shadow-lg bg-white dark:bg-gray-900 transition-colors">
-      {/* 🔹 Sidebar (desktop) */}
-      <div className="hidden md:flex w-56 border-r dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2 flex-col">
-        <div className="flex w-full justify-between items-center mb-4">
-          <button
-            className="btn btn-squish btn-sm "
-            onClick={() => {
-              if (setShow) {
-                setShow(false);
-              }
-            }}
-          >
-            close
-          </button>
-
-          <ItsDropdown
-            closeWhenItemClick
-            trigger={
-              <button className="btn btn-squish">
-                <SettingsIcon />
-              </button>
-            }
-          >
-            {" "}
-            <button
-              className="btn btn-ghost !w-full"
-              onClick={() => {
-                setEditMode(!editMode);
-              }}
-            >
-              {!editMode ? "Edit" : "Stop Edit"}
-            </button>{" "}
-          </ItsDropdown>
-        </div>
-        <button
-          onClick={handleNewConversation}
-          className="mb-2 px-3 py-2 bg-blue-500 text-white rounded-lg"
-        >
-          ➕ New Chat
-        </button>
-        <div className="flex-1 overflow-y-auto space-y-1">
-          {conversations.map((c) => (
-            <div
-              key={c.id}
-              className={`flex justify-between items-center px-2 py-1 rounded cursor-pointer ${
-                c.id === activeId
-                  ? "bg-blue-100 dark:bg-blue-500/30"
-                  : "hover:bg-gray-200 dark:hover:bg-gray-700"
-              }`}
-              onClick={() => setActiveId(c.id)}
-            >
-              <span className="truncate">{c.title}</span>
-              {editMode && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteConversation(c.id);
-                  }}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  ✖
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {editMode && (
-          <button
-            onClick={handleClearAll}
-            className="btn btn-red btn-squish place-self-end btn-sm"
-          >
-            🗑️ Clear All
-          </button>
-        )}
-      </div>
-
-      {/* 🔹 Mobile dropdown for convos */}
-      <div className="md:hidden border-b dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-2 flex items-center justify-between">
-        <ItsDropdown
-          className="-translate-y-1"
-          trigger={
-            <button className="px-3 py-2 bg-blue-500 text-white rounded-lg">
-              ☰ Chats
-            </button>
-          }
-        >
-          <ItsDropdown
-            closeWhenItemClick
-            trigger={
-              <button className="btn btn-squish mb-4 ">
-                <SettingsIcon />
-              </button>
-            }
-          >
-            {" "}
-            <button
-              className="btn btn-ghost !w-full"
-              onClick={() => {
-                setEditMode(!editMode);
-              }}
-            >
-              {!editMode ? "Edit" : "Stop Edit"}
-            </button>{" "}
-          </ItsDropdown>
-          <button
-            onClick={handleNewConversation}
-            className="w-full mb-2 px-3 py-2 bg-blue-500 text-white rounded-lg"
-          >
-            ➕ New Chat
-          </button>
-
-          {conversations.map((c) => (
-            <div
-              key={c.id}
-              className={`flex justify-between items-center px-2 py-1 rounded cursor-pointer ${
-                c.id === activeId
-                  ? "bg-blue-100 dark:bg-blue-800"
-                  : "hover:bg-gray-200 dark:hover:bg-gray-700"
-              }`}
-              onClick={() => {
-                setActiveId(c.id);
-              }}
-            >
-              <span className="truncate">{c.title}</span>
-              {editMode && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteConversation(c.id);
-                  }}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  ✖
-                </button>
-              )}
-            </div>
-          ))}
-          {editMode && (
-            <button
-              onClick={handleClearAll}
-              className="mt-4 btn btn-red btn-squish place-self-end btn-sm"
-            >
-              🗑️ Clear All
-            </button>
-          )}
-        </ItsDropdown>
-        <button
-          className="btn btn-round -translate-y-1 !border-red-400 !border-opacity-60 dark:!border-opacity-50 !text-red-300 dark:!text-red-200 text-opacity-65 dark:text-opacity-100 z-50"
-          onClick={() => {
-            if (setShow) {
-              setShow(false);
-            }
-          }}
-        >
-          <CloseIcon />
-        </button>
-      </div>
-
-      {/* 🔹 Main chat area */}
-      <div className="flex flex-col overflow-y-auto flex-1">
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-thumb-rounded-lg">
-          {activeConversation?.messages.length === 0 && (
-            <div className="p-6 text-center text-gray-600 dark:text-gray-300">
-              <h2 className="text-xl font-bold mb-2">
-                👋 Welcome to Ian’s PortfolioBot
-              </h2>
-              <p className="mb-4">
-                This assistant knows about my skills, projects, and experience.
-                Ask me anything to see if I’m a fit for your project!
-              </p>
-              <p className="italic text-sm">
-                (All your conversations are saved automatically.)
-              </p>
-            </div>
-          )}
-
-          {activeConversation?.messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`max-w-xs px-3 py-2 rounded-lg break-words ${
-                msg.role === "user"
-                  ? "bg-blue-500 text-white self-end ml-auto"
-                  : "bg-gray-200 text-black self-start dark:bg-gray-800 dark:text-white"
-              }`}
-            >
-              <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
-                {msg.content}
-              </ReactMarkdown>
-            </div>
-          ))}
-
-          {loading && (
-            <div className="bg-gray-200 text-black max-w-xs px-3 py-2 rounded-lg self-start animate-pulse dark:bg-gray-800 dark:text-white">
-              typing...
-            </div>
-          )}
-        </div>
-
-        {/* Input */}
-        <form
-          onSubmit={handleSend}
-          className="flex border-t p-2 bg-gray-50 dark:bg-gray-800 transition-colors"
-        >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask Ian about his projects..."
-            className="flex-1 border rounded-lg px-3 py-2 mr-2 focus:outline-none dark:bg-gray-700 dark:text-white dark:border-gray-600"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg disabled:opacity-50"
-          >
-            Send
-          </button>
-        </form>
-      </div>
+      <Sidebar
+        conversations={conversations}
+        activeId={activeId}
+        setActiveId={setActiveId}
+        editMode={editMode}
+        setEditMode={setEditMode}
+        handleNewConversation={() =>
+          handleNewConversation(fingerprint ?? undefined)
+        }
+        handleDeleteConversation={handleDeleteConversation}
+        handleClearAll={handleClearAll}
+        setShow={setShow}
+      />
+      <MobileSidebar
+        conversations={conversations}
+        activeId={activeId}
+        setActiveId={setActiveId}
+        editMode={editMode}
+        setEditMode={setEditMode}
+        handleNewConversation={() =>
+          handleNewConversation(fingerprint ?? undefined)
+        }
+        handleDeleteConversation={handleDeleteConversation}
+        handleClearAll={handleClearAll}
+        setShow={setShow}
+      />
+      <ChatArea
+        activeConversation={
+          conversations.find((c) => c.id === activeId) ?? undefined
+        }
+        input={input}
+        setInput={setInput}
+        handleSend={handleSend}
+        loading={loading}
+      />
     </div>
   );
 }

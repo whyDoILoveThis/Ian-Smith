@@ -16,6 +16,30 @@
   --color-projects--stack-item-bg: #00000049;
 }
 
+/*& Scroll Bar*/
+.project::-webkit-scrollbar-track,
+.project *::-webkit-scrollbar-track {
+  -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0);
+  border-radius: 10px;
+  background-color: #51515100;
+}
+
+.project::-webkit-scrollbar,
+.project *::-webkit-scrollbar {
+  border-radius: 10px;
+
+  width: 5px;
+  height: 5px;
+  background-color: #00000000;
+}
+
+.project::-webkit-scrollbar-thumb,
+.project *::-webkit-scrollbar-thumb {
+  border-radius: 0px;
+  -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0);
+  background-color: #ffffff;
+}
+
 .project {
   width: 100%;
   display: flex;
@@ -164,6 +188,18 @@
   border-radius: 10px;
   padding: 1rem;
   margin-top: 1rem;
+}
+
+.moreInfoOverflow {
+    background-color: var(--color-projects--stack-wrap-bg);
+  border-color: var(--color-projects--stack-wrap-border);
+  border: 1px solid;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-top: 1rem;
+  overflow-y: scroll;
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
 }
 
 .stackWrap {

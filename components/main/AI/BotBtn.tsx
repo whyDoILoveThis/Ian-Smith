@@ -30,11 +30,17 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
     return HINTS[Math.floor(Math.random() * HINTS.length)];
   };
 
-  // Load saved state
   useEffect(() => {
-    const saved = localStorage.getItem("disableHints");
-    if (saved === "true") setDisableHints(true);
+    const savedHints = localStorage.getItem("disableHints");
+    if (savedHints === "true") setDisableHints(true);
+
+    const savedToast = localStorage.getItem("toastDisabled");
+    if (savedToast === "true") setToastDisabled(true);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("toastDisabled", toastDisabled ? "true" : "false");
+  }, [toastDisabled]);
 
   // Save state and hide toast
   const saveDisableHints = (value: boolean) => {
@@ -118,6 +124,8 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
   const disableInfiniteHints = () => {
     saveDisableHints(true);
     setToastVisible(false);
+    setToastDisabled(true);
+    setShowHint(false);
   };
 
   return (
@@ -128,46 +136,75 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
         onMouseLeave={handleHoverLeave}
       >
         <button
-          className={`${
-            showHint && !disableHints ? "w-auto px-3 pr-3" : "w-12"
-          } h-12 backdrop-blur-md rounded-full flex justify-center items-center p-0 border border-opacity-50 border-white text-white bg-[#0080ffeb] transition-all duration-500`}
+          onClick={() => setShowBot(!showBot)}
+          className={`h-12 backdrop-blur-md rounded-full overflow-hidden flex items-center justify-center border border-opacity-50 border-white text-white bg-[#0080ffeb]
+    transition-all duration-500 ease-in-out
+    ${
+      showHint && !disableHints
+        ? "max-w-[24rem] px-4 animate-bounce-small"
+        : "w-12 max-w-12 px-0"
+    }`}
         >
-          <span
-            onClick={() => setShowBot(!showBot)}
-            className="flex items-center"
-          >
-            <BsRobot size={30} />
-            {!disableHints && (
-              <span
-                className={`text-sm font-semibold transition-all duration-500 overflow-hidden ${
-                  showHint ? "w-fit ml-2" : "max-w-0 p-0 m-0"
-                }`}
-              >
-                {hint}
-              </span>
-            )}
-          </span>
-          {/* Settings gear (shows on hover) */}
+          <BsRobot size={30} />
+
+          {!disableHints && (
+            <span
+              className={`text-sm font-semibold overflow-hidden transition-all duration-500 ease-in-out
+        ${
+          showHint
+            ? "pl-2 max-w-[20rem] opacity-100 translate-x-0"
+            : "max-w-0 pl-0 opacity-0 -translate-x-2"
+        }`}
+            >
+              {hint}
+            </span>
+          )}
+
+          <style jsx global>{`
+            @keyframes bounce-small {
+              0% {
+                transform: scale(1);
+              }
+              25% {
+                transform: scale(1.15);
+              }
+              50% {
+                transform: scale(0.95);
+              }
+              75% {
+                transform: scale(1.1);
+              }
+              100% {
+                transform: scale(1);
+              }
+            }
+
+            .animate-bounce-small {
+              animation: bounce-small 0.4s ease-in-out forwards;
+            }
+          `}</style>
         </button>
 
-        <ItsDropdown
-          closeWhenItemClick
-          className="-translate-x-72"
-          position="up-left"
-          trigger={
-            <button className="w-full">
-              <BsGear size={18} />
-            </button>
-          }
-        >
-          <button
-            className=" z-50 btn btn-ghost"
-            onClick={() => saveDisableHints(!disableHints)}
-            aria-label="Toggle hints"
+        {(toastDisabled || disableHints) && (
+          <ItsDropdown
+            closeWhenItemClick
+            className="-translate-x-72"
+            position="up-left"
+            trigger={
+              <button className="w-full">
+                <BsGear size={18} />
+              </button>
+            }
           >
-            Turn Hints {disableHints ? "On" : "Off"}
-          </button>
-        </ItsDropdown>
+            <button
+              className=" z-50 btn btn-ghost !w-full"
+              onClick={() => saveDisableHints(!disableHints)}
+              aria-label="Toggle hints"
+            >
+              Turn Hints {disableHints ? "On" : "Off"}
+            </button>
+          </ItsDropdown>
+        )}
       </div>
 
       {/* Toast */}

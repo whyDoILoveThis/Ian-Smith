@@ -17,9 +17,6 @@
     rounded-md;
 }
 
-.btn-squish {
-  @apply !leading-none text-nowrap;
-}
 
 .btn-w-icon {
   @apply flex
@@ -147,6 +144,9 @@
     px-2;
 }
 
+.btn-squish {
+  @apply !leading-none h-fit text-nowrap p-0.5 px-2;
+}
 
 
 .btn-bot {

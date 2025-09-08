@@ -8,9 +8,12 @@ import ItsPopover from "@/components/sub/ItsPopover";
 import { useState } from "react";
 import BotBtn from "@/components/main/AI/BotBtn";
 import ConfettiCelebration from "@/components/main/ConfettiCelebration";
+import useRefreshOnReconnect from "@/hooks/useRefreshOnReconnect";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
+
+  useRefreshOnReconnect();
 
   return (
     <article className="pt-16">
