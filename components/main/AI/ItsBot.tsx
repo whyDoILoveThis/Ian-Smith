@@ -41,15 +41,7 @@ export default function ItsBot({ show, setShow }: Props) {
         setFingerprint(visitorId);
 
         // Try remote first
-        const remote = await fbGetConversationSessionsByFingerprint(visitorId);
-        if (remote && remote.length > 0) {
-          if (!mounted) return;
-          setConversations(remote);
-          setActiveId(remote[0]?.id ?? null);
-          // also write a local cache
-          localStorage.setItem(localKey(visitorId), JSON.stringify(remote));
-          return;
-        }
+       
 
         // fallback: check per-user localStorage
         const saved = localStorage.getItem(localKey(visitorId));
