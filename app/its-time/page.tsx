@@ -2,7 +2,7 @@
 
 import Nav from "@/components/main/Nav";
 import React, { useEffect, useRef, useState } from "react";
-
+export default function Page() {
 // Cities with weight (higher weight = bigger font size)
 export const cities = [
   { city: "New York", tz: "America/New_York", weight: 5 },
@@ -73,7 +73,7 @@ export const cities = [
   { city: "Pacific/Noumea", tz: "Pacific/Noumea", weight: 1 },
 ];
 
-export default function Page() {
+
   // REFS for sticky detection
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const tzRef = useRef<HTMLParagraphElement | null>(null);
