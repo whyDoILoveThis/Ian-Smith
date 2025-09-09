@@ -4,7 +4,7 @@ import Nav from "@/components/main/Nav";
 import React, { useEffect, useRef, useState } from "react";
 export default function Page() {
 // Cities with weight (higher weight = bigger font size)
-export const cities = [
+ const cities = [
   { city: "New York", tz: "America/New_York", weight: 5 },
   { city: "Los Angeles", tz: "America/Los_Angeles", weight: 4 },
   { city: "Chicago", tz: "America/Chicago", weight: 4 },
