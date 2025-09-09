@@ -1,7 +1,7 @@
 "use client";
 
 import Nav from "@/components/main/Nav";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 // Cities with weight (higher weight = bigger font size)
 export const cities = [
@@ -74,6 +74,10 @@ export const cities = [
 ];
 
 export default function Page() {
+  // REFS for sticky detection
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const tzRef = useRef<HTMLParagraphElement | null>(null);
+  const [isSticky, setIsSticky] = useState(false);
   const [hours, setHours] = useState("00");
   const [minutes, setMinutes] = useState("00");
   const [seconds, setSeconds] = useState("00");
@@ -82,6 +86,46 @@ export default function Page() {
   const [timezone, setTimezone] = useState<string>(
     Intl.DateTimeFormat().resolvedOptions().timeZone
   );
+
+  useEffect(() => {
+    if (!sentinelRef.current || !tzRef.current) return;
+
+    let observer: IntersectionObserver | null = null;
+
+    const createObserver = () => {
+      if (observer) observer.disconnect();
+
+      // computed `top` in px from the sticky element (e.g. `top-16` => "64px")
+      const topStyle = getComputedStyle(tzRef.current!).top;
+      const topPx = parseFloat(topStyle) || 0;
+
+      // When sentinel is NOT intersecting at the rootMargin offset,
+      // the sticky element has reached the top - so it's "stuck"
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          setIsSticky(!entry.isIntersecting);
+        },
+        {
+          root: null,
+          threshold: 0,
+          rootMargin: `-${topPx}px 0px 0px 0px`,
+        }
+      );
+
+      observer.observe(sentinelRef.current!);
+    };
+
+    createObserver();
+
+    // Recreate on resize (top offset might change across breakpoints)
+    const onResize = () => createObserver();
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
 
   useEffect(() => {
     const updateTime = () => {
@@ -145,7 +189,14 @@ export default function Page() {
       </h1>
 
       {/* TIMEZONE */}
-      <p className="mt-2 text-sm md:text-lg font-medium sticky top-16 text-gray-500 dark:text-gray-400 text-right w-full max-w-4xl">
+      {/* sentinel: placed right before the sticky element */}
+      <div ref={sentinelRef} />
+      <p
+        ref={tzRef}
+        className={`p-2 rounded-lg rounded-tr-none rounded-tl-none backdrop-blur-md place-self-end text-sm md:text-lg font-medium w-fit sticky top-16 text-gray-500 dark:text-gray-400 text-right max-w-4xl ${
+          isSticky ? "dark:bg-white/10 bg-black/5 shadow-md" : "bg-transparent"
+        } `}
+      >
         {timezone}
       </p>
 
