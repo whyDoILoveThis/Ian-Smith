@@ -112,10 +112,13 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
         </div>
       )}
       <div className="text-center md:text-left mt-4">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-neutral-900 dark:text-neutral-100">
-          <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-            Full-Stack
-          </span>{" "}
+        <h2 className="text-2xl md:text-3xl flex flex-wrap justify-center items-center font-extrabold tracking-tight text-neutral-900 dark:text-neutral-100">
+          <div className="relative inline-block">
+            <span className="bg-gradient-to-r mr-2 from-blue-400 via-indigo-400 to-violet-400 bg-clip-text text-transparent">
+              Full-Stack
+            </span>{" "}
+            <br />
+          </div>
           React Developer
         </h2>
         <p className="mx-2 mt-3 text-base md:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">

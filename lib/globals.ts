@@ -507,3 +507,5 @@ export const SPECIAL_DAYS = [
   { name: "World Development Information Day", date: "10-24" },
   { name: "International Day for Preventing Extremism", date: "12-12" },
 ];
+
+export const LINK_MY_BLOGS = "http://its-ians-blog.vercel.app/user/user_2iqJuHsepKWDsGxo2o6rczQpvYq";
