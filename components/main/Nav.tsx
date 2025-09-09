@@ -3,6 +3,9 @@ import { ThemeToggler } from "@/components/Theme/ThemeToggler";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import ITSLogo from "../sub/ItsLogo";
+import { LINK_MY_BLOGS } from "@/lib/globals";
+import LinkUnderlineAnim from "../sub/LinkUnderlineAnim";
 
 const Nav = () => {
   const pathname = usePathname();
@@ -22,24 +25,14 @@ const Nav = () => {
   return (
     <nav className="zz-top fixed top-0 w-full max-w-[800px] flex justify-between items-center p-2 px-6 border-b bg-blur-10">
       <Link className="font-bold text-2xl" href={"/"}>
-        ITS
+        <ITSLogo />
       </Link>
       <div className="flex gap-6 items-center">
-        <Link className="hover:underline" href={"/about-me"}>
-          About Me
-        </Link>
-        <Link
-          className="hover:underline"
-          target="_blank"
-          href={
-            "http://its-ians-blog.vercel.app/user/user_2iqJuHsepKWDsGxo2o6rczQpvYq"
-          }
-        >
-          Blog
-        </Link>
-        <Link className="hover:underline" target="_blank" href={"/cpp"}>
-          C++ Zone
-        </Link>
+        <span className="flex gap-6 items-center translate-y-2">
+          <LinkUnderlineAnim linkText="About Me" linkHref="/about-me" />
+          <LinkUnderlineAnim linkText="Blogs" linkHref={LINK_MY_BLOGS} />
+          <LinkUnderlineAnim linkText="C++ Zone" linkHref="/its-cpp" />
+        </span>
         <ThemeToggler />
       </div>
     </nav>
