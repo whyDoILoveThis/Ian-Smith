@@ -394,7 +394,6 @@ export const SPECIAL_DAYS = [
   { name: "Labor Day", date: "09-02" },
   { name: "International Day of Charity", date: "09-05" },
   { name: "Grandparents Day", date: "09-08" },
-  { name: "World Suicide Prevention Day", date: "09-10" },
   { name: "Patriot Day (USA)", date: "09-11" },
   { name: "Video Games Day", date: "09-12" },
   { name: "Positive Thinking Day", date: "09-13" },

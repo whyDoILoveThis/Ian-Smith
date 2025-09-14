@@ -8,11 +8,14 @@ import { ProgressBar } from "react-loader-spinner";
 import { Button } from "../ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import UploadIcon from "../sub/UploadIcon";
+import { appwrImgUp } from "@/appwrite/appwrStorage";
+import { appwrUpdateHeader } from "@/appwrite/appwrStorage";
+import { appwrGetHeader } from "@/appwrite/appwrGetHeader";
 
 const HeaderCMS = () => {
   const [image, setImage] = useState<File | null>(null); // State for file upload
   const [imageUrl, setImageUrl] = useState("");
-  const [headerObj, setHeaderObj] = useState<Header | null>();
+  const [headerObj, setHeaderObj] = useState<Header | null>(null);
   const [header, setHeader] = useState("");
   const [tagline, setTagline] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +23,7 @@ const HeaderCMS = () => {
 
   useEffect(() => {
     const getHeader = async () => {
-      setHeaderObj(await fbGetHeader());
+      setHeaderObj(await appwrGetHeader());
     };
 
     getHeader();
@@ -53,12 +56,12 @@ const HeaderCMS = () => {
     setLoading(true);
     if (image) {
       try {
-        // Upload image to Firebase Storage
-        const tempImageUrl = await fbUploadImage(image);
-        fbUpdateHeader({
+        // Upload image to appwrite Storage
+        const { url } = await appwrImgUp(image);
+        appwrUpdateHeader({
           header,
           tagline,
-          imageUrl: tempImageUrl,
+          imageUrl: url,
         });
         toast({
           variant: "success",
@@ -69,7 +72,7 @@ const HeaderCMS = () => {
         console.log(err);
       }
     } else if (imageUrl !== "") {
-      fbUpdateHeader({
+      appwrUpdateHeader({
         header,
         tagline,
         imageUrl,
@@ -87,6 +90,7 @@ const HeaderCMS = () => {
 
   return (
     <div className="col-flex items-center py-4 rounded-2xl">
+      <h2 className="italic text-green-300">NEW UPDATES!</h2>
       <Header cmsImageUrl={imageUrl} cmsHeader={header} cmsTagline={tagline} />
       <form
         onSubmit={(e) => {

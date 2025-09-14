@@ -11,10 +11,10 @@ import { LINK_MY_BLOGS } from "@/lib/globals";
 const Footer = () => {
   return (
     <footer className="relative overflow-hidden w-full flex flex-col items-center p-4 pt-12 border-t border-slate-500 bg-slate-200 dark:bg-slate-900 bg-blur-10">
-      <Link className="absolute left-4 top-2 font-bold text-2xl" href={"/"}>
+      <Link className="absolute left-0 top-2 font-bold text-2xl" href={"/"}>
         <ITSLogo />
       </Link>
-      <div className="flex items-center gap-6 flex-wrap">
+      <div className="flex items-center gap-6 flex-wrap mt-8">
         <LinkUnderlineAnim linkText="Time" linkHref="/its-time" />
         <LinkUnderlineAnim linkText="About Me" linkHref="/about-me" />
         <LinkUnderlineAnim linkText="Blogs" linkHref={LINK_MY_BLOGS} />

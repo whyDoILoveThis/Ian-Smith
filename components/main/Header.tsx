@@ -25,6 +25,7 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
   // ensure loader plays for at least 7 seconds
   const [loading, setLoading] = useState(true);
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+  const [imgLoading, setImgLoading] = useState(false);
 
   useEffect(() => {
     const getHeader = async () => {
@@ -78,14 +79,24 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
     <article className="col-flex items-center max-w-[600px] sm:flex sm:justify-center md:flex-row md:items-center md:gap-2">
       {imageUrl && (
         <div className="flex items-center gap-1 bg-white dark:bg-opacity-10 bg-opacity-50 p-2 pb-8 m-2 rounded-3xl">
-          <div className="bg-white dark:bg-opacity-5 bg-opacity-20 translate-y-4 w-[115px] h-[115px] flex items-center justify-center rounded-full">
+          <div className="relative bg-white dark:bg-opacity-5 bg-opacity-20 translate-y-4 w-[115px] h-[115px] flex items-center justify-center rounded-full">
             <Image
-              className="rounded-xl -translate-y-2 translate-x-1"
+              onLoadingComplete={() => {
+                setImgLoading(false);
+              }}
+              className={`${
+                imgLoading && "opacity-50"
+              } rounded-xl -translate-y-2 translate-x-1`}
               width={80}
               height={100}
               src={imageUrl}
               alt="adsfa"
             />
+            {imgLoading && (
+              <span className="absolute inset-0">
+                <LoaderSpinSmall />
+              </span>
+            )}
           </div>
           <div className="translate-y-9 flex flex-col gap-2">
             <span className="flex flex-col ">

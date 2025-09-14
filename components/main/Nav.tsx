@@ -23,7 +23,7 @@ const Nav = () => {
   if (hidden) return null;
 
   return (
-    <nav className="zz-top fixed top-0 w-full max-w-[800px] flex justify-between items-center p-2 px-6 border-b bg-blur-10">
+    <nav className="zz-top fixed top-0 w-full max-w-[800px] flex justify-between items-center p-2 pb-0 pr-6 border-b bg-blur-10">
       <Link className="font-bold text-2xl" href={"/"}>
         <ITSLogo />
       </Link>
