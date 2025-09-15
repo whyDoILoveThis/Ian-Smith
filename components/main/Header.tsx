@@ -10,6 +10,7 @@ import Loader from "./Loader";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
 import ITSLoader from "./ItsLoader";
 import AgeTag from "../sub/AgeTag";
+import { appwrGetHeader } from "@/appwrite/appwrGetHeader";
 
 interface Props {
   cmsImageUrl?: string;
@@ -29,7 +30,7 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
 
   useEffect(() => {
     const getHeader = async () => {
-      setHeaderObj(await fbGetHeader());
+      setHeaderObj(await appwrGetHeader());
     };
 
     if (!cmsImageUrl || !cmsHeader || !cmsTagline) {
