@@ -18,6 +18,7 @@ import {
 } from "firebase/storage";
 import Loader from "./Loader";
 import ItsTooltip from "../ui/its-tooltip";
+import { appwrImgUp } from "@/appwrite/appwrStorage";
 
 interface Props {
   project: Project;
@@ -105,6 +106,8 @@ const ProjectCard = ({
 
   useEffect(() => {
     fetchSkills();
+    setDemoUrl(project.demoUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleStackChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,37 +150,33 @@ const ProjectCard = ({
   const handleSave = async () => {
     setLoading(true);
 
-    let screenshotUrls: string[] = [];
+    let screenshotObjs: Screenshot[] = [];
 
     if (screenshots) {
-      // Step 1: Delete existing screenshots in Firebase Storage
-      if (project.screenshots && project.screenshots.length > 0) {
-        setLoadingMsg("Replacing old pics...");
-        const storage = getStorage();
-        await Promise.all(
-          project.screenshots.map(async (url) => {
-            const fileRef = storageRef(
-              storage,
-              url.replace(/.*\/o\/(.*?)\?.*/, "$1").replace(/%2F/g, "/")
-            ); // Extract file path from URL
-            await deleteObject(fileRef).catch((err) => {
-              console.warn("Failed to delete file:", err);
-            });
-          })
-        );
-      }
+      // // Step 1: Delete existing screenshots in Firebase Storage
+      // if (project.screenshots && project.screenshots.length > 0) {
+      //   setLoadingMsg("Replacing old pics...");
+      //   const storage = getStorage();
+      //   await Promise.all(
+      //     project.screenshots.map(async (url) => {
+      //       const fileRef = storageRef(
+      //         storage,
+      //         url.replace(/.*\/o\/(.*?)\?.*/, "$1").replace(/%2F/g, "/")
+      //       ); // Extract file path from URL
+      //       await deleteObject(fileRef).catch((err) => {
+      //         console.warn("Failed to delete file:", err);
+      //       });
+      //     })
+      //   );
+      // }
 
       // Step 2: Upload new screenshots and get URLs
-      const storage = getStorage();
-      screenshotUrls = await Promise.all(
+      screenshotObjs = await Promise.all(
         Array.from(screenshots).map(async (file, index) => {
-          const fileStorageRef = storageRef(
-            storage,
-            `screenshots/${file.name}`
-          );
-          await uploadBytes(fileStorageRef, file);
           setLoadingMsg(`Uploading image ${index}...`);
-          return getDownloadURL(fileStorageRef);
+          const imgData = await appwrImgUp(file);
+          return imgData;
+          //return getDownloadURL(fileStorageRef);
         })
       );
     }
@@ -190,7 +189,7 @@ const ProjectCard = ({
       moreInfo: editedProject.moreInfo,
       demoUrl: editedProject.demoUrl,
       screenshots:
-        screenshotUrls.length > 0 ? screenshotUrls : project.screenshots,
+        screenshotObjs.length > 0 ? screenshotObjs : project.screenshots,
       stack,
     };
 
@@ -207,14 +206,15 @@ const ProjectCard = ({
       setLoading(false);
     } catch (error) {
       console.error("Error updating project:", error);
+      setLoading(false);
     }
   };
 
-  const nextScreenshot = (urls: string[]) => {
+  const nextScreenshot = (urls: Screenshot[] | string[]) => {
     setCurrentScreenshot((prev) => (prev + 1) % urls.length);
   };
 
-  const prevScreenshot = (urls: string[]) => {
+  const prevScreenshot = (urls: Screenshot[] | string[]) => {
     setCurrentScreenshot((prev) => (prev - 1 + urls.length) % urls.length);
   };
 
@@ -363,7 +363,7 @@ const ProjectCard = ({
                     className={styles.screenshot}
                     width={200}
                     height={140}
-                    src={project.screenshots[currentScreenshot]}
+                    src={project.screenshots[currentScreenshot].url}
                     alt="Screenshot"
                     onLoad={() => {
                       if (!loadedImages.includes(currentScreenshot)) {
@@ -586,7 +586,7 @@ const ProjectCard = ({
             />
           </button>
           <Image
-            src={project.screenshots[currentScreenshot]}
+            src={project.screenshots[currentScreenshot].url}
             alt="Fullscreen Screenshot"
             width={800}
             height={600}

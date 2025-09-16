@@ -5,8 +5,13 @@ interface Project {
     description: string;
     moreInfo: string;
     demoUrl: string;
-    screenshots: string[];
+    screenshots: Screenshot[];
     stack: string[];
+  }
+
+  interface Screenshot {
+    url: string;
+    fileId?: string;
   }
 
   interface Skill {
