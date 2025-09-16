@@ -16,6 +16,7 @@ import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
 import UploadIcon from "../sub/UploadIcon";
 import { handleUrlChange } from "@/lib/handleUrlChange";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
+import { appwrImgUp } from "@/appwrite/appwrStorage";
 
 const ProjectsCMS = () => {
   const [newProject, setNewProject] = useState({
@@ -135,13 +136,12 @@ const ProjectsCMS = () => {
       return;
     }
     if (screenshots) {
-      const storage = getStorage();
-      const screenshotUrls = await Promise.all(
+      const screenshotObjs = await Promise.all(
         Array.from(screenshots).map(async (file, index) => {
           setLoadingMessage(`Uploading image ${index}...`);
-          const storageRef = ref(storage, `screenshots/${file.name}`);
-          await uploadBytes(storageRef, file);
-          return getDownloadURL(storageRef);
+          const imgData = await appwrImgUp(file);
+          return imgData;
+          //return getDownloadURL(fileStorageRef);
         })
       );
       setLoadingMessage("Adding project info...");
@@ -151,7 +151,7 @@ const ProjectsCMS = () => {
         description: newProject.description,
         moreInfo: newProject.moreInfo,
         demoUrl: newProject.demoUrl,
-        screenshots: screenshotUrls,
+        screenshots: screenshotObjs,
         stack,
       };
 
