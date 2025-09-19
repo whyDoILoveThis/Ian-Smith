@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import ProjectCard from "./ProjectCard";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
+import { appwrFetchProjects } from "@/appwrite/appwrGetProjects";
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -17,9 +18,7 @@ const Projects = () => {
   };
 
   const fetchProjects = async () => {
-    const querySnapshot = await getDocs(collection(db, "projects"));
-    const projectsList = querySnapshot.docs.map((doc) => doc.data() as Project);
-    setProjects(projectsList);
+    setProjects(await appwrFetchProjects());
   };
 
   useEffect(() => {

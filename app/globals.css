@@ -205,3 +205,15 @@ input[type="file"]::-webkit-file-upload-button {
   animation: shake3 0.9s infinite;
 }
 
+
+
+@keyframes spin-slow {
+  to {
+    transform: rotatey(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+

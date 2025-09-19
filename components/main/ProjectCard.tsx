@@ -19,6 +19,7 @@ import {
 import Loader from "./Loader";
 import ItsTooltip from "../ui/its-tooltip";
 import { appwrImgUp } from "@/appwrite/appwrStorage";
+import { appwrSaveOrUpdateProject } from "@/appwrite/appwrSaveOrUpdateProject";
 
 interface Props {
   project: Project;
@@ -194,10 +195,7 @@ const ProjectCard = ({
     };
 
     try {
-      const projectDoc = doc(db, "projects", project.id);
-      await updateDoc(projectDoc, {
-        ...theEditedProject, // Spread the object to ensure it's in a plain format
-      });
+      appwrSaveOrUpdateProject(theEditedProject);
       setShowEdit(false);
       setEditScreenshots(false);
       fetchProjects();

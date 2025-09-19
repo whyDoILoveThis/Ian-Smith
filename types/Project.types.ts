@@ -18,4 +18,5 @@ interface Project {
     id: string;
     text: string;
     fileURL: string;
+    fileId?: string;
   }

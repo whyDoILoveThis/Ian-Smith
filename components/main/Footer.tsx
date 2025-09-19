@@ -10,7 +10,7 @@ import { LINK_MY_BLOGS } from "@/lib/globals";
 
 const Footer = () => {
   return (
-    <footer className="relative overflow-hidden w-full flex flex-col items-center p-4 pt-12 border-t border-slate-500 bg-slate-200 dark:bg-slate-900 bg-blur-10">
+    <footer className="absolute bottom-0 left-0 overflow-hidden w-full flex flex-col items-center p-4 pt-12 border-t border-slate-500 bg-slate-200 dark:bg-slate-900">
       <Link className="absolute left-0 top-2 font-bold text-2xl" href={"/"}>
         <ITSLogo />
       </Link>

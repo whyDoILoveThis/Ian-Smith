@@ -12,6 +12,7 @@ import Image from "next/image";
 import { db } from "@/lib/firebaseConfig";
 import { Button } from "../ui/button";
 import UploadIcon from "../sub/UploadIcon";
+import { appwrFetchSkills, appwrSaveSkill } from "@/appwrite/appwrSkillManager";
 
 const SkillsComponent: React.FC = () => {
   const [text, setText] = useState("");
@@ -21,12 +22,7 @@ const SkillsComponent: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const fetchSkills = async () => {
-    const querySnapshot = await getDocs(collection(db, "skills"));
-    const skillsList = querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    setSkills(skillsList);
+    setSkills(await appwrFetchSkills());
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,17 +47,7 @@ const SkillsComponent: React.FC = () => {
   const handleSubmit = async () => {
     if (file && text) {
       setLoading(true);
-      const storage = getStorage();
-      const storageRef = ref(storage, `images/${file.name}`);
-      await uploadBytes(storageRef, file);
-      const fileURL = await getDownloadURL(storageRef);
-
-      const newSkill = {
-        text,
-        fileURL,
-      };
-
-      await addDoc(collection(db, "skills"), newSkill);
+      await appwrSaveSkill({ file, text });
       fetchSkills();
       setText("");
       setImageUrl("");

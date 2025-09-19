@@ -27,38 +27,28 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
-        <body className={inter.className}>
-          <SignedIn>
-            <ConnectivityWrapper>
-              <main className="flex flex-col items-center">
-                <ThemeProvider
-                  attribute="class"
-                  defaultTheme="system"
-                  enableSystem
-                  disableTransitionOnChange
-                >
+        <body
+          className={`relative pb-44 min-h-screen
+           ${inter.className}`}
+        >
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <SignedIn>
+              <ConnectivityWrapper>
+                <main className="flex flex-col items-center">
                   <CMS />
                   <Toaster />
-                  <Footer />
-                </ThemeProvider>
-              </main>
-            </ConnectivityWrapper>
-          </SignedIn>
-          <SignedOut>
-            <ConnectivityWrapper>
-              <main className="flex flex-col items-center">
-                <ThemeProvider
-                  attribute="class"
-                  defaultTheme="system"
-                  enableSystem
-                  disableTransitionOnChange
-                >
-                  <div className="w-full max-w-[800px]">{children}</div>
-                  <Footer />
-                </ThemeProvider>
-              </main>
-            </ConnectivityWrapper>
-          </SignedOut>
+                </main>
+              </ConnectivityWrapper>
+            </SignedIn>
+            <SignedOut>
+              <ConnectivityWrapper>
+                <main className="flex flex-col items-center">
+                  <div className="w-full h-full max-w-[800px]">{children}</div>
+                </main>
+              </ConnectivityWrapper>
+            </SignedOut>
+            <Footer />
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>
