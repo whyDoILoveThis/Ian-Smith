@@ -1,29 +1,59 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
+import { ConfettiHandle } from "./ConfettiCanvas";
 
 type Choco = { id: number; text: string; opened: boolean };
 
 export default function ChocolateGrid({
-  chocos,
-  openChocolate,
-  revealAll,
-  rewrapAll,
+  confettiRef,
   onCelebrate,
 }: {
-  chocos: Choco[];
-  openChocolate: (id: number) => void;
-  // revealAll: set every choco opened = true
-  revealAll: () => void;
-  // rewrapAll: set every choco opened = false
-  rewrapAll: () => void;
   onCelebrate?: () => void;
+  confettiRef: React.RefObject<ConfettiHandle | null>;
 }) {
   const MILK_CHOC = "#84563C";
   const SOFT_PINK = "#ffd6e8";
 
+  const [chocos, setChocos] = useState<Choco[]>(
+    [
+      "Every morning with you is my favorite sunrise.",
+      "Your smile cures my worst days.",
+      "You make my life whole.",
+      "Our love = my treasure.",
+      "Forever is simply not long enough with you.",
+      "🎶Ian and Jessie sittin in a tree🎶",
+    ].map((t, i) => ({ id: i, text: t, opened: false }))
+  );
+
+  const [unwrapped, setUnwrapped] = useState(false);
+
   const allOpened = chocos.length > 0 && chocos.every((c) => c.opened);
+
+  // parent component (page.tsx) — inside component scope
+  const revealAll = () => {
+    setChocos((c) => c.map((x) => ({ ...x, opened: true })));
+    confettiRef.current?.explode(30);
+    setUnwrapped(true); // if you still track that
+  };
+
+  const rewrapAll = () => {
+    setChocos((c) => c.map((x) => ({ ...x, opened: false })));
+    setUnwrapped(false);
+  };
+
+  const openChocolate = (id: number) => {
+    setChocos((c) => {
+      const next = c.map((x) => (x.id === id ? { ...x, opened: true } : x));
+      // if all opened after this action, you can trigger confetti or set unwrapped flag
+      if (next.every((n) => n.opened)) {
+        confettiRef.current?.explode(45);
+        setUnwrapped(true);
+      }
+      return next;
+    });
+  };
 
   return (
     <div
@@ -161,6 +191,7 @@ export default function ChocolateGrid({
         >
           🎉 Surprise!
         </button>
+        <button className="text-4xl text-pink-400 font-extrabold">+</button>
       </div>
     </div>
   );
