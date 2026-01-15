@@ -24,18 +24,8 @@ export default function LovePage() {
 
   // state
   const [clickHearts, setClickHearts] = useState<Heart[]>([]);
-  const [chocos, setChocos] = useState<Choco[]>(
-    [
-      "Every morning with you is my favorite sunrise.",
-      "Your smile cures my worst days.",
-      "You make my life whole.",
-      "Our love = my treasure.",
-      "Forever is simply not long enough with you.",
-      "🎶Ian and Jessie sittin in a tree🎶",
-    ].map((t, i) => ({ id: i, text: t, opened: false }))
-  );
+
   const [showLetter, setShowLetter] = useState(false);
-  const [unwrapped, setUnwrapped] = useState(false);
   const [marry, showMarry] = useState(false);
 
   // confetti ref (component exposes explode)
@@ -59,30 +49,6 @@ export default function LovePage() {
       () => setClickHearts((s) => s.filter((h) => h.id !== newHeart.id)),
       1700
     );
-  };
-
-  // parent component (page.tsx) — inside component scope
-  const revealAll = () => {
-    setChocos((c) => c.map((x) => ({ ...x, opened: true })));
-    confettiRef.current?.explode(30);
-    setUnwrapped(true); // if you still track that
-  };
-
-  const rewrapAll = () => {
-    setChocos((c) => c.map((x) => ({ ...x, opened: false })));
-    setUnwrapped(false);
-  };
-
-  const openChocolate = (id: number) => {
-    setChocos((c) => {
-      const next = c.map((x) => (x.id === id ? { ...x, opened: true } : x));
-      // if all opened after this action, you can trigger confetti or set unwrapped flag
-      if (next.every((n) => n.opened)) {
-        confettiRef.current?.explode(45);
-        setUnwrapped(true);
-      }
-      return next;
-    });
   };
 
   // typed typewriter trigger from modal open
@@ -140,10 +106,7 @@ export default function LovePage() {
 
         <div className="mt-8 flex flex-col gap-6 items-center w-full max-w-6xl">
           <ChocolateGrid
-            chocos={chocos}
-            openChocolate={openChocolate}
-            revealAll={revealAll}
-            rewrapAll={rewrapAll}
+            confettiRef={confettiRef}
             onCelebrate={() => confettiRef.current?.explode(50)}
           />
 
