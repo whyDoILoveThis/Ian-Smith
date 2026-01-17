@@ -97,44 +97,63 @@ const HeaderCMS = () => {
           e.preventDefault();
           handleSubmit();
         }}
-        className="col-flex mx-4 gap-2 items-center rounded-2xl bg-black bg-opacity-10 p-6"
+        className="mt-4 max-w-xl w-full mx-auto rounded-2xl p-6 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/20 dark:border-slate-800/40 shadow-xl flex flex-col gap-4"
       >
-        <div className="col-flex w-full items-center gap-2 border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
-          <label htmlFor="headerImg">Header Img</label>
-          <div className="relative border-2 rounded-xl border-dashed p-2 px-4">
+        {/* Header Image */}
+        <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50/60 dark:bg-slate-800/50 border border-slate-200/20 dark:border-slate-700/30">
+          <label
+            htmlFor="headerImg"
+            className="relative flex-none w-16 h-16 rounded-xl overflow-hidden cursor-pointer flex flex-col items-center justify-center bg-white/60 dark:bg-slate-700/40 border border-slate-200/20 hover:scale-105 transition-transform"
+          >
             <input
               id="headerImg"
-              className="w-full h-full opacity-0 absolute"
+              className="absolute inset-0 opacity-0 cursor-pointer"
               onChange={handleFileChange}
               type="file"
+              accept="image/*"
             />
             <UploadIcon />
-          </div>
+            <span className="text-xs text-center mt-1">Header Image</span>
+          </label>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Square images work best for clean results.
+          </p>
         </div>
-        <div className="col-flex items-center border rounded-2xl bg-black bg-opacity-20 p-4 px-6">
-          <label htmlFor="header">Header</label>
+
+        {/* Header Text */}
+        <div className="flex flex-col gap-2 p-4 rounded-2xl bg-slate-50/60 dark:bg-slate-800/50 border border-slate-200/20 dark:border-slate-700/30">
+          <label htmlFor="header" className="text-sm font-medium">
+            Header
+          </label>
           <input
-            onChange={(e) => {
-              setHeader(e.target.value);
-            }}
             id="header"
-            className="input"
             type="text"
             value={header}
+            onChange={(e) => setHeader(e.target.value)}
+            className="w-full bg-transparent px-4 py-3 rounded-xl border border-transparent focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
+            placeholder="Main heading..."
           />
         </div>
-        <div className="col-flex items-center border rounded-xl bg-black bg-opacity-20 p-4 px-6 mb-4">
-          <label htmlFor="tagline">Tagline</label>
+
+        {/* Tagline */}
+        <div className="flex flex-col gap-2 p-4 rounded-2xl bg-slate-50/60 dark:bg-slate-800/50 border border-slate-200/20 dark:border-slate-700/30">
+          <label htmlFor="tagline" className="text-sm font-medium">
+            Tagline
+          </label>
           <textarea
-            onChange={(e) => {
-              setTagline(e.target.value);
-            }}
             id="tagline"
-            className="input !rounded-2xl h-[200px]"
             value={tagline}
+            onChange={(e) => setTagline(e.target.value)}
+            className="w-full bg-transparent px-4 py-3 rounded-2xl h-[180px] resize-none border border-transparent focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
+            placeholder="Short description or subtitle..."
           />
         </div>
-        <button className="btn btn-green place-self-end" type="submit">
+
+        {/* Submit */}
+        <button
+          className="btn btn-green btn-sm btn-squish place-self-end mt-2"
+          type="submit"
+        >
           {loading ? (
             <ProgressBar
               height="27"

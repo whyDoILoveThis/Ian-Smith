@@ -3,20 +3,17 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import styles from "../../styles/ProjectCard.module.css";
 import chevron from "../../images/icon--chevron.png";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  deleteDoc,
-  doc,
-} from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
 import ProjectCard from "../main/ProjectCard";
-import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
 import UploadIcon from "../sub/UploadIcon";
 import { handleUrlChange } from "@/lib/handleUrlChange";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
 import { appwrImgUp } from "@/appwrite/appwrStorage";
+import {
+  appwrFetchProjects,
+  appwrDeleteProject,
+} from "@/appwrite/appwrGetProjects";
+import { appwrFetchSkills } from "@/appwrite/appwrSkillManager";
+import { appwrSaveOrUpdateProject } from "@/appwrite/appwrSaveOrUpdateProject";
 
 const ProjectsCMS = () => {
   const [newProject, setNewProject] = useState({
@@ -72,18 +69,12 @@ const ProjectsCMS = () => {
   };
 
   const fetchSkills = async () => {
-    const querySnapshot = await getDocs(collection(db, "skills"));
-    const skillsList = querySnapshot.docs.map(
-      (doc) => ({ id: doc.id, ...doc.data() } as Skill)
-    );
+    const skillsList = await appwrFetchSkills();
     setSkills(skillsList);
   };
 
   const fetchProjects = async () => {
-    const querySnapshot = await getDocs(collection(db, "projects"));
-    const projectsList = querySnapshot.docs.map(
-      (doc) => ({ id: doc.id, ...doc.data() } as Project)
-    );
+    const projectsList = await appwrFetchProjects();
     setProjects(projectsList);
   };
 
@@ -140,8 +131,10 @@ const ProjectsCMS = () => {
         Array.from(screenshots).map(async (file, index) => {
           setLoadingMessage(`Uploading image ${index}...`);
           const imgData = await appwrImgUp(file);
-          return imgData;
-          //return getDownloadURL(fileStorageRef);
+          return {
+            url: imgData.url,
+            fileId: imgData.fileId,
+          } as Screenshot;
         })
       );
       setLoadingMessage("Adding project info...");
@@ -155,7 +148,7 @@ const ProjectsCMS = () => {
         stack,
       };
 
-      await addDoc(collection(db, "projects"), theNewProject);
+      await appwrSaveOrUpdateProject(theNewProject);
       fetchProjects();
       setNewProject({
         title: "",
@@ -175,10 +168,13 @@ const ProjectsCMS = () => {
     }
   };
 
-  const handleDelete = async (id: string | undefined) => {
+  const handleDelete = async (
+    id: string | undefined,
+    screenshots?: Screenshot[]
+  ) => {
     if (id) {
       console.log("trying delete: ", id);
-      await deleteDoc(doc(db, "projects", id));
+      await appwrDeleteProject(id, screenshots);
     }
     fetchProjects();
   };
@@ -190,7 +186,7 @@ const ProjectsCMS = () => {
 
   const getSkillIcon = (skillText: string) => {
     const skill = skills.find((s) => s.text === skillText);
-    return skill ? skill.fileURL : "";
+    return skill ? skill.url : "";
   };
 
   const handleInputChange = (field: keyof typeof newProject, value: string) => {
@@ -344,7 +340,7 @@ const ProjectsCMS = () => {
           {skills.map((skill, index) => (
             <div
               className="flex gap-2 border rounded-full w-fit p-2 px-4"
-              key={skill.id}
+              key={skill.$id}
             >
               <input
                 type="checkbox"
@@ -356,12 +352,12 @@ const ProjectsCMS = () => {
                 }}
               />{" "}
               <div className="flex items-center gap-1">
-                {skill.fileURL && (
+                {skill.url && (
                   <Image
                     className="h-fit"
                     width={20}
                     height={20}
-                    src={skill.fileURL}
+                    src={skill.url}
                     alt="left"
                   />
                 )}

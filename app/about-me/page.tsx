@@ -9,37 +9,22 @@
  * I shall always place 'use client' at the top of the file
  * if I dare to summon React state or effects."
  *
- * May my builds be swift and my hydration flawless. 🕊️
+ * May my builds be swift and my hydration flawless.
+ *
+ * AMEN🕊️
  **********************************************************************/
 "use client"; // ✨ THE HOLY INCANTATION ✨
 
 import Nav from "@/components/main/Nav";
 import ItsTooltip from "@/components/ui/its-tooltip";
-import { db } from "@/lib/firebaseConfig";
-import { collection, getDocs } from "firebase/firestore";
+import { useSkills } from "@/hooks/useSkills";
 import Image from "next/image";
 import Link from "next/link";
-import React, { useEffect, useState } from "react";
+import ImgOfMe from "@/images/hero--img.png";
+import Footer from "@/components/main/Footer";
 
 const AboutMe = () => {
-  const [skills, setSkills] = useState<Skill[]>([]);
-
-  useEffect(() => {
-    const fetchSkills = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "skills"));
-        const skillsList = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<Skill, "id">),
-        }));
-        setSkills(skillsList);
-      } catch (error) {
-        console.error("Error fetching skills:", error);
-      }
-    };
-
-    fetchSkills();
-  }, []);
+  const skills = useSkills();
 
   return (
     <article className="pt-6 pb-10">
@@ -74,12 +59,18 @@ const AboutMe = () => {
             {/* Left column: avatar + badges + CTAs */}
             <aside className="md:w-1/3 flex flex-col items-center md:items-start gap-6">
               <div
-                className="w-28 h-28 rounded-full bg-gradient-to-br from-slate-100 to-slate-200
+                className="w-36 h-36 rounded-full bg-gradient-to-br from-slate-100 to-slate-200
                          dark:from-gray-800 dark:to-gray-900 flex items-center justify-center
                          text-2xl font-bold text-slate-800 dark:text-slate-100 ring-1 ring-gray-200 dark:ring-gray-700"
                 aria-hidden
               >
-                ITS
+                <Image
+                  className="-translate-y-1.5 translate-x-2"
+                  src={ImgOfMe}
+                  alt="ITS Logo"
+                  width={100}
+                  height={100}
+                />
               </div>
 
               {/* Dynamic skill badges */}
@@ -93,12 +84,12 @@ const AboutMe = () => {
                                    text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700"
                       >
                         <Image
-                          src={skill.fileURL}
+                          src={skill.url}
                           alt={skill.text}
                           width={20}
                           height={20}
                           className="drop-shadow-sm"
-                        />{" "}
+                        />
                       </span>
                     </ItsTooltip>
                   ))}
@@ -137,20 +128,33 @@ const AboutMe = () => {
                 Hi — I’m <strong>Ian Thai Smith</strong>. I build web apps with
                 a focus on clean UX, performance, and simple DX for other
                 developers. I prefer small, maintainable codebases that scale,
-                and I enjoy turning rough ideas into polished products.
+                and I enjoy turning rough ideas into polished products. These
+                aren&apos;t just buzzwords - this is literally how I work.
+              </p>
+
+              <p>
+                DX is one of my main focal points. If your application
+                can&apos;t be properly maintained or extended, it doesn&apos;t
+                matter how fast it runs. You need code that is flexible, and
+                easy to scale and read. Without that combination your app will
+                always be a headache to work on.
               </p>
 
               <p>
                 My toolkit includes React, Next.js, TypeScript, Node, and
                 Tailwind. I’ve shipped utilities and small native tools (C++),
                 as well as dashboards and full stack systems. I love optimizing
-                critical paths and improving developer ergonomics.
+                critical paths and improving developer ergonomics. Basically, to
+                put it in plain english: I like to make very important things
+                highly optimized without overengineering, and I make them easy
+                to work with.
               </p>
 
               <p>
-                When I’m not coding, I’m outside training, reading, or tinkering
-                with small projects. If you’re hiring or want to collaborate,
-                reach out — I respond quickly.
+                When I’m not coding, I’m outside running, or tinkering with
+                small projects, maybe inside reading or playing minecraft. I’m
+                always open to new opportunities. If you’re hiring or want to
+                collaborate, reach out — I respond quickly.
               </p>
 
               {/* Optional quick facts / stats */}
@@ -187,6 +191,7 @@ const AboutMe = () => {
           }
         `}</style>
       </section>
+      <Footer />
     </article>
   );
 };

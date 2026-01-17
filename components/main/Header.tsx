@@ -56,7 +56,15 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
     document.body.style.overflow = "hidden";
 
     const t = setTimeout(() => setMinTimeElapsed(true), 3000);
-    return () => clearTimeout(t);
+    // Fallback: enable scroll after 7 seconds even if image hasn't loaded
+    const fallbackT = setTimeout(() => {
+      document.body.style.overflow = "auto";
+    }, 7000);
+
+    return () => {
+      clearTimeout(t);
+      clearTimeout(fallbackT);
+    };
   }, []);
 
   // hide loader only after we have an image URL and the minimum time elapsed

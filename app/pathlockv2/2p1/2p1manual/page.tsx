@@ -223,11 +223,7 @@ export default function RfSimPage() {
 
         {/* Manual mapper: use the manual-only overlay */}
         <div className="col-span-2">
-          <ManualLearningLobeOverlay
-            key={overlayKey}
-            gridSize={121}
-            canvasSize={420}
-          />
+          <ManualLearningLobeOverlay />
         </div>
       </div>
 

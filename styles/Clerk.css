@@ -1,83 +1,72 @@
-.cl-modalBackdrop.🔒️.cl-internal-1gaxbcg {
+.cl-modalBackdrop.🔒️.cl-internal-bkuiv1 {
+  z-index: 99999999;
   align-items: center !important;
-  backdrop-filter: blur(10px);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 100%) !important;
+  backdrop-filter: blur(12px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.2) !important;
 }
 
-.cl-internal-4x6jej {
-  display: none !important;
-  visibility: hidden !important;
-  position: relative !important;
-  top: -200px !important;
-  background-color: aqua;
-}
-
-.cl-footer.🔒️.cl-internal-nofrx8 {
+.cl-header.🔒️.cl-internal-vvtys3 {
   display: none !important;
 }
 
-.cl-footerAction.cl-footerAction__signIn.🔒️.cl-internal-1rpdi70 {
+.cl-footer.🔒️.cl-internal-vorlia {
   display: none !important;
 }
 
-.cl-internal-1pr5xvn {
-  display: none;
+.cl-card.cl-signIn-start.🔒️.cl-internal-d5pd3d {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  border-radius: 28px;
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3), 
+              inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
 }
 
-.cl-card.cl-signIn-start.🔒️.cl-internal-1p733cp {
-  display: block;
-}
-
-
-.cl-internal-1dauvpw {
- display: none !important;
-  visibility: hidden !important;
-  position: relative !important;
-  top: -200px !important;
-  background-color: aqua;
-}
-.cl-internal-df7v37 {
-  display: none !important;
-  visibility: hidden !important;
-  position: relative !important;
-  top: -200px !important;
-  background-color: aqua;
-}
-
-.cl-card.cl-signIn-start.🔒️.cl-internal-1p733cp {
-  background: rgba(0, 0, 0, 0.766);
+.cl-card.cl-signIn-start.🔒️.cl-internal-d5pd3d:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 48px 0 rgba(0, 0, 0, 0.4),
+              inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .cl-formFieldLabel {
   @apply
-  text-slate-400
+  text-slate-300
+  font-medium
+  text-sm
+  tracking-wide
 }
 
 .cl-formFieldAction {
   @apply
-  text-slate-500
-  hover:text-slate-400
+  text-slate-400
+  hover:text-slate-200
+  transition-colors
+  duration-200
 }
 
-
-
 .cl-formButtonPrimary {
-  box-shadow: none !important;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(34, 197, 94, 0.15) 100%) !important;
+  border: 1.5px solid rgba(34, 197, 94, 0.5) !important;
+  box-shadow: 0 4px 15px 0 rgba(34, 197, 94, 0.2),
+              inset 0 1px 1px 0 rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px) !important;
   @apply
-  selection:bg-transparent
-    hover:bg-opacity-30
-    dark:hover:bg-opacity-10
-    cursor-pointer
-    w-fit 
-    p-1
-    px-3
-    border
-    rounded-md
-text-green-600
-    dark:text-green-200
-    border-green-500
-    bg-green-600
-    dark:bg-green-400
-    bg-opacity-20
-    dark:bg-opacity-20
-  shadow-none;
+  text-green-100
+  font-semibold
+  rounded-lg
+  cursor-pointer
+  transition-all
+  duration-300
+  hover:text-green-50
+  active:scale-95;
+}
+
+.cl-formButtonPrimary:hover {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.4) 0%, rgba(34, 197, 94, 0.25) 100%) !important;
+  border-color: rgba(34, 197, 94, 0.7) !important;
+  box-shadow: 0 6px 25px 0 rgba(34, 197, 94, 0.3),
+              inset 0 1px 1px 0 rgba(255, 255, 255, 0.3) !important;
 }

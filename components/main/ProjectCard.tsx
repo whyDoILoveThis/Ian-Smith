@@ -4,27 +4,23 @@ import styles from "../../styles/ProjectCard.module.css";
 import chevron from "../../images/icon--chevron.png";
 import { useEffect, useRef, useState } from "react";
 import { MdModeEditOutline } from "react-icons/md";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
 import { handleUrlChange } from "@/lib/handleUrlChange";
 import UploadIcon from "../sub/UploadIcon";
-import {
-  deleteObject,
-  getDownloadURL,
-  getStorage,
-  ref as storageRef,
-  uploadBytes,
-} from "firebase/storage";
 import Loader from "./Loader";
 import ItsTooltip from "../ui/its-tooltip";
 import { appwrImgUp } from "@/appwrite/appwrStorage";
 import { appwrSaveOrUpdateProject } from "@/appwrite/appwrSaveOrUpdateProject";
+import { appwrFetchSkills } from "@/appwrite/appwrSkillManager";
+import DeleteProjPop from "../sub/DeleteProjPop";
 
 interface Props {
   project: Project;
   getSkillIcon: (skillText: string) => string;
-  handleDelete?: (id: string | undefined) => Promise<void>;
+  handleDelete?: (
+    id: string | undefined,
+    screenshots?: Screenshot[],
+  ) => Promise<void>;
   fetchProjects: () => void;
 }
 
@@ -52,6 +48,7 @@ const ProjectCard = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
+  const [showFullscreenControls, setShowFullscreenControls] = useState(true);
 
   useEffect(() => {
     const checkOverflow = () => {
@@ -90,10 +87,7 @@ const ProjectCard = ({
   };
 
   const fetchSkills = async () => {
-    const querySnapshot = await getDocs(collection(db, "skills"));
-    const skillsList = querySnapshot.docs.map(
-      (doc) => ({ id: doc.id, ...doc.data() } as Skill)
-    );
+    const skillsList = await appwrFetchSkills();
     setSkills(skillsList);
   };
 
@@ -141,7 +135,7 @@ const ProjectCard = ({
         });
 
       const imgurls = await Promise.all(
-        files.map((file) => readFileAsDataURL(file))
+        files.map((file) => readFileAsDataURL(file)),
       );
       setImageUrls(imgurls); // Update state after all files are processed
       console.log("Updated imageUrls:", imgurls);
@@ -176,15 +170,18 @@ const ProjectCard = ({
         Array.from(screenshots).map(async (file, index) => {
           setLoadingMsg(`Uploading image ${index}...`);
           const imgData = await appwrImgUp(file);
-          return imgData;
-          //return getDownloadURL(fileStorageRef);
-        })
+          return {
+            url: imgData.url,
+            fileId: imgData.fileId,
+          } as Screenshot;
+        }),
       );
     }
 
     setLoadingMsg("Adding project info...");
 
     const theEditedProject = {
+      projectId: project.$id,
       title: editedProject.title,
       description: editedProject.description,
       moreInfo: editedProject.moreInfo,
@@ -195,7 +192,7 @@ const ProjectCard = ({
     };
 
     try {
-      appwrSaveOrUpdateProject(theEditedProject);
+      await appwrSaveOrUpdateProject(theEditedProject);
       setShowEdit(false);
       setEditScreenshots(false);
       fetchProjects();
@@ -249,33 +246,12 @@ const ProjectCard = ({
       {handleDelete && (
         <div>
           {showDeletePop && (
-            <div className="fixed top-0 left-0 z-[99999] col-flex items-center justify-center w-full h-full bg-black bg-opacity-50 backdrop-blur-lg">
-              <p className="rounded-xl p-2 border border-red-400 text-red-200 btn-red text-lg">
-                About to <b>DELETE</b>: {project.title}
-              </p>
-              <p className="text-xl mt-4">
-                This action is <b className=" underline">NOT</b> reversable!!!
-              </p>
-              <p className="text-2xl mt-4 mb-1 font-bold">Are you sure???</p>
-              <div className="flex gap-6">
-                <button
-                  className="border-2 border-green-500 rounded-xl p-2"
-                  onClick={() => {
-                    handleDelete(project.id);
-                    setShowDeletePop(false);
-                    setLoadingDelete(true);
-                  }}
-                >
-                  Yes
-                </button>
-                <button
-                  className="border-2 border-red-500 rounded-xl p-2"
-                  onClick={() => setShowDeletePop(false)}
-                >
-                  NO!
-                </button>
-              </div>
-            </div>
+            <DeleteProjPop
+              project={project}
+              handleDelete={handleDelete}
+              setShowDeletePop={setShowDeletePop}
+              setLoadingDelete={setLoadingDelete}
+            />
           )}
 
           <div className={`${styles.projectCMSBtnsWrap} `}>
@@ -331,7 +307,7 @@ const ProjectCard = ({
                   <button
                     onClick={() => {
                       prevScreenshot(
-                        editScreenshots ? imageUrls : project.screenshots
+                        editScreenshots ? imageUrls : project.screenshots,
                       );
                     }}
                     className={[styles.btnArrow, styles.btnLeft].join(" ")}
@@ -341,7 +317,7 @@ const ProjectCard = ({
                   <button
                     onClick={() => {
                       nextScreenshot(
-                        editScreenshots ? imageUrls : project.screenshots
+                        editScreenshots ? imageUrls : project.screenshots,
                       );
                     }}
                     className={[styles.btnArrow, styles.btnRight].join(" ")}
@@ -361,7 +337,7 @@ const ProjectCard = ({
                     className={styles.screenshot}
                     width={200}
                     height={140}
-                    src={project.screenshots[currentScreenshot].url}
+                    src={project.screenshots[currentScreenshot]?.url || ""}
                     alt="Screenshot"
                     onLoad={() => {
                       if (!loadedImages.includes(currentScreenshot)) {
@@ -537,12 +513,12 @@ const ProjectCard = ({
                 onChange={handleStackChange}
               />{" "}
               <div className="flex items-center gap-1">
-                {skill.fileURL && (
+                {skill.url && (
                   <Image
                     className="h-fit"
                     width={20}
                     height={20}
-                    src={skill.fileURL}
+                    src={skill.url}
                     alt="left"
                   />
                 )}
@@ -552,42 +528,58 @@ const ProjectCard = ({
         </div>
       )}
       {isFullscreen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
-          <button
-            className="absolute top-20 right-4 text-white text-2xl btn btn-round btn-red"
-            onClick={() => setIsFullscreen(false)}
-          >
-            ✖
-          </button>
-          <button
-            className="absolute left-4 text-white text-2xl btn btn-round"
-            onClick={() => prevScreenshot(project.screenshots)}
-          >
-            <Image
-              className="rotate-90 -translate-x-0.5"
-              width={25}
-              height={25}
-              src={chevron}
-              alt="left"
-            />
-          </button>
-          <button
-            className="absolute right-4 text-white text-2xl btn btn-round"
-            onClick={() => nextScreenshot(project.screenshots)}
-          >
-            <Image
-              className="-rotate-90 translate-x-0.5"
-              width={25}
-              height={25}
-              src={chevron}
-              alt="right"
-            />
-          </button>
+        <div className="fixed backdrop-blur-md inset-0 zz-top-plus3 flex items-center justify-center bg-black bg-opacity-80">
+          {showFullscreenControls && (
+            <div className="zz-top-plus-4">
+              <button
+                className="absolute top-20 right-4 text-2xl btn btn-round btn-red !bg-red-500 !bg-opacity-60 backdrop-blur-sm"
+                onClick={() => setIsFullscreen(false)}
+              >
+                ✖
+              </button>
+              <button
+                className="absolute left-4 text-white text-2xl btn btn-round !bg-black/40"
+                onClick={() => prevScreenshot(project.screenshots)}
+              >
+                <Image
+                  className="rotate-90 -translate-x-0.5"
+                  width={25}
+                  height={25}
+                  src={chevron}
+                  alt="left"
+                />
+              </button>
+              <button
+                className="absolute right-4 text-white text-2xl btn btn-round !bg-black/40"
+                onClick={() => nextScreenshot(project.screenshots)}
+              >
+                <Image
+                  className="-rotate-90 translate-x-0.5"
+                  width={25}
+                  height={25}
+                  src={chevron}
+                  alt="right"
+                />
+              </button>
+            </div>
+          )}
           <Image
-            src={project.screenshots[currentScreenshot].url}
-            alt="Fullscreen Screenshot"
-            width={800}
-            height={600}
+            onClick={() => {
+              setShowFullscreenControls(!showFullscreenControls);
+            }}
+            className=""
+            width={1200}
+            height={1200}
+            src={project.screenshots[currentScreenshot]?.url || ""}
+            alt="Screenshot"
+            onLoad={() => {
+              if (!loadedImages.includes(currentScreenshot)) {
+                setLoadedImages((prev) => [...prev, currentScreenshot]);
+              }
+            }}
+            style={{
+              opacity: loadedImages.includes(currentScreenshot) ? "1" : "0.5",
+            }}
           />
         </div>
       )}

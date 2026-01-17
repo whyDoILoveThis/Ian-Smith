@@ -1,6 +1,6 @@
 import { ID } from "appwrite";
 import { storage, tablesDB } from "./appwriteConfig";
-import { appwrImgUp } from "./appwrStorage";
+import { appwrImgUp, appwrImgDelete } from "./appwrStorage";
 
 interface SaveSkillParams {
   file: File;
@@ -49,15 +49,49 @@ export async function appwrFetchSkills(): Promise<Skill[]> {
     });
 
     // Map Appwrite rows to your Skill interface
-    const skills = response.rows.map((row: any) => ({
-      $id: row.$id,
-      ...row.data,
-    }));
+    const skills = response.rows.map((row: any) => {
+      // Appwrite tables store data in the row itself, not nested
+      const skillData = {
+        $id: row.$id,
+        text: row.text || row.data?.text,
+        url: row.url || row.data?.url,
+        fileId: row.fileId || row.data?.fileId,
+      };
+      console.log("📝 Single skill data:", skillData);
+      return skillData;
+    });
 
     console.log("🛠 Skills fetched:", skills);
     return skills;
   } catch (error) {
     console.error("❌ Error fetching skills:", error);
     return [];
+  }
+}
+
+export async function appwrDeleteSkill(
+  skillId: string,
+  fileId?: string
+): Promise<void> {
+  const databaseId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
+  const tableId = process.env.NEXT_PUBLIC_APPWRITE_SKILLS_TABLE_ID!;
+
+  try {
+    // Delete the image file from storage if fileId exists
+    if (fileId) {
+      await appwrImgDelete(fileId);
+    }
+
+    // Delete the skill row from the database
+    await tablesDB.deleteRow({
+      databaseId,
+      tableId,
+      rowId: skillId,
+    });
+
+    console.log(`✅ Skill ${skillId} deleted`);
+  } catch (error) {
+    console.error("❌ Error deleting skill:", error);
+    throw error;
   }
 }

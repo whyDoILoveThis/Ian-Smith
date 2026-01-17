@@ -9,6 +9,7 @@ import { useState } from "react";
 import BotBtn from "@/components/main/AI/BotBtn";
 import ConfettiCelebration from "@/components/main/ConfettiCelebration";
 import useRefreshOnReconnect from "@/hooks/useRefreshOnReconnect";
+import Footer from "@/components/main/Footer";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
@@ -16,8 +17,10 @@ export default function Home() {
   useRefreshOnReconnect();
 
   return (
-    <article className="pt-16">
-      <Nav />
+    <article
+      className={`${!showBot ? "pt-20" : ""} w-full col-flex items-center`}
+    >
+      {!showBot && <Nav />}
       <div className="w-full col-flex items-center mb-6">
         <Header />
       </div>
@@ -29,11 +32,12 @@ export default function Home() {
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && (
         <ItsPopover show={showBot} setShow={setShowBot}>
-          <div className="w-full px-4 pr-8 h-full">
+          <div className="w-full pr-4 h-full">
             <ItsBot show={showBot} setShow={setShowBot} />
           </div>
         </ItsPopover>
       )}
+      <Footer />
     </article>
   );
 }

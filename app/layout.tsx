@@ -9,7 +9,6 @@ import { ThemeProvider } from "@/components/Theme/ThemeProvider";
 import { ClerkProvider, SignedIn, SignedOut } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/toaster";
 import CMS from "@/components/CMS/CMS";
-import Footer from "@/components/main/Footer";
 import ConnectivityWrapper from "@/components/main/ConnectivityWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -43,11 +42,10 @@ export default function RootLayout({
             <SignedOut>
               <ConnectivityWrapper>
                 <main className="flex flex-col items-center">
-                  <div className="w-full h-full max-w-[800px]">{children}</div>
+                  <div className="w-full max-w-[800px]">{children}</div>
                 </main>
               </ConnectivityWrapper>
             </SignedOut>
-            <Footer />
           </ThemeProvider>
         </body>
       </html>

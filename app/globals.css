@@ -63,8 +63,14 @@
   * {
     @apply border-border;
   }
+  html {
+    height: auto;
+    overflow-y: auto;
+  }
   body {
     @apply bg-background text-foreground;
+    height: auto;
+    overflow-y: auto;
   }
 }
 
@@ -78,6 +84,14 @@ h1 {
 
 .zz-top-plus2 {
   z-index: 1000001;
+}
+
+.zz-top-plus3 {
+  z-index: 1000003;
+}
+
+.zz-top-plus-4 {
+  z-index: 1000004;
 }
 
 .zz-10 {

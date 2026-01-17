@@ -11,6 +11,7 @@ export default function DoubleSecretLogin() {
   const leftPortal = useSecretUnlock(true); // locked at start
   const [showModal, setShowModal] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
 
   // 🔓 Unlock left when right is fully unlocked
   useEffect(() => {
@@ -129,7 +130,11 @@ export default function DoubleSecretLogin() {
         </div>
       )}
       {showModal && (
-        <div className="fixed inset-0 z-[99999] bg-slate-950 bg-opacity-70 backdrop-blur-sm ">
+        <div
+          className={`fixed inset-0 ${
+            !showSignIn ? "zz-top-plus3" : "z-[0]"
+          } pt-56 bg-slate-950 bg-opacity-70 backdrop-blur-sm `}
+        >
           <p className="text-center mt-2 text-sm text-slate-300">
             You could literally be installing malware or viruses, do you REALLY
             wish to proceed?
@@ -142,9 +147,9 @@ export default function DoubleSecretLogin() {
                 rightPortal.reset();
                 leftPortal.reset();
               }}
-              className="btn btn-green btn-squish"
+              className="btn btn-green font-bold text-2xl mb-5"
             >
-              Back to Safety
+              👈Back to Safety
             </button>
             {!showDownload ? (
               <button
@@ -156,13 +161,21 @@ export default function DoubleSecretLogin() {
                 Potentially Download Harmful/Dangerous Files
               </button>
             ) : (
-              <a href="/files.zip" download className="relative btn btn-red">
-                <span className="w-fit h-fit z-[999999] opacity-0">
+              <a
+                href="/files.zip"
+                download
+                className="relative flex justify-center items-center btn btn-red"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSignIn(!showSignIn);
+                }}
+              >
+                <span className="absolute">
+                  <DownloadIcon />
+                </span>
+                <span className="opacity-0">
                   <SignInButton mode="modal" />
                 </span>
-                <p className="z-0 w-[20px] h-[20px] absolute top-2 right-4">
-                  <DownloadIcon />
-                </p>
               </a>
             )}
           </div>

@@ -10,6 +10,7 @@ const LinkUnderlineAnim = ({ linkText, linkHref }: Props) => {
   return (
     <Link
       href={linkHref}
+      target="_blank"
       className="text-lg place-self-start mb-4 font-semibold tracking-wide dark:text-slate-200 
               text-slate-800     relative group"
     >

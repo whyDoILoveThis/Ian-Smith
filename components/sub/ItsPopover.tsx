@@ -22,13 +22,14 @@ const ItsPopover = ({ children, zIndex = "999", show, setShow }: Props) => {
     return () => {
       document.body.classList.remove("overflow-hidden");
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!show) return;
 
   return (
     <div
-      className={`bg-black pt-16 bg-opacity-60 fixed z-50 top-0 left-0 w-screen h-screen backdrop-blur-md 
+      className={`bg-black bg-opacity-60 fixed z-50 top-0 left-0 w-screen h-screen backdrop-blur-md 
                     flex flex-col items-center 
     `}
     >

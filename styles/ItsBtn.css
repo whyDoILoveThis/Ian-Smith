@@ -14,7 +14,8 @@
     p-1
     px-3
     border
-    rounded-md;
+    rounded-md
+    backdrop-blur-md;
 }
 
 

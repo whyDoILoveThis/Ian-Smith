@@ -73,8 +73,9 @@ export default function ItsDropdown({
       <div onClick={() => setOpen((prev) => !prev)}>{trigger}</div>
 
       <div
+        onClick={handleContentClick}
         className={`
-          absolute min-w-[10rem] w-72 rounded-xl shadow-lg bg-white dark:bg-gray-900 border dark:border-gray-700 z-[999]
+          absolute min-w-[10rem] w-72 p-2 rounded-xl shadow-lg bg-white dark:bg-gray-900 border dark:border-gray-700 z-[999]
           transition-all duration-200 transform
           ${
             open
@@ -86,9 +87,7 @@ export default function ItsDropdown({
         `}
         role="menu"
       >
-        <div className="p-2" onClick={handleContentClick}>
-          {children}
-        </div>
+        {children}
       </div>
     </div>
   );

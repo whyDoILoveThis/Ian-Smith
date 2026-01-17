@@ -1,19 +1,15 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import ProjectCard from "./ProjectCard";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
 import { appwrFetchProjects } from "@/appwrite/appwrGetProjects";
+import { appwrFetchSkills } from "@/appwrite/appwrSkillManager";
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
 
   const fetchSkills = async () => {
-    const querySnapshot = await getDocs(collection(db, "skills"));
-    const skillsList = querySnapshot.docs.map(
-      (doc) => ({ id: doc.id, ...doc.data() } as Skill)
-    );
+    const skillsList = await appwrFetchSkills();
     setSkills(skillsList);
   };
 
@@ -30,7 +26,7 @@ const Projects = () => {
 
   const getSkillIcon = (skillText: string) => {
     const skill = skills.find((s) => s.text === skillText);
-    return skill ? skill.fileURL : "";
+    return skill ? skill.url : "";
   };
 
   if (!projects || !skills) return <div></div>;
