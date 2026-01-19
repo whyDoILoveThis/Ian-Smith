@@ -7,10 +7,8 @@ import { Conversation, Message } from "./types";
 import { Sidebar } from "./Sidebar";
 import { ChatArea } from "./ChatArea";
 import { MobileSidebar } from "./MobileSidebar";
-import {
-  fbSaveConversationSessionByUser,
-  fbGetConversationSessionsByFingerprint,
-} from "@/firebase/fbConversationByUser";
+import { fbSaveConversationSessionByUser } from "@/firebase/fbConversationByUser";
+import { doFingerprintThing } from "./Fingerprinter";
 
 interface Props {
   show: boolean;
@@ -34,14 +32,28 @@ export default function ItsBot({ show, setShow }: Props) {
 
     const init = async () => {
       try {
-        const fp = await FingerprintJS.load();
-        const result = await fp.get();
-        const visitorId = result.visitorId;
-        if (!mounted) return;
-        setFingerprint(visitorId);
+        // get fingerprint
+        const {
+          visitorId,
+          os,
+          browserUA,
+          timezone,
+          languages,
+          screenResolution,
+          cpuCores,
+          memoryGB,
+          gpuInfo,
+        } = await doFingerprintThing(mounted, setFingerprint);
 
-        // Try remote first
-       
+        console.log("🆔 visitorId:", visitorId);
+        console.log("💻 os:", os);
+        console.log("🌐 browserUA:", browserUA);
+        console.log("⏰ timezone:", timezone);
+        console.log("🗣️ languages:", languages);
+        console.log("🖥️ screenResolution:", screenResolution);
+        console.log("🧠 cpuCores:", cpuCores);
+        console.log("💾 memoryGB:", memoryGB);
+        console.log("🎮 gpuInfo:", gpuInfo);
 
         // fallback: check per-user localStorage
         const saved = localStorage.getItem(localKey(visitorId));
@@ -107,7 +119,7 @@ export default function ItsBot({ show, setShow }: Props) {
     if (fingerprint) {
       // fbSaveConversationSessionByUser handles merging by id (no duplicates)
       fbSaveConversationSessionByUser(fingerprint, conversations).catch((err) =>
-        console.error("Failed to save sessions:", err)
+        console.error("Failed to save sessions:", err),
       );
     }
   }, [conversations, fingerprint]);
@@ -116,12 +128,12 @@ export default function ItsBot({ show, setShow }: Props) {
   const updateConversation = (
     id: string,
     messages: Message[],
-    title?: string
+    title?: string,
   ) =>
     setConversations((prev) =>
       prev.map((c) =>
-        c.id === id ? { ...c, messages, title: title ?? c.title } : c
-      )
+        c.id === id ? { ...c, messages, title: title ?? c.title } : c,
+      ),
     );
 
   const handleNewConversation = (fingerprintId?: string) => {
@@ -179,14 +191,14 @@ export default function ItsBot({ show, setShow }: Props) {
 
     const newMessages = [
       ...activeConversation.messages,
-      { role: "user" as const, content: input },
+      { role: "user" as const, content: input, timestamp: Date.now() },
     ];
 
     if (activeConversation.messages.length === 0) {
       updateConversation(
         activeConversation.id,
         newMessages,
-        input.slice(0, 30)
+        input.slice(0, 30),
       );
     } else {
       updateConversation(activeConversation.id, newMessages);
@@ -196,16 +208,26 @@ export default function ItsBot({ show, setShow }: Props) {
     setLoading(true);
 
     try {
+      // For API, remove timestamp
+      const messagesForAPI = newMessages.map(({ role, content }) => ({
+        role,
+        content,
+      }));
+
       const res = await fetch("/api/its-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userMessages: newMessages }),
+        body: JSON.stringify({ userMessages: messagesForAPI }),
       });
       const data = await res.json();
       const botReply = data.reply ?? "Not sure what to say.";
       updateConversation(activeConversation.id, [
         ...newMessages,
-        { role: "assistant" as const, content: botReply },
+        {
+          role: "assistant" as const,
+          content: botReply,
+          timestamp: Date.now(),
+        },
       ]);
     } catch (err) {
       console.error(err);
@@ -214,6 +236,7 @@ export default function ItsBot({ show, setShow }: Props) {
         {
           role: "assistant" as const,
           content: "Something went wrong on my end.",
+          timestamp: Date.now(),
         },
       ]);
     } finally {

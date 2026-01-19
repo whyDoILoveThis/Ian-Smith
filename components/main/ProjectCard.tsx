@@ -13,6 +13,7 @@ import { appwrImgUp } from "@/appwrite/appwrStorage";
 import { appwrSaveOrUpdateProject } from "@/appwrite/appwrSaveOrUpdateProject";
 import { appwrFetchSkills } from "@/appwrite/appwrSkillManager";
 import DeleteProjPop from "../sub/DeleteProjPop";
+import ItsCheckbox from "../ui/its-checkbox";
 
 interface Props {
   project: Project;
@@ -506,12 +507,12 @@ const ProjectCard = ({
               className="flex gap-2 border rounded-full w-fit p-2 px-4"
               key={skill.id}
             >
-              <input
-                type="checkbox"
+              <ItsCheckbox
                 value={skill.text}
                 defaultChecked={project.stack.includes(skill.text)}
                 onChange={handleStackChange}
-              />{" "}
+              />
+
               <div className="flex items-center gap-1">
                 {skill.url && (
                   <Image

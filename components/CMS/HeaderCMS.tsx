@@ -90,7 +90,6 @@ const HeaderCMS = () => {
 
   return (
     <div className="col-flex items-center py-4 rounded-2xl">
-      <h2 className="italic text-green-300">NEW UPDATES!</h2>
       <Header cmsImageUrl={imageUrl} cmsHeader={header} cmsTagline={tagline} />
       <form
         onSubmit={(e) => {

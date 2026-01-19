@@ -12,6 +12,7 @@ import {
   SessionFull,
   UserSummary,
 } from "@/firebase/fbGetConversationsSessionsGrouped";
+import { fbDeleteUserSessions } from "@/firebase/fbConversationByUser";
 
 export default function AiConversationsCMS() {
   const [users, setUsers] = useState<UserSummary[]>([]);
@@ -24,6 +25,7 @@ export default function AiConversationsCMS() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [expandedConvId, setExpandedConvId] = useState<string | null>(null);
+  const [allowEdit, setAllowEdit] = useState(false);
 
   // 🔹 Fetch all user docs
   const loadUsers = async () => {
@@ -86,6 +88,23 @@ export default function AiConversationsCMS() {
     }
   };
 
+  const handleDeleteEntireUser = async (userId: string) => {
+    const confirmed = window.confirm(
+      "Delete this entire user and all their conversations?",
+    );
+    if (!confirmed) return;
+
+    try {
+      // Delete the user document (assuming you have a function for this)
+      // await fbDeleteUserDocument(userId);
+      // Then delete all sessions for this user
+      await fbDeleteUserSessions(userId);
+      loadUsers();
+    } catch (err: any) {
+      alert("Failed to delete user: " + String(err?.message || err));
+    }
+  };
+
   return (
     <div className="w-full flex flex-col md:flex-row gap-4 max-w-5xl p-4">
       {/* Left: users list */}
@@ -126,6 +145,17 @@ export default function AiConversationsCMS() {
                   {u.sessionCount ?? 0} conversations
                 </div>
               </button>
+              {u.id === activeUserId && allowEdit && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteEntireUser(u.id);
+                  }}
+                  className="text-red-500 hover:text-red-700 text-xs"
+                >
+                  ✖
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -149,10 +179,19 @@ export default function AiConversationsCMS() {
         )}
 
         {activeUserSessions && !loadingSessions && (
-          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+          <div className="flex flex-col gap-4">
             {activeUserSessions.sessions.length === 0 && (
               <div className="text-sm text-gray-500">No conversations.</div>
             )}
+
+            <button
+              onClick={() => {
+                setAllowEdit(!allowEdit);
+              }}
+              className={`btn ${allowEdit ? "btn-orange" : "btn-blue"} btn-squish place-self-end`}
+            >
+              {allowEdit ? "Stop Editing" : "Edit"}
+            </button>
 
             {activeUserSessions.sessions.map((conv) => {
               const isOpen = expandedConvId === conv.id;
@@ -174,15 +213,17 @@ export default function AiConversationsCMS() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteConversation(conv.id);
-                        }}
-                        className="text-red-500 hover:text-red-700 text-xs"
-                      >
-                        ✖
-                      </button>
+                      {allowEdit && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteConversation(conv.id);
+                          }}
+                          className="text-red-500 hover:text-red-700 text-xs"
+                        >
+                          ✖
+                        </button>
+                      )}
                       <button className="text-xs text-blue-500 hover:text-blue-700">
                         {isOpen ? "▲ Hide" : "▼ Expand"}
                       </button>
@@ -193,7 +234,7 @@ export default function AiConversationsCMS() {
                   <div
                     className={`transition-all duration-500 ease-in-out ${
                       isOpen
-                        ? "max-h-[600px] opacity-100 p-3"
+                        ? "max-h-[600px] opacity-100 p-3 overflow-y-auto customScroll"
                         : "max-h-0 opacity-0"
                     } overflow-hidden`}
                   >
@@ -201,20 +242,33 @@ export default function AiConversationsCMS() {
                       {conv.messages.map((m, i) => (
                         <div
                           key={i}
-                          className={`flex ${
+                          className={`flex  ${
                             m.role === "user" ? "justify-end" : "justify-start"
                           }`}
                         >
-                          <div
-                            className={`max-w-xs px-4 py-2 rounded-2xl shadow text-sm ${
-                              m.role === "user"
-                                ? "bg-blue-500 text-white rounded-br-none"
-                                : "bg-gray-200 dark:bg-gray-600 text-black dark:text-white rounded-bl-none"
-                            }`}
-                          >
-                            <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
-                              {m.content}
-                            </ReactMarkdown>
+                          <div className="flex flex-col gap-1">
+                            <div
+                              className={`max-w-xs px-4 py-2 rounded-2xl shadow text-sm ${
+                                m.role === "user"
+                                  ? "bg-blue-500 text-white rounded-br-none"
+                                  : "bg-gray-200 dark:bg-gray-600 text-black dark:text-white rounded-bl-none"
+                              }`}
+                            >
+                              <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+                                {m.content}
+                              </ReactMarkdown>
+                            </div>
+                            <span
+                              className={`text-sm text-slate-600 ${
+                                m.role === "user" ? "self-end" : ""
+                              }`}
+                            >
+                              {m.timestamp &&
+                                new Date(m.timestamp).toLocaleTimeString()}
+                              <br />
+                              {m.timestamp &&
+                                new Date(m.timestamp).toLocaleDateString()}
+                            </span>
                           </div>
                         </div>
                       ))}

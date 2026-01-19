@@ -10,6 +10,7 @@ import BotBtn from "@/components/main/AI/BotBtn";
 import ConfettiCelebration from "@/components/main/ConfettiCelebration";
 import useRefreshOnReconnect from "@/hooks/useRefreshOnReconnect";
 import Footer from "@/components/main/Footer";
+import PurpleParticleToggle from "@/components/main/PurpleParticleToggle";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);

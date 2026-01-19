@@ -14,6 +14,7 @@ import {
 } from "@/appwrite/appwrGetProjects";
 import { appwrFetchSkills } from "@/appwrite/appwrSkillManager";
 import { appwrSaveOrUpdateProject } from "@/appwrite/appwrSaveOrUpdateProject";
+import ItsCheckbox from "../ui/its-checkbox";
 
 const ProjectsCMS = () => {
   const [newProject, setNewProject] = useState({
@@ -64,7 +65,7 @@ const ProjectsCMS = () => {
 
   const handleCheckboxChange = (index: number) => {
     setCheckboxStates((prev) =>
-      prev.map((checked, i) => (i === index ? !checked : checked))
+      prev.map((checked, i) => (i === index ? !checked : checked)),
     );
   };
 
@@ -101,7 +102,7 @@ const ProjectsCMS = () => {
         });
 
       const imgurls = await Promise.all(
-        files.map((file) => readFileAsDataURL(file))
+        files.map((file) => readFileAsDataURL(file)),
       );
       setImageUrls(imgurls); // Update state after all files are processed
       console.log("Updated imageUrls:", imgurls);
@@ -135,7 +136,7 @@ const ProjectsCMS = () => {
             url: imgData.url,
             fileId: imgData.fileId,
           } as Screenshot;
-        })
+        }),
       );
       setLoadingMessage("Adding project info...");
 
@@ -170,7 +171,7 @@ const ProjectsCMS = () => {
 
   const handleDelete = async (
     id: string | undefined,
-    screenshots?: Screenshot[]
+    screenshots?: Screenshot[],
   ) => {
     if (id) {
       console.log("trying delete: ", id);
@@ -199,13 +200,13 @@ const ProjectsCMS = () => {
 
   const nextScreenshot = () => {
     setCurrentScreenshot(
-      (prev) => (prev + 1) % (imageUrls.length || 1) // Prevent divide-by-zero
+      (prev) => (prev + 1) % (imageUrls.length || 1), // Prevent divide-by-zero
     );
   };
 
   const prevScreenshot = () => {
     setCurrentScreenshot(
-      (prev) => (prev - 1 + (imageUrls.length || 1)) % (imageUrls.length || 1)
+      (prev) => (prev - 1 + (imageUrls.length || 1)) % (imageUrls.length || 1),
     );
   };
 
@@ -342,15 +343,15 @@ const ProjectsCMS = () => {
               className="flex gap-2 border rounded-full w-fit p-2 px-4"
               key={skill.$id}
             >
-              <input
-                type="checkbox"
+              <ItsCheckbox
                 value={skill.text}
-                checked={checkboxStates[index]}
+                defaultChecked={checkboxStates[index]}
                 onChange={(e) => {
                   handleStackChange(e);
                   handleCheckboxChange(index);
                 }}
-              />{" "}
+              />
+
               <div className="flex items-center gap-1">
                 {skill.url && (
                   <Image

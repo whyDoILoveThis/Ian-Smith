@@ -6,6 +6,7 @@ import {
   setDoc,
   serverTimestamp,
   type DocumentData,
+  deleteDoc,
 } from "firebase/firestore";
 
 import type { Conversation } from "@/components/main/AI/types"; // adjust path
@@ -61,4 +62,10 @@ export async function fbGetConversationSessionsByFingerprint(
   if (!snap.exists()) return [];
   const data = snap.data() as DocumentData;
   return (data.sessions as Conversation[]) || [];
+}
+
+// 🔹 Delete ALL sessions for a user (delete whole user doc)
+export async function fbDeleteUserSessions(docId: string): Promise<void> {
+  const ref = doc(db, COLLECTION, docId);
+  await deleteDoc(ref);
 }

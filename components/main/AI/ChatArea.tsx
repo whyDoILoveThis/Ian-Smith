@@ -39,17 +39,27 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         )}
 
         {activeConversation?.messages.map((msg, idx) => (
-          <div
-            key={idx}
-            className={`max-w-xs px-3 py-2 rounded-3xl break-words ${
-              msg.role === "user"
-                ? "bg-blue-500 text-white self-end ml-auto rounded-br-none"
-                : "bg-gray-200 text-black self-start dark:bg-gray-800 dark:text-white rounded-bl-none"
-            }`}
-          >
-            <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
-              {msg.content}
-            </ReactMarkdown>
+          <div key={idx} className="flex flex-col gap-1">
+            <div
+              className={`max-w-xs px-3 py-2 rounded-3xl break-words ${
+                msg.role === "user"
+                  ? "bg-blue-500 text-white self-end ml-auto rounded-br-none"
+                  : "bg-gray-200 text-black self-start dark:bg-gray-800 dark:text-white rounded-bl-none"
+              }`}
+            >
+              <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+                {msg.content}
+              </ReactMarkdown>
+            </div>
+            <span
+              className={`text-sm text-slate-600 ${
+                msg.role === "user" ? "self-end" : ""
+              }`}
+            >
+              {msg.timestamp && new Date(msg.timestamp).toLocaleTimeString()}
+              <br />
+              {msg.timestamp && new Date(msg.timestamp).toLocaleDateString()}
+            </span>
           </div>
         ))}
 

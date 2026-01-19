@@ -16,14 +16,24 @@ import RunningPuppy from "../sub/RunningPuppy";
 const Footer = () => {
   const [isSecurityMaxed, setIsSecurityMaxed] = useState(true);
   const [toggledSecurity, setToggledSecurity] = useState(false);
+  const [showSecurityBanner, setShowSecurityBanner] = useState(false);
 
   useEffect(() => {
     const g = async () => {
       setIsSecurityMaxed(await appwrGetSecurityFlag());
+      setShowSecurityBanner(!(await appwrGetSecurityFlag()));
     };
 
     g();
   }, [toggledSecurity]);
+
+  useEffect(() => {
+    if (!isSecurityMaxed && !showSecurityBanner) {
+      setTimeout(() => {
+        setShowSecurityBanner(true);
+      }, 200000);
+    }
+  }, [showSecurityBanner]);
 
   return (
     <article className="w-full flex justify-center mt-16">
@@ -55,8 +65,25 @@ const Footer = () => {
             <span onClick={() => setToggledSecurity(!toggledSecurity)}>
               <SecurityToggle setHasBeenToggled={setToggledSecurity} />
             </span>
-            <span className="fixed backdrop-blur-md zz-top-plus2 left-0 bottom-24 btn-red p-2 pl-2 pr-4 rounded-tr-lg rounded-br-lg text-xs select-none border border-l-0 border-red-400 ">
+
+            <span
+              onClick={() => {
+                if (!showSecurityBanner) {
+                  setShowSecurityBanner(true);
+                }
+              }}
+              className={`${!showSecurityBanner ? "-translate-x-72 cursor-pointer" : ""} transition-all fixed flex gap-2 backdrop-blur-md zz-top-plus2 left-0 bottom-24 btn-red p-2 pl-2 pr-4 rounded-tr-lg rounded-br-lg text-xs select-none border border-l-0 border-red-400 `}
+            >
               ⚠️SECURITY IS CURRENTLY LOOSE ASF⚠️
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSecurityBanner(false);
+                }}
+                className="text-red-500 hover:text-red-700 text-xs"
+              >
+                ✖
+              </button>
             </span>
           </div>
         )}

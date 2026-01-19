@@ -18,7 +18,7 @@ import { db } from "@/lib/firebaseConfig";
 /**
  * Types
  */
-export type Message = { role: "user" | "assistant"; content: string };
+export type Message = { role: "user" | "assistant"; content: string, timestamp?: number; };
 
 export type Conversation = {
   id: string;
@@ -114,6 +114,8 @@ export async function fbGetUserSessionsById(userId: string): Promise<SessionFull
       messages: messages.map((m: any) => ({
         role: m.role === "assistant" ? "assistant" : "user",
         content: String(m.content ?? ""),
+          timestamp: m.timestamp?.toMillis?.() ?? m.timestamp ?? Date.now(),
+
       })),
       fingerprint: s.fingerprint ?? null,
       updatedAt: tsToDate(s.updatedAt ?? s.updated_at ?? null),

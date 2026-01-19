@@ -5,6 +5,7 @@ import "@/styles/ItsBtn.css";
 import "@/styles/Clerk.css";
 import "@/styles/ItsTooltip.css";
 import "@/styles/ItsTextShadow.css";
+import "@/styles/Scrollbars.css";
 import { ThemeProvider } from "@/components/Theme/ThemeProvider";
 import { ClerkProvider, SignedIn, SignedOut } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/toaster";
