@@ -90,7 +90,7 @@ h1 {
   z-index: 1000003;
 }
 
-.zz-top-plus-4 {
+.zz-top-plus4 {
   z-index: 1000004;
 }
 
@@ -217,6 +217,56 @@ input[type="file"]::-webkit-file-upload-button {
   font-size: 4rem;
   color: rgb(114, 1, 24);
   animation: shake3 0.9s infinite;
+}
+
+/* Timeline hover-card truncation dots (wave every 3s) */
+.timeline-ellipsis {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.timeline-ellipsis-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: rgba(103, 232, 249, 0.9); /* cyan-200-ish */
+  transform: translateY(0);
+  animation: timeline-ellipsis-wave 3s infinite;
+}
+
+.timeline-ellipsis-dot:nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.timeline-ellipsis-dot:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+@keyframes timeline-ellipsis-wave {
+  /* quick wave, long rest */
+  0% {
+    transform: translateY(0);
+    opacity: 0.75;
+  }
+  2% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+  4% {
+    transform: translateY(0);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 0.75;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-ellipsis-dot {
+    animation: none;
+  }
 }
 
 

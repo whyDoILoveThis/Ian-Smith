@@ -36,3 +36,14 @@
 .customScroll::-webkit-scrollbar-thumb:active {
   background-color: #62A34B;
 }
+
+/*change the colors below this comment to the equivilant of tailwinds cyan-400*/
+.customScrollActiveCyan::-webkit-scrollbar-thumb:hover {
+  background-color: #0db2e0;
+}
+
+.customScrollActiveCyan::-webkit-scrollbar-thumb:active {
+  background-color: #0db2e0;
+}
+
+

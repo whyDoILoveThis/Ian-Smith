@@ -128,6 +128,51 @@
     items-center;
 }
 
+.btn-round-sm {
+  --btn-size: 18px;
+  @apply w-[var(--btn-size)]
+    h-[var(--btn-size)] 
+    min-w-[var(--btn-size)]
+    min-h-[var(--btn-size)] 
+    max-w-[var(--btn-size)]
+    max-h-[var(--btn-size)] 
+    rounded-full
+    p-0
+    flex
+    justify-center
+    items-center;
+}
+
+.btn-round-md {
+  --btn-size: 32px;
+  @apply w-[var(--btn-size)]
+    h-[var(--btn-size)] 
+    min-w-[var(--btn-size)]
+    min-h-[var(--btn-size)] 
+    max-w-[var(--btn-size)]
+    max-h-[var(--btn-size)] 
+    rounded-full
+    p-0
+    flex
+    justify-center
+    items-center;
+}
+
+.btn-round-lg {
+  --btn-size: 45px;
+  @apply w-[var(--btn-size)]
+    h-[var(--btn-size)] 
+    min-w-[var(--btn-size)]
+    min-h-[var(--btn-size)] 
+    max-w-[var(--btn-size)]
+    max-h-[var(--btn-size)] 
+    rounded-full
+    p-0
+    flex
+    justify-center
+    items-center;
+}
+
 .btn-md {
   @apply text-base
     p-2

@@ -2,9 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
-import CapsCoolerDemo from "@/components/main/cpp/CapsCoolerDemo";
-import SoftwarePage from "@/components/main/cpp/CppAppPage";
-import { softwareThemes } from "@/components/main/cpp/softwareThemes";
+import CapsCoolerDemo from "@/components/cpp/CapsCoolerDemo";
+import SoftwarePage from "@/components/cpp/CppAppPage";
+import { softwareThemes } from "@/components/cpp/softwareThemes";
 import Image from "next/image";
 import CapsCoolerTrayScreenshot from "@/images/screenshot--CapsCoolerTray.png";
 import WinrarIcon from "@/images/png-transparent-winrar-icon.png";
@@ -62,7 +62,7 @@ export default function Cpp() {
                     height={24}
                   />
                   <span className="bottom-0 self-end leading-none">
-                    ITSCapsCooler-V1{" "}
+                    ITSCapsCooler-V1
                     <span className="text-sm leading-none text-slate-500">
                       999KB
                     </span>
