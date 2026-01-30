@@ -27,7 +27,7 @@ const AboutMe = () => {
   const skills = useSkills();
 
   return (
-    <article className="pt-6 pb-10">
+    <article className="pt-8 ">
       <Nav />
       <section
         aria-labelledby="about-heading"

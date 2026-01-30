@@ -11,6 +11,8 @@ import ConfettiCelebration from "@/components/main/ConfettiCelebration";
 import useRefreshOnReconnect from "@/hooks/useRefreshOnReconnect";
 import Footer from "@/components/main/Footer";
 import PurpleParticleToggle from "@/components/main/PurpleParticleToggle";
+import BrainfTodo from "@/components/sub/BrainfTodo";
+import NetworkSpeedMini from "@/components/main/NetworkSpeedMini";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
@@ -21,6 +23,7 @@ export default function Home() {
     <article
       className={`${!showBot ? "pt-20" : ""} w-full col-flex items-center`}
     >
+      <NetworkSpeedMini />
       {!showBot && <Nav />}
       <div className="w-full col-flex items-center mb-6">
         <Header />

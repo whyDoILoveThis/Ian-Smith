@@ -2,9 +2,10 @@
 
 import ItsToast from "@/components/sub/ItsToast";
 import { useEffect, useRef, useState } from "react";
-import { BsRobot, BsGear } from "react-icons/bs";
+import { BsRobot } from "react-icons/bs";
 import { HINTS } from "@/lib/globals";
 import ItsDropdown from "@/components/ui/its-dropdown";
+import { Settings } from "lucide-react";
 
 type Props = {
   showBot: boolean;
@@ -135,6 +136,26 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
         onMouseEnter={handleHover}
         onMouseLeave={handleHoverLeave}
       >
+        {(toastDisabled || disableHints) && (
+          <ItsDropdown
+            closeWhenItemClick
+            className=" w-[150px] translate-y-2 !bg-white/20 backdrop-blur-md"
+            position="up-right"
+            trigger={
+              <button className={`w-full text-gray-400 hover:text-white`}>
+                <Settings size={14} />
+              </button>
+            }
+          >
+            <button
+              className=" z-50 hover:bg-white/20 rounded-lg !w-full"
+              onClick={() => saveDisableHints(!disableHints)}
+              aria-label="Toggle hints"
+            >
+              Turn Hints {disableHints ? "On" : "Off"}
+            </button>
+          </ItsDropdown>
+        )}
         <button
           onClick={() => setShowBot(!showBot)}
           className={`h-12 backdrop-blur-md rounded-full overflow-hidden flex items-center justify-center border border-opacity-50 border-white text-white bg-[#0080ffeb]
@@ -184,27 +205,6 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
             }
           `}</style>
         </button>
-
-        {(toastDisabled || disableHints) && (
-          <ItsDropdown
-            closeWhenItemClick
-            className="-translate-x-72"
-            position="up-left"
-            trigger={
-              <button className="w-full">
-                <BsGear size={18} />
-              </button>
-            }
-          >
-            <button
-              className=" z-50 btn btn-ghost !w-full"
-              onClick={() => saveDisableHints(!disableHints)}
-              aria-label="Toggle hints"
-            >
-              Turn Hints {disableHints ? "On" : "Off"}
-            </button>
-          </ItsDropdown>
-        )}
       </div>
 
       {/* Toast */}

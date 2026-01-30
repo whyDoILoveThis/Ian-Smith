@@ -3,17 +3,19 @@
 import * as React from "react";
 import { Moon, Sun, Monitor } from "lucide-react";
 import { useTheme } from "next-themes";
-
 import { Button } from "@/components/ui/button";
 import ItsDropdown from "@/components/ui/its-dropdown";
 
-export function ThemeToggler() {
+interface Props {
+  isMobile?: boolean;
+}
+export function ThemeToggler({ isMobile }: Props) {
   const { setTheme } = useTheme();
 
   return (
     <div className="zz-top-plus2">
       <ItsDropdown
-        position="down-right"
+        position={isMobile ? "up-right" : "down-right"}
         closeWhenItemClick
         className="max-w-fit !bg-opacity-40 backdrop-blur-md rounded-2xl border border-slate-200/10 dark:border-slate-800/50 shadow-xl"
         trigger={

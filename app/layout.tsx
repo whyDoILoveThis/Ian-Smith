@@ -8,9 +8,8 @@ import "@/styles/ItsTextShadow.css";
 import "@/styles/Scrollbars.css";
 import { ThemeProvider } from "@/components/Theme/ThemeProvider";
 import { ClerkProvider, SignedIn, SignedOut } from "@clerk/nextjs";
-import { Toaster } from "@/components/ui/toaster";
-import CMS from "@/components/CMS/CMS";
 import ConnectivityWrapper from "@/components/main/ConnectivityWrapper";
+import SignedInJSX from "@/components/main/SignedInJSX";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,6 +23,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const iansUserId = process.env.NEXT_PUBLIC_IANS_CLERK_USERID;
+
+  const MainSiteContent = () => {
+    return <div className="w-full max-w-[800px]">{children}</div>;
+  };
   return (
     <ClerkProvider>
       <html lang="en">
@@ -35,15 +39,16 @@ export default function RootLayout({
             <SignedIn>
               <ConnectivityWrapper>
                 <main className="flex flex-col items-center">
-                  <CMS />
-                  <Toaster />
+                  <div id="portal-root-0"></div>
+                  <SignedInJSX adminUserId={iansUserId}>{children}</SignedInJSX>
                 </main>
               </ConnectivityWrapper>
             </SignedIn>
             <SignedOut>
               <ConnectivityWrapper>
                 <main className="flex flex-col items-center">
-                  <div className="w-full max-w-[800px]">{children}</div>
+                  <div id="portal-root-0"></div>
+                  <MainSiteContent />
                 </main>
               </ConnectivityWrapper>
             </SignedOut>

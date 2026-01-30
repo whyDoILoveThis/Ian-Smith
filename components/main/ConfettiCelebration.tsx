@@ -100,40 +100,40 @@ const ConfettiCelebration: React.FC = () => {
     setCurrentIndex(closestIndex >= 0 ? closestIndex : 0);
 
   return (
-    <article className="flex flex-col items-center gap-4 p-6 rounded-xl bg-white/10 border border-white/20">
-      <div className="flex flex-col items-center justify-center">
-        <ItsConfettiCannon />
-        <span className="italic dark:text-slate-400">
-          **Click to throw some confetti!!**
-        </span>
-      </div>
-
-      <div className="flex flex-col items-center">
-        <p className="text-lg h-10 font-semibold text-center">
-          🎊 Only <span className="text-purple-500">{daysLeft}</span> days until{" "}
-          <span className="text-blue-400">{currentDay.name}</span>!
-        </p>
-
-        <span className="flex gap-3 mt-4">
-          <button
-            onClick={prevDay}
-            className="btn !rounded-full btn-purple btn-squish btn-xs"
-          >
-            Prev
-          </button>
-          <button
-            onClick={goToNearest}
-            className="btn !rounded-full btn-blue btn-squish btn-xs"
-          >
-            Nearest
-          </button>
-          <button
-            onClick={nextDay}
-            className="btn !rounded-full btn-purple btn-squish btn-xs"
-          >
-            Next
-          </button>
-        </span>
+    <article className="w-full flex justify-center">
+      <div className="flex flex-col w-full max-w-[800px] items-center gap-4 p-6 rounded-xl bg-white/10 border border-white/20">
+        <div className="flex flex-col items-center justify-center">
+          <ItsConfettiCannon />
+          <span className="italic dark:text-slate-400">
+            **Click to throw some confetti!!**
+          </span>
+        </div>
+        <div className="flex flex-col items-center">
+          <p className="text-lg h-10 font-semibold text-center">
+            🎊 Only <span className="text-purple-500">{daysLeft}</span> days
+            until <span className="text-blue-400">{currentDay.name}</span>!
+          </p>
+          <span className="flex gap-3 mt-4">
+            <button
+              onClick={prevDay}
+              className="btn !rounded-full btn-purple btn-squish btn-xs"
+            >
+              Prev
+            </button>
+            <button
+              onClick={goToNearest}
+              className="btn !rounded-full btn-blue btn-squish btn-xs"
+            >
+              Nearest
+            </button>
+            <button
+              onClick={nextDay}
+              className="btn !rounded-full btn-purple btn-squish btn-xs"
+            >
+              Next
+            </button>
+          </span>
+        </div>
       </div>
     </article>
   );

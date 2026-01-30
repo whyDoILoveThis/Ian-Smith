@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import FingerprintJS from "@fingerprintjs/fingerprintjs";
+import React, { useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { Conversation, Message } from "./types";
 import { Sidebar } from "./Sidebar";
@@ -23,82 +22,96 @@ export default function ItsBot({ show, setShow }: Props) {
   const [editMode, setEditMode] = useState(false);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
 
-  // helper key for per-user localStorage
   const localKey = (fp?: string) => `portfolioBotConversations:${fp ?? "anon"}`;
 
-  // Initialize fingerprint and load sessions (remote first, fallback to local)
+  // Safe JSON parse helper
+  const safeParse = <T,>(s: string | null): T | null => {
+    if (!s) return null;
+    try {
+      return JSON.parse(s) as T;
+    } catch (e) {
+      console.warn("Failed to parse JSON:", e);
+      return null;
+    }
+  };
+
+  // Create a fresh conversation object (helper)
+  const makeNewConv = (fp?: string, indexBasedTitle?: number): Conversation => {
+    const id = uuidv4();
+    const title =
+      typeof indexBasedTitle === "number"
+        ? `Conversation ${indexBasedTitle}`
+        : `Conversation ${conversations.length + 1 || 1}`;
+    return {
+      id,
+      title,
+      messages: [],
+      fingerprint: fp ?? undefined,
+    };
+  };
+
+  // Initialize fingerprint and load local sessions (robust)
   useEffect(() => {
     let mounted = true;
-
     const init = async () => {
       try {
-        // get fingerprint
-        const {
-          visitorId,
-          os,
-          browserUA,
-          timezone,
-          languages,
-          screenResolution,
-          cpuCores,
-          memoryGB,
-          gpuInfo,
-        } = await doFingerprintThing(mounted, setFingerprint);
+        const { visitorId } = await doFingerprintThing(mounted, setFingerprint);
 
-        console.log("🆔 visitorId:", visitorId);
-        console.log("💻 os:", os);
-        console.log("🌐 browserUA:", browserUA);
-        console.log("⏰ timezone:", timezone);
-        console.log("🗣️ languages:", languages);
-        console.log("🖥️ screenResolution:", screenResolution);
-        console.log("🧠 cpuCores:", cpuCores);
-        console.log("💾 memoryGB:", memoryGB);
-        console.log("🎮 gpuInfo:", gpuInfo);
+        if (!mounted) return;
 
-        // fallback: check per-user localStorage
-        const saved = localStorage.getItem(localKey(visitorId));
-        if (saved) {
-          const parsed: Conversation[] = JSON.parse(saved);
-          if (!mounted) return;
-          setConversations(parsed);
-          setActiveId(parsed[0]?.id ?? null);
+        setFingerprint((prev) => prev ?? visitorId);
+
+        // try per-fingerprint localStorage first
+        const fpKey = localKey(visitorId);
+        const fpSaved = safeParse<Conversation[]>(localStorage.getItem(fpKey));
+        if (fpSaved && fpSaved.length) {
+          setConversations(fpSaved);
+          setActiveId(fpSaved[0]?.id ?? null);
+          // also ensure remote has it (best-effort)
+          fbSaveConversationSessionByUser(visitorId, fpSaved).catch((err) =>
+            console.error("Failed to ensure remote sessions:", err),
+          );
           return;
         }
 
-        // final fallback: start a new conversation (tag it with fingerprint)
-        const id = uuidv4();
-        const newConv: Conversation = {
-          id,
-          title: "Conversation 1",
-          messages: [],
-          fingerprint: visitorId,
-        };
-        if (!mounted) return;
-        setConversations([newConv]);
-        setActiveId(id);
-        localStorage.setItem(localKey(visitorId), JSON.stringify([newConv]));
-        // also save remote doc with initial conv so user has a doc
-        await fbSaveConversationSessionByUser(visitorId, [newConv]);
-      } catch (err) {
-        console.error("Fingerprint or session load failed", err);
-        // fallback to generic localStorage if fingerprint failed
-        const saved = localStorage.getItem(localKey());
-        if (saved) {
-          const parsed: Conversation[] = JSON.parse(saved);
-          if (!mounted) return;
-          setConversations(parsed);
-          setActiveId(parsed[0]?.id ?? null);
-        } else {
-          const id = uuidv4();
-          const newConv: Conversation = {
-            id,
-            title: "Conversation 1",
-            messages: [],
-          };
-          if (!mounted) return;
-          setConversations([newConv]);
-          setActiveId(id);
+        // fallback to anon local storage
+        const anonSaved = safeParse<Conversation[]>(
+          localStorage.getItem(localKey()),
+        );
+        if (anonSaved && anonSaved.length) {
+          // migrate anon -> fp key (merge w/out duplicates)
+          const merged = [...anonSaved];
+          localStorage.setItem(fpKey, JSON.stringify(merged));
+          localStorage.removeItem(localKey());
+          setConversations(merged);
+          setActiveId(merged[0]?.id ?? null);
+          await fbSaveConversationSessionByUser(visitorId, merged);
+          return;
         }
+
+        // if nothing found, create initial conv and persist
+        const initial = makeNewConv(visitorId, 1);
+        if (!mounted) return;
+        setConversations([initial]);
+        setActiveId(initial.id);
+        localStorage.setItem(fpKey, JSON.stringify([initial]));
+        await fbSaveConversationSessionByUser(visitorId, [initial]);
+      } catch (err) {
+        console.error("Fingerprint or session load failed:", err);
+        // fallback: try anon key
+        const anonSaved = safeParse<Conversation[]>(
+          localStorage.getItem(localKey()),
+        );
+        if (anonSaved && anonSaved.length) {
+          setConversations(anonSaved);
+          setActiveId(anonSaved[0]?.id ?? null);
+          return;
+        }
+        // last resort: create fresh anon conv
+        const initial = makeNewConv(undefined, 1);
+        setConversations([initial]);
+        setActiveId(initial.id);
+        localStorage.setItem(localKey(), JSON.stringify([initial]));
       }
     };
 
@@ -106,81 +119,93 @@ export default function ItsBot({ show, setShow }: Props) {
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Save to local AND remote when conversations change (grouped by fingerprint)
+  // Persist conversations to localStorage and Firestore (when fingerprint available)
   useEffect(() => {
-    if (!conversations) return;
-    // save local per-user cache
-    const key = localKey(fingerprint ?? undefined);
-    localStorage.setItem(key, JSON.stringify(conversations));
+    // conversations can be empty during transitions; ensure there's always at least one conv
+    if (!conversations || conversations.length === 0) return;
 
-    // If we have a fingerprint, persist merged to firestore
+    const key = localKey(fingerprint ?? undefined);
+    try {
+      localStorage.setItem(key, JSON.stringify(conversations));
+    } catch (e) {
+      console.warn("Failed to write localStorage:", e);
+    }
+
     if (fingerprint) {
-      // fbSaveConversationSessionByUser handles merging by id (no duplicates)
       fbSaveConversationSessionByUser(fingerprint, conversations).catch((err) =>
         console.error("Failed to save sessions:", err),
       );
     }
   }, [conversations, fingerprint]);
 
-  // rest of your handlers (updateConversation, handleNewConversation, etc.)
+  // --- Handlers ---
+
+  // updateConversation uses functional update to avoid stale closures
   const updateConversation = (
     id: string,
     messages: Message[],
     title?: string,
-  ) =>
+  ) => {
     setConversations((prev) =>
       prev.map((c) =>
         c.id === id ? { ...c, messages, title: title ?? c.title } : c,
       ),
     );
+  };
 
+  // Create a new conversation, but ensure we don't leave duplicates or skip when none exist
   const handleNewConversation = (fingerprintId?: string) => {
-    const hasEmpty = conversations.some((c) => c.messages.length === 0);
-    if (hasEmpty) return;
+    setConversations((prev) => {
+      // if an empty conversation already exists, reuse it (prevent duplicates)
+      if (prev.some((c) => c.messages.length === 0)) return prev;
 
-    const id = uuidv4();
-    const newConv: Conversation = {
-      id,
-      title:
-        conversations.length === 0
-          ? "Conversation 1"
-          : `Conversation ${conversations.length + 1}`,
-      messages: [],
-      fingerprint: fingerprintId ?? fingerprint ?? undefined,
-    };
+      const newConv = makeNewConv(fingerprintId ?? undefined, 1);
+      setActiveId(newConv.id);
 
-    setConversations((prev) => [newConv, ...prev]);
-    setActiveId(id);
+      return [newConv, ...prev];
+    });
   };
 
   const handleDeleteConversation = (id: string) => {
     setConversations((prev) => {
       const filtered = prev.filter((c) => c.id !== id);
       if (filtered.length === 0) {
-        // create fresh conv tied to fingerprint
-        const id2 = uuidv4();
-        const newConv: Conversation = {
-          id: id2,
-          title: "Conversation 1",
-          messages: [],
-          fingerprint: fingerprint ?? undefined,
-        };
+        const newConv = makeNewConv(fingerprint ?? undefined, 1);
         setActiveId(newConv.id);
+        // persist will be handled by the conversations effect
         return [newConv];
       }
-      if (id === activeId) setActiveId(filtered[0].id);
+      if (id === activeId) {
+        // ensure activeId moves to the first remaining
+        setActiveId(filtered[0].id);
+      }
       return filtered;
     });
   };
 
   const handleClearAll = () => {
-    if (window.confirm("Are you sure you want to clear all conversations?")) {
-      const key = localKey(fingerprint ?? undefined);
+    if (!window.confirm("Are you sure you want to clear all conversations?"))
+      return;
+
+    const fp = fingerprint ?? undefined;
+    const key = localKey(fp);
+    try {
       localStorage.removeItem(key);
-      setConversations([]);
-      handleNewConversation(fingerprint ?? undefined);
+    } catch (e) {
+      console.warn("Failed to remove localStorage key:", e);
+    }
+
+    const newConv = makeNewConv(fp, 1);
+    setConversations([newConv]);
+    setActiveId(newConv.id);
+
+    if (fp) {
+      fbSaveConversationSessionByUser(fp, [newConv]).catch((err) =>
+        console.error("Failed to save cleared session:", err),
+      );
     }
   };
 
@@ -189,11 +214,12 @@ export default function ItsBot({ show, setShow }: Props) {
     const activeConversation = conversations.find((c) => c.id === activeId);
     if (!input.trim() || !activeConversation) return;
 
-    const newMessages = [
+    const newMessages: Message[] = [
       ...activeConversation.messages,
-      { role: "user" as const, content: input, timestamp: Date.now() },
+      { role: "user", content: input, timestamp: Date.now() },
     ];
 
+    // update title from first user message for empty convo
     if (activeConversation.messages.length === 0) {
       updateConversation(
         activeConversation.id,
@@ -208,7 +234,6 @@ export default function ItsBot({ show, setShow }: Props) {
     setLoading(true);
 
     try {
-      // For API, remove timestamp
       const messagesForAPI = newMessages.map(({ role, content }) => ({
         role,
         content,
@@ -221,20 +246,17 @@ export default function ItsBot({ show, setShow }: Props) {
       });
       const data = await res.json();
       const botReply = data.reply ?? "Not sure what to say.";
+
       updateConversation(activeConversation.id, [
         ...newMessages,
-        {
-          role: "assistant" as const,
-          content: botReply,
-          timestamp: Date.now(),
-        },
+        { role: "assistant", content: botReply, timestamp: Date.now() },
       ]);
     } catch (err) {
       console.error(err);
       updateConversation(activeConversation.id, [
         ...newMessages,
         {
-          role: "assistant" as const,
+          role: "assistant",
           content: "Something went wrong on my end.",
           timestamp: Date.now(),
         },
@@ -244,6 +266,7 @@ export default function ItsBot({ show, setShow }: Props) {
     }
   };
 
+  // render
   return (
     <div className="flex flex-col md:flex-row w-full max-w-5xl h-full border rounded-lg rounded-b-none overflow-hidden shadow-lg bg-white dark:bg-gray-900 transition-colors">
       <Sidebar

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import HeaderCMS from "./HeaderCMS";
 import SkillsCMS from "./SkillsCMS";
 import ProjectsCMS from "./ProjectsCMS";
-import { SignOutButton } from "@clerk/nextjs";
+import { SignOutButton, useAuth, UserButton, useUser } from "@clerk/nextjs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LogoutIcon from "../sub/LogoutIcon";
 import AiConversationsCMS from "./AiConversationsCMS";
@@ -14,11 +14,16 @@ import {
 } from "@/appwrite/appwrUpdateSecurity";
 
 const CMS = () => {
+  const { user } = useUser();
   return (
     <article className="w-full flex flex-col items-center max-w-[800px] p-4">
       <h1 className="text-5xl font-bold text-center mb-4">Portfolio CMS</h1>
+      <div className="flex items-center gap-1">
+        <UserButton />
+        <span>{user?.emailAddresses[0]?.emailAddress || ""}</span>
+      </div>
       {/* Security toggle */}
-      <div className="w-full flex justify-center mb-4">
+      <div className="w-full flex justify-center my-4">
         <div className="flex items-center gap-3">
           <SecurityToggle />
         </div>

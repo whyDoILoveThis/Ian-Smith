@@ -2,18 +2,27 @@ import React, { useEffect } from "react";
 import CloseIcon from "./CloseIcon";
 
 interface Props {
+  className?: string;
   children?: React.ReactNode;
   zIndex?: string;
   show?: boolean;
   setShow?: (show: boolean) => void;
+  bgBlur?: "0" | "none" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 }
 
-const ItsPopover = ({ children, zIndex = "999", show, setShow }: Props) => {
+const ItsPopover = ({
+  className,
+  children,
+  zIndex = "999",
+  show,
+  setShow,
+  bgBlur,
+}: Props) => {
   const isOpen = true;
   useEffect(() => {
     // Disable body scroll when popover is open
     if (isOpen) {
-      document.body.classList.add("overflow-hidden");
+      document.body.classList.add("!overflow-hidden");
     } else {
       document.body.classList.remove("");
     }
@@ -29,11 +38,20 @@ const ItsPopover = ({ children, zIndex = "999", show, setShow }: Props) => {
 
   return (
     <div
-      className={`bg-black bg-opacity-60 fixed z-50 top-0 left-0 w-screen h-screen backdrop-blur-md 
-                    flex flex-col items-center 
+      onClick={() => setShow && setShow(false)}
+      className={`bg-black bg-opacity-60 fixed inset-0 zz-top-plus4 
+                    flex flex-col items-center ${className && className}
     `}
     >
-      <div className="w-full h-full max-w-[800px] relative  flex flex-col items-center ">
+      {bgBlur !== "0" && bgBlur !== "none" && (
+        <span
+          onClick={() => {
+            setShow && setShow(false);
+          }}
+          className={`absolute z-20 inset-0 backdrop-blur-${bgBlur ? bgBlur : "md"}`}
+        />
+      )}
+      <div className="w-full z-40 h-full max-w-[800px] relative  flex flex-col justify-center items-center ">
         {children}
       </div>
     </div>

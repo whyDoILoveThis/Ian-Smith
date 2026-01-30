@@ -1,78 +1,78 @@
 "use client";
 
+import Footer from "@/components/main/Footer";
 import Nav from "@/components/main/Nav";
 import React, { useEffect, useRef, useState } from "react";
 export default function Page() {
-// Cities with weight (higher weight = bigger font size)
- const cities = [
-  { city: "New York", tz: "America/New_York", weight: 5 },
-  { city: "Los Angeles", tz: "America/Los_Angeles", weight: 4 },
-  { city: "Chicago", tz: "America/Chicago", weight: 4 },
-  { city: "Denver", tz: "America/Denver", weight: 3 },
-  { city: "Toronto", tz: "America/Toronto", weight: 3 },
-  { city: "Mexico City", tz: "America/Mexico_City", weight: 4 },
-  { city: "São Paulo", tz: "America/Sao_Paulo", weight: 3 },
-  { city: "Buenos Aires", tz: "America/Argentina/Buenos_Aires", weight: 3 },
-  { city: "Lima", tz: "America/Lima", weight: 2 },
-  { city: "Santiago", tz: "America/Santiago", weight: 2 },
-  { city: "Bogota", tz: "America/Bogota", weight: 2 },
-  { city: "Caracas", tz: "America/Caracas", weight: 2 },
-  { city: "Anchorage", tz: "America/Anchorage", weight: 1 },
-  { city: "Honolulu", tz: "Pacific/Honolulu", weight: 1 },
+  // Cities with weight (higher weight = bigger font size)
+  const cities = [
+    { city: "New York", tz: "America/New_York", weight: 5 },
+    { city: "Los Angeles", tz: "America/Los_Angeles", weight: 4 },
+    { city: "Chicago", tz: "America/Chicago", weight: 4 },
+    { city: "Denver", tz: "America/Denver", weight: 3 },
+    { city: "Toronto", tz: "America/Toronto", weight: 3 },
+    { city: "Mexico City", tz: "America/Mexico_City", weight: 4 },
+    { city: "São Paulo", tz: "America/Sao_Paulo", weight: 3 },
+    { city: "Buenos Aires", tz: "America/Argentina/Buenos_Aires", weight: 3 },
+    { city: "Lima", tz: "America/Lima", weight: 2 },
+    { city: "Santiago", tz: "America/Santiago", weight: 2 },
+    { city: "Bogota", tz: "America/Bogota", weight: 2 },
+    { city: "Caracas", tz: "America/Caracas", weight: 2 },
+    { city: "Anchorage", tz: "America/Anchorage", weight: 1 },
+    { city: "Honolulu", tz: "Pacific/Honolulu", weight: 1 },
 
-  // 🌍 Europe
-  { city: "London", tz: "Europe/London", weight: 5 },
-  { city: "Paris", tz: "Europe/Paris", weight: 4 },
-  { city: "Berlin", tz: "Europe/Berlin", weight: 3 },
-  { city: "Rome", tz: "Europe/Rome", weight: 3 },
-  { city: "Madrid", tz: "Europe/Madrid", weight: 3 },
-  { city: "Moscow", tz: "Europe/Moscow", weight: 3 },
-  { city: "Helsinki", tz: "Europe/Helsinki", weight: 2 },
-  { city: "Warsaw", tz: "Europe/Warsaw", weight: 2 },
-  { city: "Vienna", tz: "Europe/Vienna", weight: 2 },
-  { city: "Reykjavik", tz: "Atlantic/Reykjavik", weight: 1 },
-  { city: "Lisbon", tz: "Europe/Lisbon", weight: 2 },
-  { city: "Athens", tz: "Europe/Athens", weight: 2 },
+    // 🌍 Europe
+    { city: "London", tz: "Europe/London", weight: 5 },
+    { city: "Paris", tz: "Europe/Paris", weight: 4 },
+    { city: "Berlin", tz: "Europe/Berlin", weight: 3 },
+    { city: "Rome", tz: "Europe/Rome", weight: 3 },
+    { city: "Madrid", tz: "Europe/Madrid", weight: 3 },
+    { city: "Moscow", tz: "Europe/Moscow", weight: 3 },
+    { city: "Helsinki", tz: "Europe/Helsinki", weight: 2 },
+    { city: "Warsaw", tz: "Europe/Warsaw", weight: 2 },
+    { city: "Vienna", tz: "Europe/Vienna", weight: 2 },
+    { city: "Reykjavik", tz: "Atlantic/Reykjavik", weight: 1 },
+    { city: "Lisbon", tz: "Europe/Lisbon", weight: 2 },
+    { city: "Athens", tz: "Europe/Athens", weight: 2 },
 
-  // 🌏 Asia
-  { city: "Tokyo", tz: "Asia/Tokyo", weight: 5 },
-  { city: "Seoul", tz: "Asia/Seoul", weight: 4 },
-  { city: "Shanghai", tz: "Asia/Shanghai", weight: 4 },
-  { city: "Beijing", tz: "Asia/Shanghai", weight: 4 },
-  { city: "Hong Kong", tz: "Asia/Hong_Kong", weight: 4 },
-  { city: "Bangkok", tz: "Asia/Bangkok", weight: 3 },
-  { city: "Singapore", tz: "Asia/Singapore", weight: 3 },
-  { city: "Kolkata", tz: "Asia/Kolkata", weight: 3 },
-  { city: "Dubai", tz: "Asia/Dubai", weight: 3 },
-  { city: "Jakarta", tz: "Asia/Jakarta", weight: 2 },
-  { city: "Kuala Lumpur", tz: "Asia/Kuala_Lumpur", weight: 2 },
-  { city: "Manila", tz: "Asia/Manila", weight: 2 },
-  { city: "Riyadh", tz: "Asia/Riyadh", weight: 2 },
+    // 🌏 Asia
+    { city: "Tokyo", tz: "Asia/Tokyo", weight: 5 },
+    { city: "Seoul", tz: "Asia/Seoul", weight: 4 },
+    { city: "Shanghai", tz: "Asia/Shanghai", weight: 4 },
+    { city: "Beijing", tz: "Asia/Shanghai", weight: 4 },
+    { city: "Hong Kong", tz: "Asia/Hong_Kong", weight: 4 },
+    { city: "Bangkok", tz: "Asia/Bangkok", weight: 3 },
+    { city: "Singapore", tz: "Asia/Singapore", weight: 3 },
+    { city: "Kolkata", tz: "Asia/Kolkata", weight: 3 },
+    { city: "Dubai", tz: "Asia/Dubai", weight: 3 },
+    { city: "Jakarta", tz: "Asia/Jakarta", weight: 2 },
+    { city: "Kuala Lumpur", tz: "Asia/Kuala_Lumpur", weight: 2 },
+    { city: "Manila", tz: "Asia/Manila", weight: 2 },
+    { city: "Riyadh", tz: "Asia/Riyadh", weight: 2 },
 
-  // 🌏 Oceania
-  { city: "Sydney", tz: "Australia/Sydney", weight: 3 },
-  { city: "Melbourne", tz: "Australia/Melbourne", weight: 3 },
-  { city: "Brisbane", tz: "Australia/Brisbane", weight: 2 },
-  { city: "Auckland", tz: "Pacific/Auckland", weight: 3 },
-  { city: "Fiji", tz: "Pacific/Fiji", weight: 1 },
+    // 🌏 Oceania
+    { city: "Sydney", tz: "Australia/Sydney", weight: 3 },
+    { city: "Melbourne", tz: "Australia/Melbourne", weight: 3 },
+    { city: "Brisbane", tz: "Australia/Brisbane", weight: 2 },
+    { city: "Auckland", tz: "Pacific/Auckland", weight: 3 },
+    { city: "Fiji", tz: "Pacific/Fiji", weight: 1 },
 
-  // 🌍 Africa
-  { city: "Cape Town", tz: "Africa/Johannesburg", weight: 2 },
-  { city: "Nairobi", tz: "Africa/Nairobi", weight: 2 },
-  { city: "Cairo", tz: "Africa/Cairo", weight: 3 },
-  { city: "Casablanca", tz: "Africa/Casablanca", weight: 2 },
+    // 🌍 Africa
+    { city: "Cape Town", tz: "Africa/Johannesburg", weight: 2 },
+    { city: "Nairobi", tz: "Africa/Nairobi", weight: 2 },
+    { city: "Cairo", tz: "Africa/Cairo", weight: 3 },
+    { city: "Casablanca", tz: "Africa/Casablanca", weight: 2 },
 
-  // 🌎 Other
-  { city: "UTC", tz: "Etc/UTC", weight: 5 },
-  { city: "GMT", tz: "Etc/GMT", weight: 4 },
-  { city: "Atlantic/Azores", tz: "Atlantic/Azores", weight: 1 },
-  { city: "Pacific/Guam", tz: "Pacific/Guam", weight: 1 },
-  { city: "Pacific/Tahiti", tz: "Pacific/Tahiti", weight: 1 },
-  { city: "Pacific/Chatham", tz: "Pacific/Chatham", weight: 1 },
-  { city: "Pacific/Marquesas", tz: "Pacific/Marquesas", weight: 1 },
-  { city: "Pacific/Noumea", tz: "Pacific/Noumea", weight: 1 },
-];
-
+    // 🌎 Other
+    { city: "UTC", tz: "Etc/UTC", weight: 5 },
+    { city: "GMT", tz: "Etc/GMT", weight: 4 },
+    { city: "Atlantic/Azores", tz: "Atlantic/Azores", weight: 1 },
+    { city: "Pacific/Guam", tz: "Pacific/Guam", weight: 1 },
+    { city: "Pacific/Tahiti", tz: "Pacific/Tahiti", weight: 1 },
+    { city: "Pacific/Chatham", tz: "Pacific/Chatham", weight: 1 },
+    { city: "Pacific/Marquesas", tz: "Pacific/Marquesas", weight: 1 },
+    { city: "Pacific/Noumea", tz: "Pacific/Noumea", weight: 1 },
+  ];
 
   // REFS for sticky detection
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -84,7 +84,7 @@ export default function Page() {
   const [ampm, setAmpm] = useState("AM");
   const [countSeconds, setCountSeconds] = useState(true);
   const [timezone, setTimezone] = useState<string>(
-    Intl.DateTimeFormat().resolvedOptions().timeZone
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
 
   useEffect(() => {
@@ -109,7 +109,7 @@ export default function Page() {
           root: null,
           threshold: 0,
           rootMargin: `-${topPx}px 0px 0px 0px`,
-        }
+        },
       );
 
       observer.observe(sentinelRef.current!);
@@ -228,7 +228,7 @@ export default function Page() {
       </div>
 
       {/* TIMEZONE CITY CLOUD */}
-      <div className="mt-12 flex flex-wrap justify-center gap-4 max-w-5xl">
+      <div className="mt-12 mb-20 flex flex-wrap justify-center gap-4 max-w-5xl">
         {cities.map(({ city, tz, weight }) => (
           <button
             key={tz}
@@ -243,6 +243,7 @@ export default function Page() {
           </button>
         ))}
       </div>
+      <Footer />
     </div>
   );
 }
