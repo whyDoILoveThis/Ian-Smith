@@ -6,7 +6,7 @@ import CapsCoolerDemo from "@/components/cpp/CapsCoolerDemo";
 import SoftwarePage from "@/components/cpp/CppAppPage";
 import { softwareThemes } from "@/components/cpp/softwareThemes";
 import Image from "next/image";
-import CapsCoolerTrayScreenshot from "@/images/screenshot--CapsCoolerTray.png";
+import CapsCoolerTrayScreenshot from "@/images/screenshot--CapsCoolerTrayExample.png";
 import WinrarIcon from "@/images/png-transparent-winrar-icon.png";
 import ExeIcon from "@/images/icon--windows_exe.png";
 import CapsCoolerIcon from "@/images/icon--caps-cooler.ico";
