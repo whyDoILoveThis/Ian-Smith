@@ -23,6 +23,7 @@ import TimelineHeader from "./TimelineHeader";
 import TimelineListOfTimelines from "./TimelineListOfTimelines";
 import TimelineListOfUsers from "./TimelineListOfUsers";
 import TimelineSettings from "./TimelineSettings";
+import TimelineTutorial from "./TimelineTutorial";
 import { appwrImgUp } from "@/appwrite/appwrStorage";
 import {
   AITimelineModal,
@@ -92,6 +93,9 @@ export default function TimelineRoot({
 
   // AI timeline modal state
   const [showAIModal, setShowAIModal] = useState(false);
+
+  // Tutorial modal state
+  const [showTutorial, setShowTutorial] = useState(false);
 
   // Unsaved AI-generated timeline preview - persisted to localStorage
   const [aiPreviewTimeline, setAiPreviewTimeline] =
@@ -874,6 +878,7 @@ export default function TimelineRoot({
           onOpenSettings={() => setShowSettingsModal(true)}
           onOpenUsers={() => setShowUsersModal(true)}
           onOpenAIModal={() => setShowAIModal(true)}
+          onOpenTutorial={() => setShowTutorial(true)}
           hasActiveTimeline={!!activeTimeline || isPreviewActive}
           onCenterToday={() => setCenterMs(Date.now())}
           onCenterFirstNode={
@@ -1123,6 +1128,11 @@ export default function TimelineRoot({
             setIsPreviewActive(false);
           }}
         />
+      )}
+
+      {/* Tutorial Modal */}
+      {showTutorial && (
+        <TimelineTutorial onClose={() => setShowTutorial(false)} />
       )}
 
       {/* year pop styles */}

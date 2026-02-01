@@ -16,6 +16,7 @@ interface Props {
   onOpenSettings?: () => void;
   onOpenUsers?: () => void;
   onOpenAIModal?: () => void;
+  onOpenTutorial?: () => void;
   hasActiveTimeline?: boolean;
   onCenterToday?: () => void;
   onCenterFirstNode?: () => void;
@@ -35,6 +36,7 @@ export default function TimelineHeader({
   onOpenSettings,
   onOpenUsers,
   onOpenAIModal,
+  onOpenTutorial,
   hasActiveTimeline,
   onCenterToday,
   onCenterFirstNode,
@@ -161,6 +163,17 @@ export default function TimelineHeader({
             }`}
           >
             {showAllCards ? "Hide All" : "Show All"}
+          </button>
+        )}
+        {onOpenTutorial && (
+          <button
+            onClick={onOpenTutorial}
+            type="button"
+            aria-label="Tutorial"
+            className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-amber-400 hover:text-amber-300 whitespace-nowrap"
+            title="How to use the timeline"
+          >
+            ❓ Help
           </button>
         )}
         {!vertical && <SettingsAndUserBtn />}

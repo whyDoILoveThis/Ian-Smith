@@ -109,6 +109,7 @@ export default function TimelineCanvas({
       {/* horizontal line */}
       <div
         onClick={onTimelineClick}
+        data-timeline-line
         className="absolute cursor-pointer z-10 left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-gradient-to-r from-neutral-800 via-cyan-700/40 to-neutral-800"
       />
 
