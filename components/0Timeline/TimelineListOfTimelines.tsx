@@ -74,7 +74,9 @@ export default function TimelineListOfTimelines({
   const [newColor, setNewColor] = useState("#06b6d4");
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [previewingTimeline, setPreviewingTimeline] = useState<Timeline | null>(null);
+  const [previewingTimeline, setPreviewingTimeline] = useState<Timeline | null>(
+    null,
+  );
 
   // Filter timelines by search query (name, description, creator name, creator email)
   const filteredTimelines = timelines.filter((timeline) => {

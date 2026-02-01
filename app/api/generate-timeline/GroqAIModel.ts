@@ -1,0 +1,1 @@
+export const GROQ_AI_MODEL = "groq/compound";

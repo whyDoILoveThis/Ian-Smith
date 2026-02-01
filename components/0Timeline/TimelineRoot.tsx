@@ -1,6 +1,12 @@
 // components/timeline/TimelineRoot.tsx
 "use client";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useMounted } from "./hooks/useMounted";
 import { useTimelineNodes } from "@/hooks/useTimelineNodes";
 import { useTimelines } from "@/hooks/useTimelines";
@@ -142,7 +148,7 @@ export default function TimelineRoot({
 
   // Get current nodes (either preview or regular)
   const currentNodes = useMemo(() => {
-    return isPreviewActive && aiPreviewTimeline 
+    return isPreviewActive && aiPreviewTimeline
       ? aiPreviewTimeline.nodes.map((n, i) => ({
           nodeId: `ai-preview-${i}`,
           timelineId: "ai-preview",
@@ -159,8 +165,8 @@ export default function TimelineRoot({
   // Center on first node
   const centerOnFirstNode = useCallback(() => {
     if (currentNodes.length > 0) {
-      const firstNode = currentNodes.reduce((earliest, node) => 
-        node.dateMs < earliest.dateMs ? node : earliest
+      const firstNode = currentNodes.reduce((earliest, node) =>
+        node.dateMs < earliest.dateMs ? node : earliest,
       );
       setCenterMs(firstNode.dateMs);
     }
@@ -169,8 +175,8 @@ export default function TimelineRoot({
   // Center on last node
   const centerOnLastNode = useCallback(() => {
     if (currentNodes.length > 0) {
-      const lastNode = currentNodes.reduce((latest, node) => 
-        node.dateMs > latest.dateMs ? node : latest
+      const lastNode = currentNodes.reduce((latest, node) =>
+        node.dateMs > latest.dateMs ? node : latest,
       );
       setCenterMs(lastNode.dateMs);
     }
@@ -236,7 +242,13 @@ export default function TimelineRoot({
     if (currentNodes.length > 0) {
       centerOnFirstNode();
     }
-  }, [activeTimeline?.timelineId, isPreviewActive, aiPreviewTimeline, centerOnFirstNode, currentNodes.length]);
+  }, [
+    activeTimeline?.timelineId,
+    isPreviewActive,
+    aiPreviewTimeline,
+    centerOnFirstNode,
+    currentNodes.length,
+  ]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -864,8 +876,12 @@ export default function TimelineRoot({
           onOpenAIModal={() => setShowAIModal(true)}
           hasActiveTimeline={!!activeTimeline || isPreviewActive}
           onCenterToday={() => setCenterMs(Date.now())}
-          onCenterFirstNode={currentNodes.length > 0 ? centerOnFirstNode : undefined}
-          onCenterLastNode={currentNodes.length > 0 ? centerOnLastNode : undefined}
+          onCenterFirstNode={
+            currentNodes.length > 0 ? centerOnFirstNode : undefined
+          }
+          onCenterLastNode={
+            currentNodes.length > 0 ? centerOnLastNode : undefined
+          }
           isOwner={isOwner}
           viewingUser={viewingUser}
           onGoHome={() => setViewingUser(null)}

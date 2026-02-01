@@ -1,5 +1,5 @@
 // app/api/generate-timeline/route.ts
-import { GROQ_AI_MODEL } from "../generate-recipe/GroqAIModel";
+import { GROQ_AI_MODEL } from "./GroqAIModel";
 import { NextResponse } from "next/server";
 import { timelineGenerationPrompt } from "./timelineGenerationPrompt";
 

@@ -28,7 +28,9 @@ export default function TimelineNodePreviewModal({
         const json = await res.json();
         if (json?.ok && Array.isArray(json.data)) {
           // Sort by date
-          const sorted = (json.data as TimelineNode[]).sort((a, b) => a.dateMs - b.dateMs);
+          const sorted = (json.data as TimelineNode[]).sort(
+            (a, b) => a.dateMs - b.dateMs,
+          );
           setNodes(sorted);
         }
       } catch (err) {
@@ -117,7 +119,10 @@ export default function TimelineNodePreviewModal({
                   >
                     <div
                       className="w-3 h-3 rounded-full flex-shrink-0 mt-1.5 shadow-sm"
-                      style={{ backgroundColor: node.color || timeline.color || "#06b6d4" }}
+                      style={{
+                        backgroundColor:
+                          node.color || timeline.color || "#06b6d4",
+                      }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
