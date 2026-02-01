@@ -107,7 +107,7 @@ export default function ItsNumInput({
         aria-label={ariaLabel}
       >
         {/* glassy container styling (default) */}
-        <div className="relative flex items-center rounded-md bg-white/6 backdrop-blur-sm border border-white/20 px-2">
+        <div className="relative flex items-center rounded-md bg-white/6 dark:bg-gray-900/10 backdrop-blur-sm border border-gray-300 dark:border-gray-700 px-2">
           {/* visible, typable input */}
           <input
             type="number"
@@ -119,7 +119,7 @@ export default function ItsNumInput({
             max={max}
             step={step}
             aria-label={ariaLabel}
-            className="bg-transparent outline-none appearance-none text-white placeholder-white/50 w-14 text-right text-sm"
+            className="bg-transparent outline-none appearance-none text-black dark:text-white placeholder-gray-500 dark:placeholder-gray-400 w-14 text-right text-sm"
           />
 
           {/* tiny custom arrows */}
@@ -128,7 +128,7 @@ export default function ItsNumInput({
               type="button"
               onClick={increment}
               aria-label="Increment"
-              className="w-3 h-3 flex items-center justify-center rounded-sm text-[10px] bg-white/8 hover:bg-white/12 active:translate-y-[1px]"
+              className="w-3 h-3 flex items-center justify-center rounded-sm text-[10px] bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 active:translate-y-[1px] border border-gray-300 dark:border-gray-700"
             >
               ▲
             </button>
@@ -136,7 +136,7 @@ export default function ItsNumInput({
               type="button"
               onClick={decrement}
               aria-label="Decrement"
-              className="w-3 h-3 flex items-center justify-center rounded-sm mt-1 text-[10px] bg-white/8 hover:bg-white/12 active:translate-y-[-1px]"
+              className="w-3 h-3 flex items-center justify-center rounded-sm mt-1 text-[10px] bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 active:translate-y-[-1px] border border-gray-300 dark:border-gray-700"
             >
               ▼
             </button>

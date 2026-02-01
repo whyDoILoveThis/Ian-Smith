@@ -19,6 +19,7 @@ export default function TimelineNodes({
   isLoading,
   showAllCards,
   canEdit,
+  isPreview,
 }: {
   events: TimelineNode[];
   getXForMs: (ms: number) => number;
@@ -32,6 +33,7 @@ export default function TimelineNodes({
   isLoading?: boolean;
   showAllCards?: boolean;
   canEdit?: boolean;
+  isPreview?: boolean;
 }) {
   // sort events ascending by dateMs
   const sorted = useMemo(
@@ -45,7 +47,7 @@ export default function TimelineNodes({
   );
 
   return (
-    <div className="absolute inset-0">
+    <div className={`absolute inset-0 ${isPreview ? "z-30" : "z-10"}`}>
       {clusters.map((c, idx) => {
         const x = getXForMs(c.centerMs);
         if (c.items.length === 1) {
@@ -60,10 +62,18 @@ export default function TimelineNodes({
               containerWidth={containerWidth}
               showAllCards={showAllCards}
               canEdit={canEdit}
+              isPreview={isPreview}
             />
           );
         } else {
-          return <TimelineCluster key={idx} x={x} items={c.items} />;
+          return (
+            <TimelineCluster
+              key={idx}
+              x={x}
+              items={c.items}
+              isPreview={isPreview}
+            />
+          );
         }
       })}
       {/* Clickable timeline area - only active if canEdit */}

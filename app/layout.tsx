@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/components/Theme/ThemeProvider";
 import { ClerkProvider, SignedIn, SignedOut } from "@clerk/nextjs";
 import ConnectivityWrapper from "@/components/main/ConnectivityWrapper";
 import SignedInJSX from "@/components/main/SignedInJSX";
+import { MainWrap } from "@/components/main/MainWrap";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,11 +24,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const iansUserId = process.env.NEXT_PUBLIC_IANS_CLERK_USERID;
-
-  const MainSiteContent = () => {
-    return <div className="w-full max-w-[800px]">{children}</div>;
-  };
+  const AdminsUserId = process.env.NEXT_PUBLIC_IANS_CLERK_USERID;
   return (
     <ClerkProvider>
       <html lang="en">
@@ -38,18 +35,16 @@ export default function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <SignedIn>
               <ConnectivityWrapper>
-                <main className="flex flex-col items-center">
-                  <div id="portal-root-0"></div>
-                  <SignedInJSX adminUserId={iansUserId}>{children}</SignedInJSX>
-                </main>
+                <MainWrap>
+                  <SignedInJSX adminUserId={AdminsUserId}>
+                    {children}
+                  </SignedInJSX>
+                </MainWrap>
               </ConnectivityWrapper>
             </SignedIn>
             <SignedOut>
               <ConnectivityWrapper>
-                <main className="flex flex-col items-center">
-                  <div id="portal-root-0"></div>
-                  <MainSiteContent />
-                </main>
+                <MainWrap>{children}</MainWrap>
               </ConnectivityWrapper>
             </SignedOut>
           </ThemeProvider>

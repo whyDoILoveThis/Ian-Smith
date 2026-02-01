@@ -281,3 +281,18 @@ input[type="file"]::-webkit-file-upload-button {
   animation: spin-slow 8s linear infinite;
 }
 
+/* AI Timeline Preview Animations */
+@keyframes slide-up {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

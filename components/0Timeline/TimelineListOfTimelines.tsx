@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import { Eye } from "lucide-react";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
+import TimelineNodePreviewModal from "./TimelineNodePreviewModal";
 
 interface TimelineListOfTimelinesProps {
   timelines: Timeline[];
@@ -16,6 +18,21 @@ interface TimelineListOfTimelinesProps {
   onClose: () => void;
   canCreate?: boolean; // Whether the current user can create timelines
   isViewingOther?: boolean; // Whether viewing another user's timelines
+  currentUserId?: string; // Current user's ID to show ownership
+  users?: TimelineUser[]; // List of users for ownership display
+  viewingUser?: TimelineUser | null; // The user being viewed
+  showAllTimelines?: boolean; // Whether showing all timelines
+  onToggleShowAll?: () => void; // Toggle between own and all timelines
+  previewTimeline?: {
+    name: string;
+    description?: string;
+    color?: string;
+    nodes?: any[];
+  } | null; // AI preview timeline
+  isPreviewActive?: boolean; // Whether the preview timeline is currently active
+  onSelectPreview?: () => void; // Callback when preview timeline is selected
+  onSelectRegularTimeline?: (timeline: Timeline) => void; // Callback when regular timeline is selected
+  onDiscardPreview?: () => void; // Callback to discard the preview timeline
 }
 
 const COLORS = [
@@ -40,12 +57,48 @@ export default function TimelineListOfTimelines({
   onClose,
   canCreate = true,
   isViewingOther = false,
+  currentUserId,
+  users = [],
+  viewingUser,
+  showAllTimelines = false,
+  onToggleShowAll,
+  previewTimeline,
+  isPreviewActive = false,
+  onSelectPreview,
+  onSelectRegularTimeline,
+  onDiscardPreview,
 }: TimelineListOfTimelinesProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newColor, setNewColor] = useState("#06b6d4");
   const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [previewingTimeline, setPreviewingTimeline] = useState<Timeline | null>(null);
+
+  // Filter timelines by search query (name, description, creator name, creator email)
+  const filteredTimelines = timelines.filter((timeline) => {
+    const query = searchQuery.toLowerCase();
+
+    // Search in timeline name and description
+    const timelineMatch =
+      timeline.name.toLowerCase().includes(query) ||
+      (timeline.description &&
+        timeline.description.toLowerCase().includes(query));
+
+    // Search in creator name and email
+    if (timeline.userId) {
+      const creator = users.find((u) => u.clerkUserId === timeline.userId);
+      if (creator) {
+        const creatorMatch =
+          creator.displayName.toLowerCase().includes(query) ||
+          (creator.email && creator.email.toLowerCase().includes(query));
+        return timelineMatch || creatorMatch;
+      }
+    }
+
+    return timelineMatch;
+  });
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -82,9 +135,39 @@ export default function TimelineListOfTimelines({
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <h2 className="text-lg font-semibold text-white">
-            {isViewingOther ? "Their Timelines" : "Timelines"}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-white">
+              {isViewingOther ? "Their Timelines" : "Timelines"}
+            </h2>
+            {(!currentUserId && !isViewingOther) ||
+            (showAllTimelines && !isViewingOther) ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                🌐 All Timelines
+              </span>
+            ) : isViewingOther && viewingUser ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                👤 {viewingUser.displayName?.split(" ")[0] || "Other User"}
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                ✓ Your Timelines
+              </span>
+            )}
+            {currentUserId && !isViewingOther && onToggleShowAll && (
+              <button
+                type="button"
+                onClick={onToggleShowAll}
+                className="ml-1 px-2 py-0.5 text-[10px] rounded-full border border-white/10 text-neutral-300 hover:text-white hover:border-white/20 transition-colors"
+                title={
+                  showAllTimelines
+                    ? "Show your timelines"
+                    : "Show all timelines"
+                }
+              >
+                {showAllTimelines ? "Yours" : "All"}
+              </button>
+            )}
+          </div>
           <button
             onClick={canClose ? onClose : undefined}
             disabled={!canClose}
@@ -99,35 +182,127 @@ export default function TimelineListOfTimelines({
         </div>
 
         {/* Content */}
-        <div className="overflow-auto max-h-[60vh] p-4">
+        <div className="overflow-auto customScroll customScrollActiveCyan max-h-[60vh] p-4">
           {loading ? (
             <div className="flex justify-center py-8">
               <LoaderSpinSmall color="cyan" />
             </div>
           ) : (
             <>
+              {/* Search Bar */}
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Search timelines..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+              </div>
+
               {/* Timeline List */}
               <div className="space-y-2">
-                {timelines.length === 0 && !isCreating && (
+                {/* AI Preview Timeline - shown at top if exists */}
+                {previewTimeline && onSelectPreview && (
+                  <div
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSelectPreview();
+                    }}
+                    className={`group relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                      isPreviewActive
+                        ? "bg-white/10 border-2 border-amber-500/70"
+                        : "bg-white/5 border border-transparent hover:bg-white/10 hover:border-amber-500/30"
+                    }`}
+                  >
+                    {/* Color indicator */}
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: previewTimeline.color || "#06b6d4",
+                      }}
+                    />
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-white truncate">
+                          {previewTimeline.name}
+                        </span>
+                        {previewTimeline.nodes && (
+                          <span className="text-[10px] text-neutral-500">
+                            ({previewTimeline.nodes.length} events)
+                          </span>
+                        )}
+                      </div>
+                      {previewTimeline.description && (
+                        <div className="text-xs text-neutral-400 truncate">
+                          {previewTimeline.description}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Active badge */}
+                    {isPreviewActive && (
+                      <span className="text-[10px] uppercase tracking-wider text-cyan-400 font-medium">
+                        Active
+                      </span>
+                    )}
+
+                    {/* Preview Badge */}
+                    <span className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded bg-gradient-to-r from-amber-500/30 to-orange-500/30 border border-amber-500/50 text-amber-300">
+                      Preview
+                    </span>
+
+                    {/* Discard button */}
+                    {onDiscardPreview && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onDiscardPreview();
+                        }}
+                        className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                        title="Discard preview"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {filteredTimelines.length === 0 && !isCreating && (
                   <p className="text-neutral-500 text-sm text-center py-4">
-                    {isViewingOther
-                      ? "This user has no timelines yet."
-                      : canCreate
-                        ? "No timelines yet. Create your first one!"
-                        : "No timelines yet. Sign in to create one!"}
+                    {searchQuery
+                      ? "No timelines match your search."
+                      : isViewingOther
+                        ? "This user has no timelines yet."
+                        : canCreate
+                          ? "No timelines yet. Create your first one!"
+                          : "No timelines yet. Sign in to create one!"}
                   </p>
                 )}
-                {timelines.map((timeline, idx) => {
+                {filteredTimelines.map((timeline, idx) => {
                   const isActive =
+                    !isPreviewActive &&
                     activeTimeline?.timelineId === timeline.timelineId;
                   const color = timeline.color || COLORS[idx % COLORS.length];
+                  const timelineOwner = timeline.userId
+                    ? users.find((u) => u.clerkUserId === timeline.userId)
+                    : null;
+                  const isOwner = timeline.userId === currentUserId;
 
                   return (
                     <div
                       key={timeline.timelineId}
                       onClick={() => {
-                        onSelect(timeline);
-                        onClose();
+                        if (onSelectRegularTimeline) {
+                          onSelectRegularTimeline(timeline);
+                        } else {
+                          onSelect(timeline);
+                          onClose();
+                        }
                       }}
                       className={`group relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 ${
                         isActive
@@ -146,12 +321,29 @@ export default function TimelineListOfTimelines({
                         <div className="font-medium text-white truncate">
                           {timeline.name}
                         </div>
-                        {timeline.description && (
-                          <div className="text-xs text-neutral-400 truncate">
-                            {timeline.description}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 text-xs text-neutral-400 truncate">
+                          {timelineOwner && (
+                            <span>
+                              by {isOwner ? "you" : timelineOwner.displayName}
+                            </span>
+                          )}
+                          {timeline.description && (
+                            <span>• {timeline.description}</span>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Preview button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewingTimeline(timeline);
+                        }}
+                        className="p-1.5 rounded-lg text-neutral-500 hover:text-cyan-400 hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Preview events"
+                      >
+                        <Eye size={14} />
+                      </button>
 
                       {/* Active badge */}
                       {isActive && (
@@ -242,6 +434,14 @@ export default function TimelineListOfTimelines({
           </div>
         )}
       </div>
+
+      {/* Node Preview Modal */}
+      {previewingTimeline && (
+        <TimelineNodePreviewModal
+          timeline={previewingTimeline}
+          onClose={() => setPreviewingTimeline(null)}
+        />
+      )}
     </div>
   );
 }

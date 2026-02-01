@@ -4,6 +4,7 @@ import ItsDropdown from "../ui/its-dropdown";
 import MenuIcon from "../sub/MenuIcon";
 import { SignInButton, useAuth, UserButton } from "@clerk/nextjs";
 import SettingsIcon from "../sub/SettingsIcon";
+import { AIButton } from "./TimelineAI";
 
 interface Props {
   scale: number;
@@ -14,8 +15,11 @@ interface Props {
   onOpenTimelines?: () => void;
   onOpenSettings?: () => void;
   onOpenUsers?: () => void;
+  onOpenAIModal?: () => void;
   hasActiveTimeline?: boolean;
   onCenterToday?: () => void;
+  onCenterFirstNode?: () => void;
+  onCenterLastNode?: () => void;
   isOwner?: boolean; // Whether current user owns the active timeline
   viewingUser?: TimelineUser | null; // User whose timelines we're viewing (null = own)
   onGoHome?: () => void; // Return to own dashboard
@@ -30,8 +34,11 @@ export default function TimelineHeader({
   onOpenTimelines,
   onOpenSettings,
   onOpenUsers,
+  onOpenAIModal,
   hasActiveTimeline,
   onCenterToday,
+  onCenterFirstNode,
+  onCenterLastNode,
   isOwner,
   viewingUser,
   onGoHome,
@@ -106,6 +113,9 @@ export default function TimelineHeader({
           </button>
         )}
 
+        {/* AI Agent button */}
+        {onOpenAIModal && <AIButton onClick={onOpenAIModal} />}
+
         {onCenterToday && (
           <button
             onClick={onCenterToday}
@@ -115,6 +125,28 @@ export default function TimelineHeader({
             title="Jump to today"
           >
             Today
+          </button>
+        )}
+        {onCenterFirstNode && (
+          <button
+            onClick={onCenterFirstNode}
+            type="button"
+            aria-label="Jump to first node"
+            className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-emerald-400 hover:text-emerald-300 whitespace-nowrap"
+            title="Jump to first node"
+          >
+            ⏮ First
+          </button>
+        )}
+        {onCenterLastNode && (
+          <button
+            onClick={onCenterLastNode}
+            type="button"
+            aria-label="Jump to last node"
+            className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-emerald-400 hover:text-emerald-300 whitespace-nowrap"
+            title="Jump to last node"
+          >
+            Last ⏭
           </button>
         )}
         {onToggleShowAll && (

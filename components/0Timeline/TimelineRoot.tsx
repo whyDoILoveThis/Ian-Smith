@@ -1,6 +1,6 @@
 // components/timeline/TimelineRoot.tsx
 "use client";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMounted } from "./hooks/useMounted";
 import { useTimelineNodes } from "@/hooks/useTimelineNodes";
 import { useTimelines } from "@/hooks/useTimelines";
@@ -18,6 +18,11 @@ import TimelineListOfTimelines from "./TimelineListOfTimelines";
 import TimelineListOfUsers from "./TimelineListOfUsers";
 import TimelineSettings from "./TimelineSettings";
 import { appwrImgUp } from "@/appwrite/appwrStorage";
+import {
+  AITimelineModal,
+  AIUnsavedBanner,
+  type GeneratedTimeline,
+} from "./TimelineAI";
 
 /**
  * TimelineRoot — now wired to useTimelineNodes (Appwrite persistence)
@@ -40,6 +45,7 @@ export default function TimelineRoot({
 
   // User viewing state - null means viewing own timelines
   const [viewingUser, setViewingUser] = useState<TimelineUser | null>(null);
+  const [showAllTimelines, setShowAllTimelines] = useState(false);
 
   // Users hook
   const {
@@ -50,7 +56,9 @@ export default function TimelineRoot({
   } = useUsers();
 
   // Determine which user's timelines to show
-  const viewingUserId = viewingUser?.clerkUserId ?? userId ?? null;
+  const viewingUserId = showAllTimelines
+    ? null
+    : (viewingUser?.clerkUserId ?? userId ?? null);
 
   // timelines hook (for multiple timelines support) - filtered by user
   const {
@@ -75,6 +83,36 @@ export default function TimelineRoot({
 
   // users modal state
   const [showUsersModal, setShowUsersModal] = useState(false);
+
+  // AI timeline modal state
+  const [showAIModal, setShowAIModal] = useState(false);
+
+  // Unsaved AI-generated timeline preview - persisted to localStorage
+  const [aiPreviewTimeline, setAiPreviewTimeline] =
+    useState<GeneratedTimeline | null>(() => {
+      if (typeof window === "undefined") return null;
+      try {
+        const saved = localStorage.getItem("ai-preview-timeline");
+        return saved ? JSON.parse(saved) : null;
+      } catch {
+        return null;
+      }
+    });
+
+  // Persist preview timeline to localStorage whenever it changes
+  useEffect(() => {
+    if (aiPreviewTimeline) {
+      localStorage.setItem(
+        "ai-preview-timeline",
+        JSON.stringify(aiPreviewTimeline),
+      );
+    } else {
+      localStorage.removeItem("ai-preview-timeline");
+    }
+  }, [aiPreviewTimeline]);
+
+  // Track if preview timeline is currently active (selected)
+  const [isPreviewActive, setIsPreviewActive] = useState(false);
 
   // Determine if current user owns the active timeline
   const isOwner = !!(
@@ -101,6 +139,42 @@ export default function TimelineRoot({
     initialCenterMs,
     1,
   );
+
+  // Get current nodes (either preview or regular)
+  const currentNodes = useMemo(() => {
+    return isPreviewActive && aiPreviewTimeline 
+      ? aiPreviewTimeline.nodes.map((n, i) => ({
+          nodeId: `ai-preview-${i}`,
+          timelineId: "ai-preview",
+          title: n.title,
+          description: n.description ?? null,
+          link: null,
+          dateMs: n.dateMs,
+          images: [],
+          color: n.color ?? aiPreviewTimeline.color ?? "#06b6d4",
+        }))
+      : nodes || [];
+  }, [isPreviewActive, aiPreviewTimeline, nodes]);
+
+  // Center on first node
+  const centerOnFirstNode = useCallback(() => {
+    if (currentNodes.length > 0) {
+      const firstNode = currentNodes.reduce((earliest, node) => 
+        node.dateMs < earliest.dateMs ? node : earliest
+      );
+      setCenterMs(firstNode.dateMs);
+    }
+  }, [currentNodes, setCenterMs]);
+
+  // Center on last node
+  const centerOnLastNode = useCallback(() => {
+    if (currentNodes.length > 0) {
+      const lastNode = currentNodes.reduce((latest, node) => 
+        node.dateMs > latest.dateMs ? node : latest
+      );
+      setCenterMs(lastNode.dateMs);
+    }
+  }, [currentNodes, setCenterMs]);
 
   // panning state (refs for perf)
   const isPanningRef = useRef(false);
@@ -138,6 +212,8 @@ export default function TimelineRoot({
   // Auto-select or open modal based on timelines state
   useEffect(() => {
     if (timelinesLoading) return;
+    // Don't auto-select if the AI preview is currently active
+    if (isPreviewActive) return;
     if (!activeTimeline) {
       if (timelines.length > 0) {
         // Auto-select the first available timeline when none is active
@@ -147,7 +223,21 @@ export default function TimelineRoot({
         setShowTimelinesModal(true);
       }
     }
-  }, [activeTimeline, timelines, timelinesLoading, selectTimeline]);
+  }, [
+    activeTimeline,
+    timelines,
+    timelinesLoading,
+    selectTimeline,
+    isPreviewActive,
+  ]);
+
+  // Auto-center on first node when active timeline or preview changes
+  useEffect(() => {
+    if (currentNodes.length > 0) {
+      centerOnFirstNode();
+    }
+  }, [activeTimeline?.timelineId, isPreviewActive, aiPreviewTimeline, centerOnFirstNode, currentNodes.length]);
+
   useEffect(() => {
     if (!mounted) return;
 
@@ -294,6 +384,74 @@ export default function TimelineRoot({
     } finally {
       setIsCreating(false);
       setCreateAtMs(null);
+    }
+  };
+
+  // -------------------------
+  // AI Timeline Generation
+  // -------------------------
+  const handleAIGenerate = async (generatedTimeline: GeneratedTimeline) => {
+    if (!userId || !clerkUser) {
+      throw new Error("You must be signed in to save AI-generated timelines");
+    }
+
+    try {
+      // First ensure user exists in our DB
+      await getOrCreateUser({
+        clerkUserId: userId,
+        displayName:
+          clerkUser.fullName ||
+          clerkUser.username ||
+          clerkUser.primaryEmailAddress?.emailAddress ||
+          "Unknown User",
+        email: clerkUser.primaryEmailAddress?.emailAddress,
+        imageUrl: clerkUser.imageUrl,
+      });
+
+      // Create the timeline
+      const savedTimeline = await saveTimeline({
+        name: generatedTimeline.name,
+        description: generatedTimeline.description,
+        color: generatedTimeline.color,
+        userId,
+      });
+
+      if (!savedTimeline?.timelineId) {
+        throw new Error("Failed to create timeline");
+      }
+
+      // Link timeline to user
+      await addTimelineToUser(userId, savedTimeline.timelineId);
+
+      // Create all nodes for this timeline
+      for (const node of generatedTimeline.nodes) {
+        await saveNode({
+          nodeId: undefined,
+          timelineId: savedTimeline.timelineId,
+          title: node.title,
+          description: node.description ?? null,
+          link: null,
+          dateMs: node.dateMs,
+          images: [],
+          color: node.color ?? null,
+        });
+      }
+
+      // Select the newly created timeline
+      selectTimeline(savedTimeline);
+
+      // Center the view on the first event
+      if (generatedTimeline.nodes.length > 0) {
+        const firstNodeMs = Math.min(
+          ...generatedTimeline.nodes.map((n) => n.dateMs),
+        );
+        setCenterMs(firstNodeMs);
+      }
+
+      setShowAIModal(false);
+    } catch (err) {
+      console.error("Failed to create AI timeline", err);
+      throw err;
     }
   };
 
@@ -697,12 +855,17 @@ export default function TimelineRoot({
           centerMs={centerMs}
           showAllCards={showAllCards}
           onToggleShowAll={() => setShowAllCards((v) => !v)}
-          activeTimelineName={activeTimeline?.name}
+          activeTimelineName={
+            isPreviewActive ? aiPreviewTimeline?.name : activeTimeline?.name
+          }
           onOpenTimelines={() => setShowTimelinesModal(true)}
           onOpenSettings={() => setShowSettingsModal(true)}
           onOpenUsers={() => setShowUsersModal(true)}
-          hasActiveTimeline={!!activeTimeline}
+          onOpenAIModal={() => setShowAIModal(true)}
+          hasActiveTimeline={!!activeTimeline || isPreviewActive}
           onCenterToday={() => setCenterMs(Date.now())}
+          onCenterFirstNode={currentNodes.length > 0 ? centerOnFirstNode : undefined}
+          onCenterLastNode={currentNodes.length > 0 ? centerOnLastNode : undefined}
           isOwner={isOwner}
           viewingUser={viewingUser}
           onGoHome={() => setViewingUser(null)}
@@ -758,20 +921,48 @@ export default function TimelineRoot({
             baseRangeDays={BASE_RANGE_DAYS}
             onTimelineClick={onTimelineClick}
           />
-          <TimelineNodes
-            events={nodes}
-            getXForMs={getXForMs}
-            containerWidth={containerWidth}
-            centerMs={centerMs}
-            scale={scale}
-            baseRangeDays={BASE_RANGE_DAYS}
-            onTimelineClick={canEdit ? onTimelineClick : undefined}
-            saveNode={saveNode}
-            deleteNode={deleteNode}
-            isLoading={loading}
-            showAllCards={showAllCards}
-            canEdit={canEdit}
-          />
+
+          {/* Show either AI Preview Timeline OR Regular Timeline based on isPreviewActive */}
+          {isPreviewActive && aiPreviewTimeline ? (
+            <TimelineNodes
+              events={aiPreviewTimeline.nodes.map((n, i) => ({
+                nodeId: `ai-preview-${i}`,
+                timelineId: "ai-preview",
+                title: n.title,
+                description: n.description ?? null,
+                link: null,
+                dateMs: n.dateMs,
+                images: [],
+                color: n.color ?? aiPreviewTimeline.color ?? "#06b6d4",
+              }))}
+              getXForMs={getXForMs}
+              containerWidth={containerWidth}
+              centerMs={centerMs}
+              scale={scale}
+              baseRangeDays={BASE_RANGE_DAYS}
+              onTimelineClick={undefined}
+              saveNode={async (payload) => payload}
+              deleteNode={async () => {}}
+              isLoading={false}
+              showAllCards={showAllCards}
+              canEdit={false}
+            />
+          ) : activeTimeline ? (
+            <TimelineNodes
+              events={nodes || []}
+              getXForMs={getXForMs}
+              containerWidth={containerWidth}
+              centerMs={centerMs}
+              scale={scale}
+              baseRangeDays={BASE_RANGE_DAYS}
+              onTimelineClick={canEdit ? onTimelineClick : undefined}
+              saveNode={saveNode}
+              deleteNode={deleteNode}
+              isLoading={loading}
+              showAllCards={showAllCards}
+              canEdit={canEdit}
+            />
+          ) : null}
 
           {/* Only show create UI if user can edit */}
           {canEdit && createAtMs !== null && (
@@ -825,6 +1016,29 @@ export default function TimelineRoot({
           onClose={() => setShowTimelinesModal(false)}
           canCreate={canCreate}
           isViewingOther={!!viewingUser}
+          currentUserId={userId ?? undefined}
+          users={users}
+          viewingUser={viewingUser}
+          showAllTimelines={showAllTimelines}
+          onToggleShowAll={() => {
+            setViewingUser(null);
+            setShowAllTimelines((v) => !v);
+          }}
+          previewTimeline={aiPreviewTimeline}
+          isPreviewActive={isPreviewActive}
+          onSelectPreview={() => {
+            setIsPreviewActive(true);
+            setShowTimelinesModal(false);
+          }}
+          onSelectRegularTimeline={(timeline) => {
+            setIsPreviewActive(false);
+            selectTimeline(timeline);
+            setShowTimelinesModal(false);
+          }}
+          onDiscardPreview={() => {
+            setAiPreviewTimeline(null);
+            setIsPreviewActive(false);
+          }}
         />
       )}
 
@@ -838,11 +1052,16 @@ export default function TimelineRoot({
             // If selecting self, go to own dashboard
             if (user.clerkUserId === userId) {
               setViewingUser(null);
+              setShowAllTimelines(false);
             } else {
               setViewingUser(user);
+              setShowAllTimelines(false);
             }
           }}
-          onGoHome={() => setViewingUser(null)}
+          onGoHome={() => {
+            setViewingUser(null);
+            setShowAllTimelines(false);
+          }}
           onClose={() => setShowUsersModal(false)}
         />
       )}
@@ -858,6 +1077,35 @@ export default function TimelineRoot({
             await deleteTimeline(timelineId);
           }}
           onClose={() => setShowSettingsModal(false)}
+        />
+      )}
+
+      {/* AI Timeline Modal */}
+      <AITimelineModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        onGenerate={handleAIGenerate}
+        onPreviewClose={(timeline) => {
+          setAiPreviewTimeline(timeline);
+          if (timeline) {
+            // Make preview active
+            setIsPreviewActive(true);
+          }
+        }}
+        isSignedIn={!!userId}
+        existingPreview={aiPreviewTimeline}
+      />
+
+      {/* Unsaved AI Timeline Banner - only show when preview is active */}
+      {aiPreviewTimeline && isPreviewActive && !showAIModal && (
+        <AIUnsavedBanner
+          timeline={aiPreviewTimeline}
+          isSignedIn={!!userId}
+          onOpenModal={() => setShowAIModal(true)}
+          onDiscard={() => {
+            setAiPreviewTimeline(null);
+            setIsPreviewActive(false);
+          }}
         />
       )}
 

@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import CMS from "@/components/CMS/CMS";
 import { Toaster } from "@/components/ui/toaster";
 import { useState, type ReactNode } from "react";
+import { MainWrap } from "./MainWrap";
 
 type Props = {
   children: ReactNode;
@@ -22,7 +23,7 @@ export default function SignedInJSX({ children, adminUserId }: Props) {
           onClick={() => {
             setShowMainContent(!showMainContent);
           }}
-          className={`btn btn-purple mt-4 ${showMainContent && "zz-top-plus4"}`}
+          className={`fixed left-2 top-24 btn btn-purple mt-4 zz-top-plus4`}
         >
           {!showMainContent ? "Main Content" : "CMS"}
         </button>
@@ -36,5 +37,5 @@ export default function SignedInJSX({ children, adminUserId }: Props) {
         )}
       </>
     );
-  } else return <div className="w-full max-w-[800px]">{children}</div>;
+  } else return <MainWrap>{children}</MainWrap>;
 }

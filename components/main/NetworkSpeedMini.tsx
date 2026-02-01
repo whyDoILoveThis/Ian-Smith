@@ -6,12 +6,10 @@ import { Settings } from "lucide-react";
 import ItsNumInput from "../sub/ItsNumInput";
 
 /**
- * NetworkSpeedMini — improved:
- * - correct measured speeds (use measured durations + arrayBuffer)
- * - smoothing (EWMA)
- * - separate intervals for ping (fast) and speed (slow)
- * - proper stacking/isolation + pseudo-element blur for glassy look
- * - dropdown uses class "its-dropdown-glass" (pass via ItsDropdown.className)
+ * NetworkSpeedMini — optimized for light and dark mode:
+ * - Uses Tailwind's `dark` variant for conditional styling
+ * - Updates pseudo-elements and dropdown styles for theme adaptability
+ * - Starts in a paused state by default
  */
 
 type SpeedStats = {
@@ -24,7 +22,7 @@ const LS_KEY = "network-speed-settings-v2";
 
 export default function NetworkSpeedMini() {
   const [stats, setStats] = useState<SpeedStats>({ ping: 0, down: 0, up: 0 });
-  const [paused, setPaused] = useState(false);
+  const [paused, setPaused] = useState(true); // Default to paused
 
   // intervals (ms)
   const [pingIntervalMs, setPingIntervalMs] = useState<number>(1000);
@@ -221,8 +219,7 @@ export default function NetworkSpeedMini() {
           height: 50px;
           padding: 0.25rem;
           border-radius: 12px;
-          color: white;
-          /* create stacking context for children so dropdown (top layer) can escape */
+          color: var(--text-color);
           isolation: isolate;
         }
         .network-mini .glass-bg::before {
@@ -230,17 +227,12 @@ export default function NetworkSpeedMini() {
           position: absolute;
           inset: 0;
           border-radius: inherit;
-          /* put actual backdrop blur on pseudo so dropdown can have separate blur */
           backdrop-filter: blur(8px) saturate(120%);
           -webkit-backdrop-filter: blur(8px) saturate(120%);
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: var(--glass-bg);
+          border: 1px solid var(--glass-border);
           pointer-events: none;
           z-index: 0;
-        }
-        .network-mini .content {
-          position: relative;
-          z-index: 2; /* above the pseudo bg */
         }
 
         /* dropdown glass pseudo element — uses a very high z so it's visually above container
@@ -258,22 +250,21 @@ export default function NetworkSpeedMini() {
           pointer-events: none;
           backdrop-filter: blur(10px) saturate(120%);
           -webkit-backdrop-filter: blur(10px) saturate(120%);
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: var(--dropdown-bg);
+          border: 1px solid var(--dropdown-border);
           z-index: 0;
         }
 
         /* inside dropdown: glassy item styles */
         .its-dropdown-glass .glass-item {
-          background: rgba(255, 255, 255, 0.02);
-          backdrop-filter: none; /* keep item backgrounds clear so text is crisp */
+          background: var(--dropdown-item-bg);
           padding: 6px;
           border-radius: 8px;
-          border: 1px solid rgba(255, 255, 255, 0.04);
+          border: 1px solid var(--dropdown-item-border);
         }
         .its-dropdown-glass input[type="number"] {
-          background: rgba(255, 255, 255, 0.85);
-          color: #000;
+          background: var(--input-bg);
+          color: var(--input-text);
           border-radius: 6px;
           padding: 4px;
           font-size: 12px;
@@ -281,7 +272,7 @@ export default function NetworkSpeedMini() {
       `}</style>
 
       {/* main widget */}
-      <article className="network-mini rounded-xl text-[10px] text-white shadow-lg">
+      <article className="network-mini rounded-xl text-[10px] shadow-lg dark:bg-gray-800 bg-white border border-gray-300 dark:border-gray-700">
         {/* background pseudo sits behind content via .glass-bg::before */}
         <div className="glass-bg absolute inset-0 rounded-xl" />
         {/* settings (top-right), note we put the dropdown trigger inside so dropdown is sibling in DOM and can overlay */}
@@ -290,24 +281,26 @@ export default function NetworkSpeedMini() {
             position="up-right"
             closeWhenItemClick={false}
             // add our class so the dropdown content gets the pseudo blur + glass item styles
-            className="its-dropdown-glass !bg-white/10 backdrop-blur-md !border-white/20 translate-x-32  w-[100px]"
+            className="its-dropdown-glass !bg-white/10 dark:!bg-gray-900/10 backdrop-blur-md !border-white/20 dark:!border-gray-700 translate-x-32 w-[100px]"
             trigger={
               <Settings
                 size={12}
-                className="text-white/60 hover:text-white cursor-pointer"
+                className="hover:text-black dark:hover:text-white cursor-pointer"
               />
             }
           >
             <div className="text-xs space-y-2">
               <button
                 onClick={() => setPaused((p) => !p)}
-                className="glass-item w-full text-left"
+                className="glass-item w-full text-left dark:text-white text-black"
               >
                 {paused ? "▶ Resume" : "⏸ Pause"}
               </button>
 
               <div className="glass-item">
-                <label className="text-[10px] block">Ping interval (ms)</label>
+                <label className="text-[10px] block dark:text-gray-300 text-gray-700">
+                  Ping interval (ms)
+                </label>
                 <ItsNumInput
                   step={500}
                   value={pingIntervalMs}
@@ -318,7 +311,9 @@ export default function NetworkSpeedMini() {
               </div>
 
               <div className="glass-item">
-                <label className="text-[10px] block">Speed interval (ms)</label>
+                <label className="text-[10px] block dark:text-gray-300 text-gray-700">
+                  Speed interval (ms)
+                </label>
                 <ItsNumInput
                   step={500}
                   onChange={(val) =>
@@ -326,12 +321,12 @@ export default function NetworkSpeedMini() {
                   }
                   value={speedIntervalMs}
                 />
-                <div className="text-[10px] text-white/60 mt-1">
+                <div className="text-[10px] mt-1 dark:text-gray-400 text-gray-600">
                   shared upload+download
                 </div>
               </div>
 
-              <div className="pt-1 border-t border-white/20 text-[10px] text-gray-300">
+              <div className="pt-1 border-t border-white/20 dark:border-gray-700 text-[10px] dark:text-gray-400 text-gray-600">
                 Data used: {formatBytes(bytesUsed)}
               </div>
             </div>
@@ -340,9 +335,15 @@ export default function NetworkSpeedMini() {
 
         {/* visible content */}
         <div className="content flex flex-col justify-center h-full relative z-10">
-          <span>📡 {Math.round(stats.ping)}ms</span>
-          <span>⬇ {formatSpeed(stats.down)}</span>
-          <span>⬆ {formatSpeed(stats.up)}</span>
+          <span className="dark:text-white text-black">
+            📡 {Math.round(stats.ping)}ms
+          </span>
+          <span className="dark:text-white text-black">
+            ⬇ {formatSpeed(stats.down)}
+          </span>
+          <span className="dark:text-white text-black">
+            ⬆ {formatSpeed(stats.up)}
+          </span>
           <span
             style={{
               position: "absolute",
@@ -351,6 +352,7 @@ export default function NetworkSpeedMini() {
               fontSize: 8,
               color: "rgba(255,255,255,0.45)",
             }}
+            className="dark:text-gray-400 text-gray-600"
           >
             {speedTimer}s
           </span>

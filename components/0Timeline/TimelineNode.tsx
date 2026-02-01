@@ -18,6 +18,7 @@ export default function TimelineNode({
   containerWidth,
   showAllCards,
   canEdit,
+  isPreview,
 }: {
   x: number;
   event: TimelineNode;
@@ -27,6 +28,7 @@ export default function TimelineNode({
   containerWidth: number;
   showAllCards?: boolean;
   canEdit?: boolean;
+  isPreview?: boolean;
 }) {
   const leftStyle: React.CSSProperties = { left: x };
   const [showNodeCard, setShowNodeCard] = useState(false);
@@ -187,7 +189,7 @@ export default function TimelineNode({
               : showAllCards
                 ? "opacity-60"
                 : ""
-          }`}
+          } ${isPreview ? "opacity-50" : ""}`}
           style={{
             height:
               (isHovered || showAllCards || isPinned) && !showNodeCard
@@ -195,30 +197,32 @@ export default function TimelineNode({
                 : 0,
             bottom: `calc(50% + 8px)`,
             width: showAllCards || isPinned ? "7px" : "2px",
-            backgroundColor: event.color || "#06b6d4",
+            backgroundColor: isPreview ? "#f59e0b" : event.color || "#06b6d4",
           }}
           onMouseEnter={handleMouseEnter}
         />
 
-        {/* top circle */}
-        <div
-          className={`absolute z-10 transition-all duration-200 cursor-pointer ${
-            showNodeCard
-              ? "opacity-0 pointer-events-none"
-              : isHovered || showAllCards || isPinned
-                ? "opacity-100"
-                : "opacity-0 pointer-events-none"
-          }`}
-          style={{
-            bottom: `calc(50% + ${lineHeight}px)`,
-          }}
-          onMouseEnter={handleMouseEnter}
-        >
+        {/* top circle - hidden for preview nodes */}
+        {!isPreview && (
           <div
-            className="w-3 h-3 rounded-full border border-neutral-900 shadow-lg"
-            style={{ backgroundColor: event.color || "#06b6d4" }}
-          />
-        </div>
+            className={`absolute z-10 transition-all duration-200 cursor-pointer ${
+              showNodeCard
+                ? "opacity-0 pointer-events-none"
+                : isHovered || showAllCards || isPinned
+                  ? "opacity-100"
+                  : "opacity-0 pointer-events-none"
+            }`}
+            style={{
+              bottom: `calc(50% + ${lineHeight}px)`,
+            }}
+            onMouseEnter={handleMouseEnter}
+          >
+            <div
+              className="w-3 h-3 rounded-full border border-neutral-900 shadow-lg"
+              style={{ backgroundColor: event.color || "#06b6d4" }}
+            />
+          </div>
+        )}
 
         <ItsPortal0>
           <ItsPopover
@@ -243,8 +247,12 @@ export default function TimelineNode({
         <div
           onMouseEnter={handleMouseEnter}
           onClick={() => setIsPinned(!isPinned)}
-          className={`w-4 h-4 rounded-full cursor-pointer ring-1 ring-neutral-700 hover:scale-110 transform transition-all duration-200 shadow-lg ${
+          className={`w-4 h-4 rounded-full cursor-pointer hover:scale-110 transform transition-all duration-200 shadow-lg ${
             showNodeCard ? "opacity-0 pointer-events-none" : ""
+          } ${
+            isPreview
+              ? "ring-1 ring-neutral-700 opacity-60"
+              : "ring-1 ring-neutral-700"
           }`}
           style={{ backgroundColor: event.color || "#06b6d4" }}
         />

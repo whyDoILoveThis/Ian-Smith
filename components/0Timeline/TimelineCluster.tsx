@@ -6,9 +6,11 @@ import TimelineHoverCard from "./TimelineHoverCard";
 export default function TimelineCluster({
   x,
   items,
+  isPreview = false,
 }: {
   x: number;
   items: TimelineNode[];
+  isPreview?: boolean;
 }) {
   const [hover, setHover] = useState(false);
   return (
@@ -22,7 +24,11 @@ export default function TimelineCluster({
         className="relative flex items-center justify-center"
       >
         <div
-          className={`w-8 h-8 rounded-full bg-neutral-700/60 border border-neutral-600 flex items-center justify-center text-sm text-neutral-200 shadow-lg transform transition-all ${hover ? "scale-105" : ""}`}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-lg transform transition-all ${hover ? "scale-105" : ""} ${
+            isPreview
+              ? "bg-neutral-700/40 border border-neutral-600 text-neutral-200 opacity-60"
+              : "bg-neutral-700/60 border border-neutral-600 text-neutral-200"
+          }`}
         >
           +{items.length}
         </div>
