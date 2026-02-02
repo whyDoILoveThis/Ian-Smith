@@ -207,6 +207,7 @@ export default function AIContentSugestions() {
     "emerald" | "blue" | "purple" | "rose"
   >("emerald");
   const MAX_VISIBLE_MESSAGES = 50;
+  const [activeTab, setActiveTab] = useState<"chat" | "room">("chat");
   // AI Chat disguise state
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
@@ -960,7 +961,7 @@ export default function AIContentSugestions() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-950 via-neutral-900 to-black">
+    <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-black">
       {isImageConfirmOpen && pendingImageUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-900/90 p-6 shadow-2xl backdrop-blur">
@@ -995,155 +996,169 @@ export default function AIContentSugestions() {
           </div>
         </div>
       )}
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold text-white">
-            AI Answerer
-          </h1>
-          <p className="mt-2 text-neutral-400">
-            Data persists through refresh. The red LEAVE button clears the
-            entire room completely.
-          </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+
+      {/* Header - Passkey & Controls */}
+      <div className="flex-shrink-0 border-b border-white/10 bg-black/60 px-3 py-2 safe-area-inset-top">
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: Toggle & Title */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                setShowLockBox(true);
-                setShowRealChat(false);
-              }}
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
+              onClick={() =>
+                setActiveTab(activeTab === "chat" ? "room" : "chat")
+              }
+              className={`relative h-7 w-14 rounded-full transition-colors ${
+                activeTab === "chat" ? "bg-emerald-500" : "bg-white/20"
+              }`}
             >
-              Change passkey
+              <span
+                className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                  activeTab === "chat" ? "translate-x-0" : "translate-x-7"
+                }`}
+              />
             </button>
-            {combo && (
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold">
-                <span className="text-neutral-400">Passkey:</span>
-                {combo.map((value, index) => (
-                  <span
-                    key={`${value}-${index}`}
-                    className="rounded-full border border-white/10 bg-black/40 px-3 py-1"
-                    style={{ color: ringColors[index] }}
-                  >
-                    {value}
-                  </span>
-                ))}
-              </div>
-            )}
+            <span className="text-sm font-semibold text-white">
+              {activeTab === "chat" ? "Chat" : "Room"}
+            </span>
+          </div>
+
+          {/* Center: Passkey */}
+          {combo && (
+            <div className="flex items-center gap-1.5">
+              {combo.map((value, index) => (
+                <span
+                  key={`${value}-${index}`}
+                  className="text-xs font-bold"
+                  style={{ color: ringColors[index] }}
+                >
+                  {value}
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLockBox(true);
+                  setShowRealChat(false);
+                }}
+                className="ml-1 text-neutral-400 hover:text-white text-xs"
+              >
+                ✎
+              </button>
+            </div>
+          )}
+
+          {/* Right: Theme Switcher */}
+          <div className="flex gap-1">
+            {(["emerald", "blue", "purple", "rose"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => handleThemeChange(t)}
+                className={`h-4 w-4 rounded-full transition-transform ${
+                  t === "emerald"
+                    ? "bg-emerald-400"
+                    : t === "blue"
+                      ? "bg-blue-500"
+                      : t === "purple"
+                        ? "bg-purple-500"
+                        : "bg-rose-500"
+                } ${chatTheme === t ? "ring-2 ring-white scale-110" : "opacity-50"}`}
+              />
+            ))}
           </div>
         </div>
+      </div>
 
-        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <h2 className="text-lg font-semibold text-white">Room Spots</h2>
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white">
-                <span>Spot 1</span>
-                <span
-                  className={
-                    availability.isSlot1Taken
-                      ? "text-amber-300"
-                      : "text-emerald-300"
-                  }
-                >
-                  {slots["1"]?.name || "Available"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white">
-                <span>Spot 2</span>
-                <span
-                  className={
-                    availability.isSlot2Taken
-                      ? "text-amber-300"
-                      : "text-emerald-300"
-                  }
-                >
-                  {slots["2"]?.name || "Available"}
-                </span>
-              </div>
-            </div>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {activeTab === "room" ? (
+          /* Room Spots View */
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="mx-auto max-w-md space-y-4">
+              <h2 className="text-lg font-semibold text-white text-center">
+                Room Spots
+              </h2>
 
-            {slotId ? (
-              <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200">
-                You are in spot {slotId} as{" "}
-                <span className="font-semibold">{screenName}</span>.
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white">
+                  <span>Spot 1</span>
+                  <span
+                    className={
+                      availability.isSlot1Taken
+                        ? "text-amber-300"
+                        : "text-emerald-300"
+                    }
+                  >
+                    {slots["1"]?.name || "Available"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white">
+                  <span>Spot 2</span>
+                  <span
+                    className={
+                      availability.isSlot2Taken
+                        ? "text-amber-300"
+                        : "text-emerald-300"
+                    }
+                  >
+                    {slots["2"]?.name || "Available"}
+                  </span>
+                </div>
               </div>
-            ) : (
-              <div className="mt-6 space-y-3">
-                <input
-                  type="text"
-                  placeholder="Your screen name"
-                  value={screenName}
-                  onChange={(event) => setScreenName(event.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
-                />
+
+              {slotId ? (
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200 text-center">
+                  You are in spot {slotId} as{" "}
+                  <span className="font-semibold">{screenName}</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Your screen name"
+                    value={screenName}
+                    onChange={(e) => setScreenName(e.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                  />
+                  <button
+                    onClick={handleJoin}
+                    disabled={availability.isFull || isJoining}
+                    className="w-full rounded-2xl bg-emerald-400/90 px-4 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {availability.isFull
+                      ? "Room Full"
+                      : isJoining
+                        ? "Joining..."
+                        : "Join Chat"}
+                  </button>
+                </div>
+              )}
+
+              <p className="text-xs text-neutral-400 text-center">
+                Leaving clears all messages and images for both users.
+              </p>
+
+              {slotId && (
                 <button
-                  onClick={handleJoin}
-                  disabled={availability.isFull || isJoining}
-                  className="w-full rounded-2xl bg-emerald-400/90 px-4 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={handleLeave}
+                  disabled={isLeaving}
+                  className="w-full rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {availability.isFull
-                    ? "Room Full"
-                    : isJoining
-                      ? "Joining..."
-                      : "Join Chat"}
+                  {isLeaving ? "Leaving..." : "Leave & Clear Room"}
                 </button>
-              </div>
-            )}
+              )}
 
-            <div className="mt-6 text-xs text-neutral-400">
-              <p>Leaving clears all messages and images for both users.</p>
+              {error && (
+                <p className="text-xs text-red-300 text-center">{error}</p>
+              )}
             </div>
-
-            {slotId && (
-              <button
-                onClick={handleLeave}
-                disabled={isLeaving}
-                className="mt-5 w-full rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isLeaving ? "Leaving..." : "Leave & Clear Room"}
-              </button>
-            )}
-
-            {error && <p className="mt-4 text-xs text-red-300">{error}</p>}
           </div>
-
-          <div className="flex h-[calc(100vh-2rem)] flex-col border-l border-white/10 bg-black/40">
-            <div className="border-b border-white/10 px-4 py-3 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-white">
-                    Live Chat
-                  </h2>
-                  <p className="text-xs text-neutral-400">
-                    🔒 End-to-end encrypted
-                  </p>
-                </div>
-                {/* Theme Switcher */}
-                <div className="flex gap-1">
-                  {(["emerald", "blue", "purple", "rose"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => handleThemeChange(t)}
-                      className={`h-5 w-5 rounded-full transition-transform ${
-                        t === "emerald"
-                          ? "bg-emerald-400"
-                          : t === "blue"
-                            ? "bg-blue-500"
-                            : t === "purple"
-                              ? "bg-purple-500"
-                              : "bg-rose-500"
-                      } ${chatTheme === t ? "ring-2 ring-white ring-offset-1 ring-offset-black scale-110" : "opacity-60 hover:opacity-100"}`}
-                      aria-label={`Switch to ${t} theme`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
+        ) : (
+          /* Chat Messages View */
+          <>
             <div
               ref={scrollContainerRef}
-              className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-2 sm:px-4 py-3"
+              className="flex-1 overflow-y-auto overscroll-contain px-2 py-3 space-y-2"
             >
               {messages.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
@@ -1336,36 +1351,37 @@ export default function AIContentSugestions() {
               <div ref={bottomRef} />
             </div>
 
-            <div className="border-t border-white/10 px-6 py-4">
+            {/* Input Area */}
+            <div className="flex-shrink-0 border-t border-white/10 bg-black/60 px-2 py-2 safe-area-inset-bottom">
               {/* Reply preview bar */}
               {replyingTo && (
-                <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm">
+                <div className="mb-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-2 py-1.5 text-sm">
                   <div className="flex-1 border-l-2 border-emerald-400 pl-2">
-                    <p className="text-xs text-emerald-400 font-semibold">
+                    <p className="text-[10px] text-emerald-400 font-semibold">
                       Replying to {replyingTo.sender}
                     </p>
-                    <p className="text-xs text-neutral-400 truncate">
-                      {replyingTo.decryptedText?.slice(0, 50) ||
+                    <p className="text-[10px] text-neutral-400 truncate">
+                      {replyingTo.decryptedText?.slice(0, 40) ||
                         (replyingTo.imageUrl ? "📷 Image" : "")}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setReplyingTo(null)}
-                    className="text-neutral-400 hover:text-white transition-colors text-lg"
+                    className="text-neutral-400 hover:text-white transition-colors"
                   >
                     ✕
                   </button>
                 </div>
               )}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder={slotId ? "Type a message" : "Join to chat"}
+                  placeholder={slotId ? "Message" : "Join to chat"}
                   value={messageText}
                   disabled={!slotId || isSending}
-                  onChange={(event) => {
-                    setMessageText(event.target.value);
+                  onChange={(e) => {
+                    setMessageText(e.target.value);
                     if (slotId) {
                       setTypingState(true);
                       if (typingTimeoutRef.current) {
@@ -1376,22 +1392,13 @@ export default function AIContentSugestions() {
                       }, 1200);
                     }
                   }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      handleSendMessage();
-                    }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSendMessage();
                   }}
-                  className="flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 disabled:opacity-50"
+                  className="flex-1 rounded-full border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 disabled:opacity-50"
                 />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!slotId || isSending || !messageText.trim()}
-                  className="rounded-2xl bg-white text-sm font-semibold text-black px-5 py-3 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Send
-                </button>
                 <label
-                  className={`rounded-2xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition ${slotId ? "cursor-pointer hover:border-white/30" : "opacity-50"}`}
+                  className={`flex-shrink-0 rounded-full border border-white/10 p-2.5 text-white transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"}`}
                 >
                   <input
                     type="file"
@@ -1400,12 +1407,43 @@ export default function AIContentSugestions() {
                     onChange={handleImageUpload}
                     className="hidden"
                   />
-                  Image
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
                 </label>
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!slotId || isSending || !messageText.trim()}
+                  className={`flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${themeColors.btn} text-black`}
+                >
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                    />
+                  </svg>
+                </button>
               </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
