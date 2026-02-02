@@ -13,6 +13,7 @@ import {
   ref,
   remove,
   runTransaction,
+  set,
   serverTimestamp,
 } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
@@ -194,6 +195,7 @@ export default function AIContentSugestions() {
   );
   const [rawMessages, setRawMessages] = useState<Message[]>([]);
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   // AI Chat disguise state
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
@@ -209,6 +211,7 @@ export default function AIContentSugestions() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const encryptionKeyRef = useRef<CryptoKey | null>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
   const ringColors = ["#f97316", "#3b82f6", "#22c55e", "#ec4899"] as const;
   // Store combo locally (user-entered)
   useEffect(() => {
@@ -331,11 +334,23 @@ export default function AIContentSugestions() {
       setRawMessages(rawMessages);
     });
 
+    const typingRef = ref(rtdb, `${ROOM_PATH}/typing`);
+    const unsubTyping = onValue(typingRef, (snap) => {
+      if (!slotId) {
+        setIsOtherTyping(false);
+        return;
+      }
+      const val = (snap.val() || {}) as Record<string, boolean>;
+      const otherSlot = slotId === "1" ? "2" : "1";
+      setIsOtherTyping(Boolean(val?.[otherSlot]));
+    });
+
     return () => {
       unsubSlots();
       unsubMessages();
+      unsubTyping();
     };
-  }, [isUnlocked]);
+  }, [isUnlocked, slotId]);
 
   useEffect(() => {
     async function decryptAll() {
@@ -370,8 +385,11 @@ export default function AIContentSugestions() {
   }, [rawMessages, encryptionKey]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length]);
+    const id = window.setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [messages, isOtherTyping]);
 
   const availability = useMemo(() => {
     const isSlot1Taken = !!slots["1"]?.name;
@@ -554,6 +572,7 @@ export default function AIContentSugestions() {
 
       await remove(ref(rtdb, `${ROOM_PATH}/messages`));
       await remove(ref(rtdb, `${ROOM_PATH}/slots/${slotId}`));
+      await set(ref(rtdb, `${ROOM_PATH}/typing/${slotId}`), false);
     } catch (err) {
       setError("Unable to leave cleanly. Try again.");
     } finally {
@@ -571,11 +590,25 @@ export default function AIContentSugestions() {
     }
   }, [clearAllMessages, isLeaving, pendingImageUrl, slotId]);
 
+  const setTypingState = useCallback(
+    async (isTyping: boolean) => {
+      if (!slotId) return;
+      try {
+        await set(ref(rtdb, `${ROOM_PATH}/typing/${slotId}`), isTyping);
+      } catch {
+        // ignore typing errors
+      }
+    },
+    [slotId],
+  );
+
   const handleSendMessage = useCallback(async () => {
     if (!slotId || !screenName.trim() || !messageText.trim() || !encryptionKey)
       return;
     setIsSending(true);
     setError(null);
+
+    setTypingState(false);
 
     try {
       // Encrypt the message before sending
@@ -597,7 +630,7 @@ export default function AIContentSugestions() {
     } finally {
       setIsSending(false);
     }
-  }, [encryptionKey, messageText, screenName, slotId]);
+  }, [encryptionKey, messageText, screenName, setTypingState, slotId]);
 
   const handleImageUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1004,6 +1037,29 @@ export default function AIContentSugestions() {
                   </div>
                 );
               })}
+              {isOtherTyping && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
+                    <p className="text-[11px] uppercase tracking-wide opacity-70">
+                      Typing
+                    </p>
+                    <div className="mt-1 flex items-center gap-1">
+                      <span
+                        className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
+                        style={{ animationDelay: "0ms" }}
+                      />
+                      <span
+                        className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
+                        style={{ animationDelay: "150ms" }}
+                      />
+                      <span
+                        className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
+                        style={{ animationDelay: "300ms" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={bottomRef} />
             </div>
 
@@ -1014,7 +1070,18 @@ export default function AIContentSugestions() {
                   placeholder={slotId ? "Type a message" : "Join to chat"}
                   value={messageText}
                   disabled={!slotId || isSending}
-                  onChange={(event) => setMessageText(event.target.value)}
+                  onChange={(event) => {
+                    setMessageText(event.target.value);
+                    if (slotId) {
+                      setTypingState(true);
+                      if (typingTimeoutRef.current) {
+                        window.clearTimeout(typingTimeoutRef.current);
+                      }
+                      typingTimeoutRef.current = window.setTimeout(() => {
+                        setTypingState(false);
+                      }, 1200);
+                    }
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       handleSendMessage();
