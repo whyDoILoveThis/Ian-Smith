@@ -960,7 +960,7 @@ export default function AIContentSugestions() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-950 via-neutral-900 to-black py-10 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-neutral-950 via-neutral-900 to-black">
       {isImageConfirmOpen && pendingImageUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-900/90 p-6 shadow-2xl backdrop-blur">
@@ -1107,7 +1107,7 @@ export default function AIContentSugestions() {
             {error && <p className="mt-4 text-xs text-red-300">{error}</p>}
           </div>
 
-          <div className="flex h-[75vh] max-h-[700px] flex-col rounded-3xl border border-white/10 bg-white/5 backdrop-blur">
+          <div className="flex h-[calc(100vh-2rem)] flex-col border-l border-white/10 bg-black/40">
             <div className="border-b border-white/10 px-4 py-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
@@ -1143,7 +1143,7 @@ export default function AIContentSugestions() {
 
             <div
               ref={scrollContainerRef}
-              className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4"
+              className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-2 sm:px-4 py-3"
             >
               {messages.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
