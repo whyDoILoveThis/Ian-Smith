@@ -1035,24 +1035,48 @@ export default function AIContentSugestions() {
                     className={`group flex ${isMine ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`relative max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg cursor-pointer select-none ${
+                      className={`relative max-w-[75%] sm:max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg select-none ${
                         isMine
                           ? "bg-emerald-400/90 text-black"
                           : "bg-white/10 text-white"
                       }`}
-                      onClick={() => setReplyingTo(msg)}
                       onTouchStart={(e) => {
                         const touch = e.touches[0];
                         const startX = touch.clientX;
+                        const startY = touch.clientY;
                         const el = e.currentTarget;
                         let deltaX = 0;
+                        let deltaY = 0;
+                        let isScrolling: boolean | null = null;
 
                         const handleMove = (moveEvent: TouchEvent) => {
                           const moveTouch = moveEvent.touches[0];
                           deltaX = moveTouch.clientX - startX;
+                          deltaY = moveTouch.clientY - startY;
+
+                          // Determine if scrolling vertically on first significant move
+                          if (
+                            isScrolling === null &&
+                            (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)
+                          ) {
+                            isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
+                          }
+
+                          // If scrolling vertically, don't interfere
+                          if (isScrolling) return;
+
+                          // Only allow swipe toward center (left for mine, right for theirs)
+                          const validDirection = isMine
+                            ? deltaX < 0
+                            : deltaX > 0;
+                          if (!validDirection) {
+                            deltaX = 0;
+                            return;
+                          }
+
                           const clampedDelta = Math.max(
-                            -60,
-                            Math.min(60, deltaX),
+                            -50,
+                            Math.min(50, deltaX),
                           );
                           el.style.transform = `translateX(${clampedDelta}px)`;
                           el.style.transition = "none";
@@ -1061,37 +1085,52 @@ export default function AIContentSugestions() {
                         const handleEnd = () => {
                           el.style.transform = "";
                           el.style.transition = "transform 0.2s ease-out";
-                          if (Math.abs(deltaX) > 40) {
+                          // Require 60px swipe in correct direction to trigger reply
+                          const validSwipe = isMine
+                            ? deltaX < -60
+                            : deltaX > 60;
+                          if (validSwipe && !isScrolling) {
                             setReplyingTo(msg);
                           }
                           document.removeEventListener("touchmove", handleMove);
                           document.removeEventListener("touchend", handleEnd);
                         };
 
-                        document.addEventListener("touchmove", handleMove);
+                        document.addEventListener("touchmove", handleMove, {
+                          passive: true,
+                        });
                         document.addEventListener("touchend", handleEnd);
                       }}
                     >
-                      {/* Reply indicator on hover/swipe */}
-                      <div
-                        className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity ${
-                          isMine ? "-left-8" : "-right-8"
+                      {/* Reply button on hover (desktop) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReplyingTo(msg);
+                        }}
+                        className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-white/10 ${
+                          isMine ? "-left-7" : "-right-7"
                         }`}
                       >
                         <span className="text-xs text-neutral-400">↩</span>
-                      </div>
+                      </button>
 
                       {/* Reply preview if this is a reply */}
                       {msg.replyToText && (
                         <div
-                          className={`mb-2 border-l-2 pl-2 text-xs opacity-70 ${
-                            isMine ? "border-black/30" : "border-white/30"
+                          className={`mb-2 rounded-lg px-2 py-1 text-[11px] ${
+                            isMine
+                              ? "bg-black/10 border-l-2 border-black/40"
+                              : "bg-white/5 border-l-2 border-white/40"
                           }`}
                         >
-                          <span className="font-semibold">
+                          <p className="font-semibold opacity-80">
                             {msg.replyToSender}
-                          </span>
-                          <p className="truncate">{msg.replyToText}</p>
+                          </p>
+                          <p className="truncate opacity-60 max-w-[200px]">
+                            {msg.replyToText}
+                          </p>
                         </div>
                       )}
 
@@ -1104,7 +1143,7 @@ export default function AIContentSugestions() {
                         )}
                       </p>
                       {msg.decryptedText && (
-                        <p className="mt-1 whitespace-pre-line">
+                        <p className="mt-1 whitespace-pre-line break-words">
                           {msg.decryptedText}
                         </p>
                       )}
