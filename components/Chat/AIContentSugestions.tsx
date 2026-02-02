@@ -430,6 +430,16 @@ export default function AIContentSugestions() {
     };
   }, [slots]);
 
+  const formatTimestamp = useCallback((createdAt?: number | object) => {
+    if (typeof createdAt !== "number") return "";
+    const date = new Date(createdAt);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, []);
+
   const claimSlot = useCallback(
     async (desiredSlot: "1" | "2", name: string) => {
       const slotRef = ref(rtdb, `${ROOM_PATH}/slots/${desiredSlot}`);
@@ -1047,6 +1057,7 @@ export default function AIContentSugestions() {
               )}
               {messages.map((msg) => {
                 const isMine = slotId === msg.slotId;
+                const timestamp = formatTimestamp(msg.createdAt);
                 return (
                   <div
                     key={msg.id}
@@ -1171,6 +1182,17 @@ export default function AIContentSugestions() {
                           alt="Uploaded"
                           className="mt-2 w-full rounded-xl border border-white/10"
                         />
+                      )}
+                      {timestamp && (
+                        <div
+                          className={`mt-2 flex ${
+                            isMine ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <span className="text-[10px] text-neutral-400">
+                            {timestamp}
+                          </span>
+                        </div>
                       )}
                       {/* Read receipt checkmark */}
                       {isMine && (
