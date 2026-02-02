@@ -434,10 +434,15 @@ export default function AIContentSugestions() {
     if (typeof createdAt !== "number") return "";
     const date = new Date(createdAt);
     if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString([], {
+    const datePart = date.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+    });
+    const timePart = date.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
+    return `${datePart} • ${timePart}`;
   }, []);
 
   const claimSlot = useCallback(
@@ -1189,7 +1194,13 @@ export default function AIContentSugestions() {
                             isMine ? "justify-end" : "justify-start"
                           }`}
                         >
-                          <span className="text-[10px] text-neutral-400">
+                          <span
+                            className={`text-[10px] ${
+                              isMine
+                                ? "text-emerald-900/70"
+                                : "text-neutral-400"
+                            }`}
+                          >
                             {timestamp}
                           </span>
                         </div>
