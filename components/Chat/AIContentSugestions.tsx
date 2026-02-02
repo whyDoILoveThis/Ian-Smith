@@ -206,7 +206,9 @@ export default function AIContentSugestions() {
   const [chatTheme, setChatTheme] = useState<
     "emerald" | "blue" | "purple" | "rose"
   >("emerald");
-  const MAX_VISIBLE_MESSAGES = 50;
+  const MESSAGES_PER_PAGE = 50;
+  const [visibleMessageCount, setVisibleMessageCount] =
+    useState(MESSAGES_PER_PAGE);
   const [activeTab, setActiveTab] = useState<"chat" | "room">("chat");
   // AI Chat disguise state
   const [showLockBox, setShowLockBox] = useState(false);
@@ -1007,13 +1009,15 @@ export default function AIContentSugestions() {
               onClick={() =>
                 setActiveTab(activeTab === "chat" ? "room" : "chat")
               }
-              className={`relative h-7 w-14 rounded-full transition-colors ${
-                activeTab === "chat" ? "bg-emerald-500" : "bg-white/20"
+              className={`relative h-7 w-14 rounded-full transition-colors duration-200 ${
+                activeTab === "room" ? "bg-amber-500" : "bg-emerald-500"
               }`}
             >
               <span
-                className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                  activeTab === "chat" ? "translate-x-0" : "translate-x-7"
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-all duration-200 ease-out ${
+                  activeTab === "room"
+                    ? "left-[calc(100%-1.625rem)]"
+                    : "left-0.5"
                 }`}
               />
             </button>
@@ -1165,8 +1169,25 @@ export default function AIContentSugestions() {
                   No messages yet. Say hello!
                 </div>
               )}
+              {/* Load older messages button */}
+              {messages.length > visibleMessageCount && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleMessageCount((prev) => prev + MESSAGES_PER_PAGE)
+                  }
+                  className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white transition-colors"
+                >
+                  ↑ Load{" "}
+                  {Math.min(
+                    MESSAGES_PER_PAGE,
+                    messages.length - visibleMessageCount,
+                  )}{" "}
+                  older messages
+                </button>
+              )}
               {/* Only render last N messages for performance */}
-              {messages.slice(-MAX_VISIBLE_MESSAGES).map((msg) => {
+              {messages.slice(-visibleMessageCount).map((msg) => {
                 const isMine = slotId === msg.slotId;
                 const timestamp = formatTimestamp(msg.createdAt);
                 return (
