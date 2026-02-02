@@ -170,6 +170,9 @@ type Message = {
   imageFileId?: string;
   createdAt?: number | object;
   decryptionFailed?: boolean;
+  replyToId?: string;
+  replyToSender?: string;
+  replyToText?: string;
 };
 
 export default function AIContentSugestions() {
@@ -196,6 +199,7 @@ export default function AIContentSugestions() {
   const [rawMessages, setRawMessages] = useState<Message[]>([]);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   // AI Chat disguise state
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
@@ -334,20 +338,27 @@ export default function AIContentSugestions() {
       setRawMessages(rawMessages);
     });
 
+    return () => {
+      unsubSlots();
+      unsubMessages();
+    };
+  }, [isUnlocked]);
+
+  // Separate effect for typing indicator - needs slotId
+  useEffect(() => {
+    if (!isUnlocked || !slotId) {
+      setIsOtherTyping(false);
+      return;
+    }
+
     const typingRef = ref(rtdb, `${ROOM_PATH}/typing`);
     const unsubTyping = onValue(typingRef, (snap) => {
-      if (!slotId) {
-        setIsOtherTyping(false);
-        return;
-      }
       const val = (snap.val() || {}) as Record<string, boolean>;
       const otherSlot = slotId === "1" ? "2" : "1";
       setIsOtherTyping(Boolean(val?.[otherSlot]));
     });
 
     return () => {
-      unsubSlots();
-      unsubMessages();
       unsubTyping();
     };
   }, [isUnlocked, slotId]);
@@ -617,20 +628,30 @@ export default function AIContentSugestions() {
         encryptionKey,
       );
 
-      const msgRef = ref(rtdb, `${ROOM_PATH}/messages`);
-      await push(msgRef, {
+      const msgData: Record<string, unknown> = {
         slotId,
         sender: screenName.trim(),
         text: encryptedText, // Encrypted text goes to DB
         createdAt: serverTimestamp(),
-      });
+      };
+
+      // Add reply data if replying
+      if (replyingTo) {
+        msgData.replyToId = replyingTo.id;
+        msgData.replyToSender = replyingTo.sender;
+        msgData.replyToText = replyingTo.decryptedText?.slice(0, 100) || "";
+      }
+
+      const msgRef = ref(rtdb, `${ROOM_PATH}/messages`);
+      await push(msgRef, msgData);
       setMessageText("");
+      setReplyingTo(null);
     } catch (err) {
       setError("Message failed to send.");
     } finally {
       setIsSending(false);
     }
-  }, [encryptionKey, messageText, screenName, setTypingState, slotId]);
+  }, [encryptionKey, messageText, replyingTo, screenName, setTypingState, slotId]);
 
   const handleImageUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1004,15 +1025,62 @@ export default function AIContentSugestions() {
                 return (
                   <div
                     key={msg.id}
-                    className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                    className={`group flex ${isMine ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg ${
+                      className={`relative max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg cursor-pointer select-none ${
                         isMine
                           ? "bg-emerald-400/90 text-black"
                           : "bg-white/10 text-white"
                       }`}
+                      onClick={() => setReplyingTo(msg)}
+                      onTouchStart={(e) => {
+                        const touch = e.touches[0];
+                        const startX = touch.clientX;
+                        const el = e.currentTarget;
+                        let deltaX = 0;
+
+                        const handleMove = (moveEvent: TouchEvent) => {
+                          const moveTouch = moveEvent.touches[0];
+                          deltaX = moveTouch.clientX - startX;
+                          const clampedDelta = Math.max(-60, Math.min(60, deltaX));
+                          el.style.transform = `translateX(${clampedDelta}px)`;
+                          el.style.transition = "none";
+                        };
+
+                        const handleEnd = () => {
+                          el.style.transform = "";
+                          el.style.transition = "transform 0.2s ease-out";
+                          if (Math.abs(deltaX) > 40) {
+                            setReplyingTo(msg);
+                          }
+                          document.removeEventListener("touchmove", handleMove);
+                          document.removeEventListener("touchend", handleEnd);
+                        };
+
+                        document.addEventListener("touchmove", handleMove);
+                        document.addEventListener("touchend", handleEnd);
+                      }}
                     >
+                      {/* Reply indicator on hover/swipe */}
+                      <div
+                        className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity ${
+                          isMine ? "-left-8" : "-right-8"
+                        }`}
+                      >
+                        <span className="text-xs text-neutral-400">↩</span>
+                      </div>
+
+                      {/* Reply preview if this is a reply */}
+                      {msg.replyToText && (
+                        <div className={`mb-2 border-l-2 pl-2 text-xs opacity-70 ${
+                          isMine ? "border-black/30" : "border-white/30"
+                        }`}>
+                          <span className="font-semibold">{msg.replyToSender}</span>
+                          <p className="truncate">{msg.replyToText}</p>
+                        </div>
+                      )}
+
                       <p className="text-[11px] uppercase tracking-wide opacity-70">
                         {msg.sender}
                         {msg.decryptionFailed && (
@@ -1064,6 +1132,26 @@ export default function AIContentSugestions() {
             </div>
 
             <div className="border-t border-white/10 px-6 py-4">
+              {/* Reply preview bar */}
+              {replyingTo && (
+                <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm">
+                  <div className="flex-1 border-l-2 border-emerald-400 pl-2">
+                    <p className="text-xs text-emerald-400 font-semibold">
+                      Replying to {replyingTo.sender}
+                    </p>
+                    <p className="text-xs text-neutral-400 truncate">
+                      {replyingTo.decryptedText?.slice(0, 50) || (replyingTo.imageUrl ? "📷 Image" : "")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="text-neutral-400 hover:text-white transition-colors text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <input
                   type="text"
