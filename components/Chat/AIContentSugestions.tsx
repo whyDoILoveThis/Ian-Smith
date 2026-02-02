@@ -173,6 +173,7 @@ type Message = {
   replyToId?: string;
   replyToSender?: string;
   replyToText?: string;
+  readBy?: { "1"?: boolean; "2"?: boolean };
 };
 
 export default function AIContentSugestions() {
@@ -200,6 +201,7 @@ export default function AIContentSugestions() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const markedAsReadRef = useRef<Set<string>>(new Set());
   // AI Chat disguise state
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
@@ -401,6 +403,22 @@ export default function AIContentSugestions() {
     }, 0);
     return () => window.clearTimeout(id);
   }, [messages, isOtherTyping]);
+
+  // Mark messages from the other person as read
+  useEffect(() => {
+    if (!slotId) return;
+    messages.forEach((msg) => {
+      // Only mark other person's messages as read, and only once
+      if (msg.slotId !== slotId && !markedAsReadRef.current.has(msg.id)) {
+        markedAsReadRef.current.add(msg.id);
+        const readRef = ref(
+          rtdb,
+          `${ROOM_PATH}/messages/${msg.id}/readBy/${slotId}`,
+        );
+        set(readRef, true).catch(() => {});
+      }
+    });
+  }, [messages, slotId]);
 
   const availability = useMemo(() => {
     const isSlot1Taken = !!slots["1"]?.name;
@@ -796,7 +814,7 @@ export default function AIContentSugestions() {
               </p>
             </div>
 
-            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
+            <div className="flex-1 space-y-4 overflow-y-auto px-3 sm:px-6 py-6">
               {aiMessages.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
                   Start a conversation. Ask about my skills, projects, or how I
@@ -1035,10 +1053,10 @@ export default function AIContentSugestions() {
                     className={`group flex ${isMine ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`relative max-w-[75%] sm:max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg select-none ${
+                      className={`relative max-w-full sm:max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg select-none ${
                         isMine
-                          ? "bg-emerald-400/90 text-black"
-                          : "bg-white/10 text-white"
+                          ? "bg-emerald-400/90 text-black rounded-br-none"
+                          : "bg-white/10 text-white rounded-bl-none"
                       }`}
                       onTouchStart={(e) => {
                         const touch = e.touches[0];
@@ -1153,6 +1171,18 @@ export default function AIContentSugestions() {
                           alt="Uploaded"
                           className="mt-2 w-full rounded-xl border border-white/10"
                         />
+                      )}
+                      {/* Read receipt checkmark */}
+                      {isMine && (
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 text-[9px] ${
+                            msg.readBy?.[slotId === "1" ? "2" : "1"]
+                              ? "text-emerald-700"
+                              : "text-black/40"
+                          }`}
+                        >
+                          ✓
+                        </span>
                       )}
                     </div>
                   </div>
