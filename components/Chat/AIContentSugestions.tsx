@@ -203,7 +203,10 @@ export default function AIContentSugestions() {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const markedAsReadRef = useRef<Set<string>>(new Set());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 30 });
+  const [chatTheme, setChatTheme] = useState<
+    "emerald" | "blue" | "purple" | "rose"
+  >("emerald");
+  const MAX_VISIBLE_MESSAGES = 50;
   // AI Chat disguise state
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
@@ -367,6 +370,19 @@ export default function AIContentSugestions() {
     };
   }, [isUnlocked, slotId]);
 
+  // Subscribe to shared theme
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const themeRef = ref(rtdb, `${ROOM_PATH}/theme`);
+    const unsub = onValue(themeRef, (snap) => {
+      const val = snap.val() as string | null;
+      if (val && ["emerald", "blue", "purple", "rose"].includes(val)) {
+        setChatTheme(val as typeof chatTheme);
+      }
+    });
+    return () => unsub();
+  }, [isUnlocked]);
+
   useEffect(() => {
     async function decryptAll() {
       const key = encryptionKeyRef.current;
@@ -399,17 +415,11 @@ export default function AIContentSugestions() {
     decryptAll();
   }, [rawMessages, encryptionKey]);
 
-  // Auto-scroll and update visible range when new messages arrive
+  // Auto-scroll when new messages arrive
   useEffect(() => {
     const id = window.setTimeout(() => {
-      // Scroll to bottom
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-      // Update visible range to show latest messages
-      const buffer = 10;
-      const endIdx = messages.length;
-      const startIdx = Math.max(0, endIdx - 30);
-      setVisibleRange({ start: startIdx, end: endIdx });
-    }, 0);
+    }, 50);
     return () => window.clearTimeout(id);
   }, [messages, isOtherTyping]);
 
@@ -453,6 +463,48 @@ export default function AIContentSugestions() {
     });
     return `${datePart} • ${timePart}`;
   }, []);
+
+  const handleThemeChange = useCallback(async (newTheme: typeof chatTheme) => {
+    try {
+      await set(ref(rtdb, `${ROOM_PATH}/theme`), newTheme);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const themeColors = useMemo(() => {
+    const themes = {
+      emerald: {
+        bg: "bg-emerald-400/90",
+        text: "text-black",
+        accent: "text-emerald-900/70",
+        ring: "ring-emerald-400",
+        btn: "bg-emerald-400",
+      },
+      blue: {
+        bg: "bg-blue-500/90",
+        text: "text-white",
+        accent: "text-blue-200/70",
+        ring: "ring-blue-400",
+        btn: "bg-blue-500",
+      },
+      purple: {
+        bg: "bg-purple-500/90",
+        text: "text-white",
+        accent: "text-purple-200/70",
+        ring: "ring-purple-400",
+        btn: "bg-purple-500",
+      },
+      rose: {
+        bg: "bg-rose-500/90",
+        text: "text-white",
+        accent: "text-rose-200/70",
+        ring: "ring-rose-400",
+        btn: "bg-rose-500",
+      },
+    };
+    return themes[chatTheme];
+  }, [chatTheme]);
 
   const claimSlot = useCallback(
     async (desiredSlot: "1" | "2", name: string) => {
@@ -1055,219 +1107,209 @@ export default function AIContentSugestions() {
             {error && <p className="mt-4 text-xs text-red-300">{error}</p>}
           </div>
 
-          <div className="flex h-[70vh] max-h-[600px] flex-col rounded-3xl border border-white/10 bg-white/5 backdrop-blur">
-            <div className="border-b border-white/10 px-6 py-4 flex-shrink-0">
-              <h2 className="text-lg font-semibold text-white">Live Chat</h2>
-              <p className="text-xs text-neutral-400">
-                🔒 End-to-end encrypted • Firebase Realtime Database
-              </p>
+          <div className="flex h-[75vh] max-h-[700px] flex-col rounded-3xl border border-white/10 bg-white/5 backdrop-blur">
+            <div className="border-b border-white/10 px-4 py-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Live Chat
+                  </h2>
+                  <p className="text-xs text-neutral-400">
+                    🔒 End-to-end encrypted
+                  </p>
+                </div>
+                {/* Theme Switcher */}
+                <div className="flex gap-1">
+                  {(["emerald", "blue", "purple", "rose"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleThemeChange(t)}
+                      className={`h-5 w-5 rounded-full transition-transform ${
+                        t === "emerald"
+                          ? "bg-emerald-400"
+                          : t === "blue"
+                            ? "bg-blue-500"
+                            : t === "purple"
+                              ? "bg-purple-500"
+                              : "bg-rose-500"
+                      } ${chatTheme === t ? "ring-2 ring-white ring-offset-1 ring-offset-black scale-110" : "opacity-60 hover:opacity-100"}`}
+                      aria-label={`Switch to ${t} theme`}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div
               ref={scrollContainerRef}
-              className="flex-1 space-y-4 overflow-y-auto px-3 sm:px-6 py-6"
-              onScroll={(e) => {
-                const container = e.currentTarget;
-                const scrollTop = container.scrollTop;
-                const clientHeight = container.clientHeight;
-                const scrollHeight = container.scrollHeight;
-                // Estimate ~80px per message on average
-                const estimatedMsgHeight = 80;
-                const buffer = 10;
-                const startIdx = Math.max(
-                  0,
-                  Math.floor(scrollTop / estimatedMsgHeight) - buffer,
-                );
-                const visibleCount =
-                  Math.ceil(clientHeight / estimatedMsgHeight) + buffer * 2;
-                const endIdx = Math.min(
-                  messages.length,
-                  startIdx + visibleCount,
-                );
-                setVisibleRange({ start: startIdx, end: endIdx });
-              }}
+              className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4"
             >
               {messages.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
                   No messages yet. Say hello!
                 </div>
               )}
-              {/* Top spacer for virtualization */}
-              {visibleRange.start > 0 && (
-                <div style={{ height: visibleRange.start * 80 }} />
-              )}
-              {messages
-                .slice(visibleRange.start, visibleRange.end)
-                .map((msg) => {
-                  const isMine = slotId === msg.slotId;
-                  const timestamp = formatTimestamp(msg.createdAt);
-                  return (
+              {/* Only render last N messages for performance */}
+              {messages.slice(-MAX_VISIBLE_MESSAGES).map((msg) => {
+                const isMine = slotId === msg.slotId;
+                const timestamp = formatTimestamp(msg.createdAt);
+                return (
+                  <div
+                    key={msg.id}
+                    className={`group flex ${isMine ? "justify-end" : "justify-start"}`}
+                  >
                     <div
-                      key={msg.id}
-                      className={`group flex ${isMine ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`relative max-w-full sm:max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg select-none ${
-                          isMine
-                            ? "bg-emerald-400/90 text-black rounded-br-none"
-                            : "bg-white/10 text-white rounded-bl-none"
-                        }`}
-                        onTouchStart={(e) => {
-                          const touch = e.touches[0];
-                          const startX = touch.clientX;
-                          const startY = touch.clientY;
-                          const el = e.currentTarget;
-                          let deltaX = 0;
-                          let deltaY = 0;
-                          let isScrolling: boolean | null = null;
+                      className={`relative max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-md select-none ${
+                        isMine
+                          ? `${themeColors.bg} ${themeColors.text} rounded-br-none`
+                          : "bg-white/10 text-white rounded-bl-none"
+                      }`}
+                      onTouchStart={(e) => {
+                        const touch = e.touches[0];
+                        const startX = touch.clientX;
+                        const startY = touch.clientY;
+                        const el = e.currentTarget;
+                        let deltaX = 0;
+                        let deltaY = 0;
+                        let isScrolling: boolean | null = null;
 
-                          const handleMove = (moveEvent: TouchEvent) => {
-                            const moveTouch = moveEvent.touches[0];
-                            deltaX = moveTouch.clientX - startX;
-                            deltaY = moveTouch.clientY - startY;
+                        const handleMove = (moveEvent: TouchEvent) => {
+                          const moveTouch = moveEvent.touches[0];
+                          deltaX = moveTouch.clientX - startX;
+                          deltaY = moveTouch.clientY - startY;
 
-                            // Determine if scrolling vertically on first significant move
-                            if (
-                              isScrolling === null &&
-                              (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)
-                            ) {
-                              isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
-                            }
+                          // Determine if scrolling vertically on first significant move
+                          if (
+                            isScrolling === null &&
+                            (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)
+                          ) {
+                            isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
+                          }
 
-                            // If scrolling vertically, don't interfere
-                            if (isScrolling) return;
+                          // If scrolling vertically, don't interfere
+                          if (isScrolling) return;
 
-                            // Only allow swipe toward center (left for mine, right for theirs)
-                            const validDirection = isMine
-                              ? deltaX < 0
-                              : deltaX > 0;
-                            if (!validDirection) {
-                              deltaX = 0;
-                              return;
-                            }
+                          // Only allow swipe toward center (left for mine, right for theirs)
+                          const validDirection = isMine
+                            ? deltaX < 0
+                            : deltaX > 0;
+                          if (!validDirection) {
+                            deltaX = 0;
+                            return;
+                          }
 
-                            const clampedDelta = Math.max(
-                              -50,
-                              Math.min(50, deltaX),
-                            );
-                            el.style.transform = `translateX(${clampedDelta}px)`;
-                            el.style.transition = "none";
-                          };
+                          const clampedDelta = Math.max(
+                            -50,
+                            Math.min(50, deltaX),
+                          );
+                          el.style.transform = `translateX(${clampedDelta}px)`;
+                          el.style.transition = "none";
+                        };
 
-                          const handleEnd = () => {
-                            el.style.transform = "";
-                            el.style.transition = "transform 0.2s ease-out";
-                            // Require 60px swipe in correct direction to trigger reply
-                            const validSwipe = isMine
-                              ? deltaX < -60
-                              : deltaX > 60;
-                            if (validSwipe && !isScrolling) {
-                              setReplyingTo(msg);
-                            }
-                            document.removeEventListener(
-                              "touchmove",
-                              handleMove,
-                            );
-                            document.removeEventListener("touchend", handleEnd);
-                          };
-
-                          document.addEventListener("touchmove", handleMove, {
-                            passive: true,
-                          });
-                          document.addEventListener("touchend", handleEnd);
-                        }}
-                      >
-                        {/* Reply button on hover (desktop) */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                        const handleEnd = () => {
+                          el.style.transform = "";
+                          el.style.transition = "transform 0.2s ease-out";
+                          // Require 60px swipe in correct direction to trigger reply
+                          const validSwipe = isMine
+                            ? deltaX < -60
+                            : deltaX > 60;
+                          if (validSwipe && !isScrolling) {
                             setReplyingTo(msg);
-                          }}
-                          className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-white/10 ${
-                            isMine ? "-left-7" : "-right-7"
+                          }
+                          document.removeEventListener("touchmove", handleMove);
+                          document.removeEventListener("touchend", handleEnd);
+                        };
+
+                        document.addEventListener("touchmove", handleMove, {
+                          passive: true,
+                        });
+                        document.addEventListener("touchend", handleEnd);
+                      }}
+                    >
+                      {/* Reply button on hover (desktop) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReplyingTo(msg);
+                        }}
+                        className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-white/10 ${
+                          isMine ? "-left-7" : "-right-7"
+                        }`}
+                      >
+                        <span className="text-xs text-neutral-400">↩</span>
+                      </button>
+
+                      {/* Reply preview if this is a reply */}
+                      {msg.replyToText && (
+                        <div
+                          className={`mb-2 rounded-lg px-2 py-1 text-[11px] ${
+                            isMine
+                              ? "bg-black/10 border-l-2 border-black/40"
+                              : "bg-white/5 border-l-2 border-white/40"
                           }`}
                         >
-                          <span className="text-xs text-neutral-400">↩</span>
-                        </button>
-
-                        {/* Reply preview if this is a reply */}
-                        {msg.replyToText && (
-                          <div
-                            className={`mb-2 rounded-lg px-2 py-1 text-[11px] ${
-                              isMine
-                                ? "bg-black/10 border-l-2 border-black/40"
-                                : "bg-white/5 border-l-2 border-white/40"
-                            }`}
-                          >
-                            <p className="font-semibold opacity-80">
-                              {msg.replyToSender}
-                            </p>
-                            <p className="truncate opacity-60 max-w-[200px]">
-                              {msg.replyToText}
-                            </p>
-                          </div>
-                        )}
-
-                        <p className="text-[11px] uppercase tracking-wide opacity-70">
-                          {msg.sender}
-                          {msg.decryptionFailed && (
-                            <span className="ml-2 text-amber-400">
-                              ⚠️ unencrypted
-                            </span>
-                          )}
-                        </p>
-                        {msg.decryptedText && (
-                          <p className="mt-1 whitespace-pre-line break-words">
-                            {msg.decryptedText}
+                          <p className="font-semibold opacity-80">
+                            {msg.replyToSender}
                           </p>
-                        )}
-                        {msg.imageUrl && (
-                          <img
-                            src={msg.imageUrl}
-                            alt="Uploaded"
-                            className="mt-2 w-full rounded-xl border border-white/10"
-                          />
-                        )}
-                        {timestamp && (
-                          <div
-                            className={`mt-2 flex ${
-                              isMine ? "justify-end" : "justify-start"
-                            }`}
-                          >
-                            <span
-                              className={`text-[10px] ${
-                                isMine
-                                  ? "text-emerald-900/70"
-                                  : "text-neutral-400"
-                              }`}
-                            >
-                              {timestamp}
-                            </span>
-                          </div>
-                        )}
-                        {/* Read receipt checkmark */}
-                        {isMine && (
-                          <span
-                            className={`absolute -bottom-0.5 -right-0.5 text-[9px] ${
-                              msg.readBy?.[slotId === "1" ? "2" : "1"]
-                                ? "text-emerald-700"
-                                : "text-black/40"
-                            }`}
-                          >
-                            ✓
+                          <p className="truncate opacity-60 max-w-[200px]">
+                            {msg.replyToText}
+                          </p>
+                        </div>
+                      )}
+
+                      <p className="text-[11px] uppercase tracking-wide opacity-70">
+                        {msg.sender}
+                        {msg.decryptionFailed && (
+                          <span className="ml-2 text-amber-400">
+                            ⚠️ unencrypted
                           </span>
                         )}
-                      </div>
+                      </p>
+                      {msg.decryptedText && (
+                        <p className="mt-1 whitespace-pre-line break-words">
+                          {msg.decryptedText}
+                        </p>
+                      )}
+                      {msg.imageUrl && (
+                        <img
+                          src={msg.imageUrl}
+                          alt="Uploaded"
+                          className="mt-2 w-full rounded-xl border border-white/10"
+                        />
+                      )}
+                      {timestamp && (
+                        <div
+                          className={`mt-1 flex ${
+                            isMine ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <span
+                            className={`text-[9px] ${
+                              isMine ? themeColors.accent : "text-neutral-400"
+                            }`}
+                          >
+                            {timestamp}
+                          </span>
+                        </div>
+                      )}
+                      {/* Read receipt checkmark */}
+                      {isMine && (
+                        <span
+                          className={`absolute bottom-1 right-1 text-[9px] ${
+                            msg.readBy?.[slotId === "1" ? "2" : "1"]
+                              ? themeColors.accent
+                              : "opacity-40"
+                          }`}
+                        >
+                          ✓
+                        </span>
+                      )}
                     </div>
-                  );
-                })}
-              {/* Bottom spacer for virtualization */}
-              {visibleRange.end < messages.length && (
-                <div
-                  style={{ height: (messages.length - visibleRange.end) * 80 }}
-                />
-              )}
+                  </div>
+                );
+              })}
               {isOtherTyping && (
                 <div className="flex justify-start">
                   <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
