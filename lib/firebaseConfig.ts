@@ -2,6 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getDatabase } from "firebase/database";
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
@@ -11,6 +12,7 @@ const firebaseConfig = {
   authDomain: "its-portfolio.firebaseapp.com",
   projectId: "its-portfolio",
   storageBucket: "its-portfolio.appspot.com",
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
   messagingSenderId: "815909155470",
   appId: "1:815909155470:web:b33ad7ce9a7ab45efbcfdf",
   measurementId: "G-XCC8FRLB63"
@@ -20,3 +22,4 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+export const rtdb = getDatabase(app);
