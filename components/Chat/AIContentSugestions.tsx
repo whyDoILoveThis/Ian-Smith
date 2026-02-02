@@ -651,7 +651,14 @@ export default function AIContentSugestions() {
     } finally {
       setIsSending(false);
     }
-  }, [encryptionKey, messageText, replyingTo, screenName, setTypingState, slotId]);
+  }, [
+    encryptionKey,
+    messageText,
+    replyingTo,
+    screenName,
+    setTypingState,
+    slotId,
+  ]);
 
   const handleImageUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1043,7 +1050,10 @@ export default function AIContentSugestions() {
                         const handleMove = (moveEvent: TouchEvent) => {
                           const moveTouch = moveEvent.touches[0];
                           deltaX = moveTouch.clientX - startX;
-                          const clampedDelta = Math.max(-60, Math.min(60, deltaX));
+                          const clampedDelta = Math.max(
+                            -60,
+                            Math.min(60, deltaX),
+                          );
                           el.style.transform = `translateX(${clampedDelta}px)`;
                           el.style.transition = "none";
                         };
@@ -1073,10 +1083,14 @@ export default function AIContentSugestions() {
 
                       {/* Reply preview if this is a reply */}
                       {msg.replyToText && (
-                        <div className={`mb-2 border-l-2 pl-2 text-xs opacity-70 ${
-                          isMine ? "border-black/30" : "border-white/30"
-                        }`}>
-                          <span className="font-semibold">{msg.replyToSender}</span>
+                        <div
+                          className={`mb-2 border-l-2 pl-2 text-xs opacity-70 ${
+                            isMine ? "border-black/30" : "border-white/30"
+                          }`}
+                        >
+                          <span className="font-semibold">
+                            {msg.replyToSender}
+                          </span>
                           <p className="truncate">{msg.replyToText}</p>
                         </div>
                       )}
@@ -1140,7 +1154,8 @@ export default function AIContentSugestions() {
                       Replying to {replyingTo.sender}
                     </p>
                     <p className="text-xs text-neutral-400 truncate">
-                      {replyingTo.decryptedText?.slice(0, 50) || (replyingTo.imageUrl ? "📷 Image" : "")}
+                      {replyingTo.decryptedText?.slice(0, 50) ||
+                        (replyingTo.imageUrl ? "📷 Image" : "")}
                     </p>
                   </div>
                   <button
