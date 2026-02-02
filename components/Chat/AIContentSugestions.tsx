@@ -32,13 +32,10 @@ type AIMessage = {
 
 // ============== E2E ENCRYPTION UTILITIES ==============
 
-// Encode string to Uint8Array
-function encodeText(str: string): Uint8Array<ArrayBuffer> {
-  const encoded = new TextEncoder().encode(str);
-  const buffer = new ArrayBuffer(encoded.length);
-  const view = new Uint8Array(buffer);
-  view.set(encoded);
-  return view as Uint8Array<ArrayBuffer>;
+// Encode string to ArrayBuffer for crypto operations
+function encodeText(str: string): ArrayBuffer {
+  const encoder = new TextEncoder();
+  return encoder.encode(str).buffer as ArrayBuffer;
 }
 
 // Decode ArrayBuffer to string
@@ -53,14 +50,13 @@ function bufferToHex(buffer: ArrayBuffer): string {
     .join("");
 }
 
-// Convert hex to Uint8Array
-function hexToBuffer(hex: string): Uint8Array<ArrayBuffer> {
-  const buffer = new ArrayBuffer(hex.length / 2);
-  const bytes = new Uint8Array(buffer);
+// Convert hex to ArrayBuffer
+function hexToBuffer(hex: string): ArrayBuffer {
+  const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
   }
-  return bytes as Uint8Array<ArrayBuffer>;
+  return bytes.buffer as ArrayBuffer;
 }
 
 // Convert ArrayBuffer to base64
@@ -73,15 +69,14 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-// Convert base64 to Uint8Array
-function base64ToBuffer(base64: string): Uint8Array<ArrayBuffer> {
+// Convert base64 to ArrayBuffer
+function base64ToBuffer(base64: string): ArrayBuffer {
   const binary = atob(base64);
-  const buffer = new ArrayBuffer(binary.length);
-  const bytes = new Uint8Array(buffer);
+  const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  return bytes as Uint8Array<ArrayBuffer>;
+  return bytes.buffer as ArrayBuffer;
 }
 
 // Derive an AES key from the LockBox combo
@@ -116,9 +111,7 @@ async function encryptMessage(
   plaintext: string,
   key: CryptoKey,
 ): Promise<string> {
-  const ivBuffer = new ArrayBuffer(12);
-  const iv = new Uint8Array(ivBuffer) as Uint8Array<ArrayBuffer>;
-  crypto.getRandomValues(iv);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
 
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
@@ -127,7 +120,9 @@ async function encryptMessage(
   );
 
   // Format: iv_hex:ciphertext_base64
-  return bufferToHex(ivBuffer) + ":" + bufferToBase64(ciphertext);
+  return (
+    bufferToHex(iv.buffer as ArrayBuffer) + ":" + bufferToBase64(ciphertext)
+  );
 }
 
 // Decrypt a message using AES-256-GCM
