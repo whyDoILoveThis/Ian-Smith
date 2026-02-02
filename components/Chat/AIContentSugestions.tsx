@@ -202,6 +202,8 @@ export default function AIContentSugestions() {
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const markedAsReadRef = useRef<Set<string>>(new Set());
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 30 });
   // AI Chat disguise state
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
@@ -397,9 +399,16 @@ export default function AIContentSugestions() {
     decryptAll();
   }, [rawMessages, encryptionKey]);
 
+  // Auto-scroll and update visible range when new messages arrive
   useEffect(() => {
     const id = window.setTimeout(() => {
+      // Scroll to bottom
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      // Update visible range to show latest messages
+      const buffer = 10;
+      const endIdx = messages.length;
+      const startIdx = Math.max(0, endIdx - 30);
+      setVisibleRange({ start: startIdx, end: endIdx });
     }, 0);
     return () => window.clearTimeout(id);
   }, [messages, isOtherTyping]);
@@ -1046,181 +1055,219 @@ export default function AIContentSugestions() {
             {error && <p className="mt-4 text-xs text-red-300">{error}</p>}
           </div>
 
-          <div className="flex min-h-[520px] flex-col rounded-3xl border border-white/10 bg-white/5 backdrop-blur">
-            <div className="border-b border-white/10 px-6 py-4">
+          <div className="flex h-[70vh] max-h-[600px] flex-col rounded-3xl border border-white/10 bg-white/5 backdrop-blur">
+            <div className="border-b border-white/10 px-6 py-4 flex-shrink-0">
               <h2 className="text-lg font-semibold text-white">Live Chat</h2>
               <p className="text-xs text-neutral-400">
                 🔒 End-to-end encrypted • Firebase Realtime Database
               </p>
             </div>
 
-            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 space-y-4 overflow-y-auto px-3 sm:px-6 py-6"
+              onScroll={(e) => {
+                const container = e.currentTarget;
+                const scrollTop = container.scrollTop;
+                const clientHeight = container.clientHeight;
+                const scrollHeight = container.scrollHeight;
+                // Estimate ~80px per message on average
+                const estimatedMsgHeight = 80;
+                const buffer = 10;
+                const startIdx = Math.max(
+                  0,
+                  Math.floor(scrollTop / estimatedMsgHeight) - buffer,
+                );
+                const visibleCount =
+                  Math.ceil(clientHeight / estimatedMsgHeight) + buffer * 2;
+                const endIdx = Math.min(
+                  messages.length,
+                  startIdx + visibleCount,
+                );
+                setVisibleRange({ start: startIdx, end: endIdx });
+              }}
+            >
               {messages.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
                   No messages yet. Say hello!
                 </div>
               )}
-              {messages.map((msg) => {
-                const isMine = slotId === msg.slotId;
-                const timestamp = formatTimestamp(msg.createdAt);
-                return (
-                  <div
-                    key={msg.id}
-                    className={`group flex ${isMine ? "justify-end" : "justify-start"}`}
-                  >
+              {/* Top spacer for virtualization */}
+              {visibleRange.start > 0 && (
+                <div style={{ height: visibleRange.start * 80 }} />
+              )}
+              {messages
+                .slice(visibleRange.start, visibleRange.end)
+                .map((msg) => {
+                  const isMine = slotId === msg.slotId;
+                  const timestamp = formatTimestamp(msg.createdAt);
+                  return (
                     <div
-                      className={`relative max-w-full sm:max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg select-none ${
-                        isMine
-                          ? "bg-emerald-400/90 text-black rounded-br-none"
-                          : "bg-white/10 text-white rounded-bl-none"
-                      }`}
-                      onTouchStart={(e) => {
-                        const touch = e.touches[0];
-                        const startX = touch.clientX;
-                        const startY = touch.clientY;
-                        const el = e.currentTarget;
-                        let deltaX = 0;
-                        let deltaY = 0;
-                        let isScrolling: boolean | null = null;
-
-                        const handleMove = (moveEvent: TouchEvent) => {
-                          const moveTouch = moveEvent.touches[0];
-                          deltaX = moveTouch.clientX - startX;
-                          deltaY = moveTouch.clientY - startY;
-
-                          // Determine if scrolling vertically on first significant move
-                          if (
-                            isScrolling === null &&
-                            (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)
-                          ) {
-                            isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
-                          }
-
-                          // If scrolling vertically, don't interfere
-                          if (isScrolling) return;
-
-                          // Only allow swipe toward center (left for mine, right for theirs)
-                          const validDirection = isMine
-                            ? deltaX < 0
-                            : deltaX > 0;
-                          if (!validDirection) {
-                            deltaX = 0;
-                            return;
-                          }
-
-                          const clampedDelta = Math.max(
-                            -50,
-                            Math.min(50, deltaX),
-                          );
-                          el.style.transform = `translateX(${clampedDelta}px)`;
-                          el.style.transition = "none";
-                        };
-
-                        const handleEnd = () => {
-                          el.style.transform = "";
-                          el.style.transition = "transform 0.2s ease-out";
-                          // Require 60px swipe in correct direction to trigger reply
-                          const validSwipe = isMine
-                            ? deltaX < -60
-                            : deltaX > 60;
-                          if (validSwipe && !isScrolling) {
-                            setReplyingTo(msg);
-                          }
-                          document.removeEventListener("touchmove", handleMove);
-                          document.removeEventListener("touchend", handleEnd);
-                        };
-
-                        document.addEventListener("touchmove", handleMove, {
-                          passive: true,
-                        });
-                        document.addEventListener("touchend", handleEnd);
-                      }}
+                      key={msg.id}
+                      className={`group flex ${isMine ? "justify-end" : "justify-start"}`}
                     >
-                      {/* Reply button on hover (desktop) */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setReplyingTo(msg);
-                        }}
-                        className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-white/10 ${
-                          isMine ? "-left-7" : "-right-7"
+                      <div
+                        className={`relative max-w-full sm:max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-lg select-none ${
+                          isMine
+                            ? "bg-emerald-400/90 text-black rounded-br-none"
+                            : "bg-white/10 text-white rounded-bl-none"
                         }`}
+                        onTouchStart={(e) => {
+                          const touch = e.touches[0];
+                          const startX = touch.clientX;
+                          const startY = touch.clientY;
+                          const el = e.currentTarget;
+                          let deltaX = 0;
+                          let deltaY = 0;
+                          let isScrolling: boolean | null = null;
+
+                          const handleMove = (moveEvent: TouchEvent) => {
+                            const moveTouch = moveEvent.touches[0];
+                            deltaX = moveTouch.clientX - startX;
+                            deltaY = moveTouch.clientY - startY;
+
+                            // Determine if scrolling vertically on first significant move
+                            if (
+                              isScrolling === null &&
+                              (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)
+                            ) {
+                              isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
+                            }
+
+                            // If scrolling vertically, don't interfere
+                            if (isScrolling) return;
+
+                            // Only allow swipe toward center (left for mine, right for theirs)
+                            const validDirection = isMine
+                              ? deltaX < 0
+                              : deltaX > 0;
+                            if (!validDirection) {
+                              deltaX = 0;
+                              return;
+                            }
+
+                            const clampedDelta = Math.max(
+                              -50,
+                              Math.min(50, deltaX),
+                            );
+                            el.style.transform = `translateX(${clampedDelta}px)`;
+                            el.style.transition = "none";
+                          };
+
+                          const handleEnd = () => {
+                            el.style.transform = "";
+                            el.style.transition = "transform 0.2s ease-out";
+                            // Require 60px swipe in correct direction to trigger reply
+                            const validSwipe = isMine
+                              ? deltaX < -60
+                              : deltaX > 60;
+                            if (validSwipe && !isScrolling) {
+                              setReplyingTo(msg);
+                            }
+                            document.removeEventListener(
+                              "touchmove",
+                              handleMove,
+                            );
+                            document.removeEventListener("touchend", handleEnd);
+                          };
+
+                          document.addEventListener("touchmove", handleMove, {
+                            passive: true,
+                          });
+                          document.addEventListener("touchend", handleEnd);
+                        }}
                       >
-                        <span className="text-xs text-neutral-400">↩</span>
-                      </button>
-
-                      {/* Reply preview if this is a reply */}
-                      {msg.replyToText && (
-                        <div
-                          className={`mb-2 rounded-lg px-2 py-1 text-[11px] ${
-                            isMine
-                              ? "bg-black/10 border-l-2 border-black/40"
-                              : "bg-white/5 border-l-2 border-white/40"
+                        {/* Reply button on hover (desktop) */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReplyingTo(msg);
+                          }}
+                          className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-white/10 ${
+                            isMine ? "-left-7" : "-right-7"
                           }`}
                         >
-                          <p className="font-semibold opacity-80">
-                            {msg.replyToSender}
-                          </p>
-                          <p className="truncate opacity-60 max-w-[200px]">
-                            {msg.replyToText}
-                          </p>
-                        </div>
-                      )}
+                          <span className="text-xs text-neutral-400">↩</span>
+                        </button>
 
-                      <p className="text-[11px] uppercase tracking-wide opacity-70">
-                        {msg.sender}
-                        {msg.decryptionFailed && (
-                          <span className="ml-2 text-amber-400">
-                            ⚠️ unencrypted
-                          </span>
-                        )}
-                      </p>
-                      {msg.decryptedText && (
-                        <p className="mt-1 whitespace-pre-line break-words">
-                          {msg.decryptedText}
-                        </p>
-                      )}
-                      {msg.imageUrl && (
-                        <img
-                          src={msg.imageUrl}
-                          alt="Uploaded"
-                          className="mt-2 w-full rounded-xl border border-white/10"
-                        />
-                      )}
-                      {timestamp && (
-                        <div
-                          className={`mt-2 flex ${
-                            isMine ? "justify-end" : "justify-start"
-                          }`}
-                        >
-                          <span
-                            className={`text-[10px] ${
+                        {/* Reply preview if this is a reply */}
+                        {msg.replyToText && (
+                          <div
+                            className={`mb-2 rounded-lg px-2 py-1 text-[11px] ${
                               isMine
-                                ? "text-emerald-900/70"
-                                : "text-neutral-400"
+                                ? "bg-black/10 border-l-2 border-black/40"
+                                : "bg-white/5 border-l-2 border-white/40"
                             }`}
                           >
-                            {timestamp}
+                            <p className="font-semibold opacity-80">
+                              {msg.replyToSender}
+                            </p>
+                            <p className="truncate opacity-60 max-w-[200px]">
+                              {msg.replyToText}
+                            </p>
+                          </div>
+                        )}
+
+                        <p className="text-[11px] uppercase tracking-wide opacity-70">
+                          {msg.sender}
+                          {msg.decryptionFailed && (
+                            <span className="ml-2 text-amber-400">
+                              ⚠️ unencrypted
+                            </span>
+                          )}
+                        </p>
+                        {msg.decryptedText && (
+                          <p className="mt-1 whitespace-pre-line break-words">
+                            {msg.decryptedText}
+                          </p>
+                        )}
+                        {msg.imageUrl && (
+                          <img
+                            src={msg.imageUrl}
+                            alt="Uploaded"
+                            className="mt-2 w-full rounded-xl border border-white/10"
+                          />
+                        )}
+                        {timestamp && (
+                          <div
+                            className={`mt-2 flex ${
+                              isMine ? "justify-end" : "justify-start"
+                            }`}
+                          >
+                            <span
+                              className={`text-[10px] ${
+                                isMine
+                                  ? "text-emerald-900/70"
+                                  : "text-neutral-400"
+                              }`}
+                            >
+                              {timestamp}
+                            </span>
+                          </div>
+                        )}
+                        {/* Read receipt checkmark */}
+                        {isMine && (
+                          <span
+                            className={`absolute -bottom-0.5 -right-0.5 text-[9px] ${
+                              msg.readBy?.[slotId === "1" ? "2" : "1"]
+                                ? "text-emerald-700"
+                                : "text-black/40"
+                            }`}
+                          >
+                            ✓
                           </span>
-                        </div>
-                      )}
-                      {/* Read receipt checkmark */}
-                      {isMine && (
-                        <span
-                          className={`absolute -bottom-0.5 -right-0.5 text-[9px] ${
-                            msg.readBy?.[slotId === "1" ? "2" : "1"]
-                              ? "text-emerald-700"
-                              : "text-black/40"
-                          }`}
-                        >
-                          ✓
-                        </span>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              {/* Bottom spacer for virtualization */}
+              {visibleRange.end < messages.length && (
+                <div
+                  style={{ height: (messages.length - visibleRange.end) * 80 }}
+                />
+              )}
               {isOtherTyping && (
                 <div className="flex justify-start">
                   <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
