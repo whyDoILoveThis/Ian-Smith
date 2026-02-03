@@ -35,6 +35,7 @@ export type TttState = {
   board: Array<"1" | "2" | null>;
   turn: "1" | "2";
   winner: "1" | "2" | "draw" | null;
+  winningLine: number[] | null;
   resetVotes: { "1"?: boolean; "2"?: boolean };
 };
 

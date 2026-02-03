@@ -3,6 +3,51 @@
 import React from "react";
 import type { Slots, TttState } from "../types";
 
+// Calculate the winning line position and rotation
+function WinningLineOverlay({
+  line,
+  winner,
+}: {
+  line: number[];
+  winner: "1" | "2";
+}) {
+  // Cell size is 60px, grid is 180x180
+  // Cell centers: col 0 = 30px, col 1 = 90px, col 2 = 150px
+  // Row centers: row 0 = 30px, row 1 = 90px, row 2 = 150px
+
+  const getCellCenter = (idx: number) => {
+    const row = Math.floor(idx / 3);
+    const col = idx % 3;
+    return { x: col * 60 + 30, y: row * 60 + 30 };
+  };
+
+  const start = getCellCenter(line[0]);
+  const end = getCellCenter(line[2]);
+
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+  const centerX = (start.x + end.x) / 2;
+  const centerY = (start.y + end.y) / 2;
+
+  const color = winner === "1" ? "bg-emerald-400" : "bg-amber-400";
+
+  return (
+    <div
+      className={`absolute ${color} rounded-full z-10`}
+      style={{
+        width: `${length + 20}px`,
+        height: "4px",
+        left: `${centerX}px`,
+        top: `${centerY}px`,
+        transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+      }}
+    />
+  );
+}
+
 type RoomSpotsViewProps = {
   slots: Slots;
   slotId: "1" | "2" | null;
@@ -184,6 +229,16 @@ export function RoomSpotsView({
             {/* Horizontal lines */}
             <div className="absolute top-[60px] left-0 h-0.5 w-full bg-white/30" />
             <div className="absolute top-[120px] left-0 h-0.5 w-full bg-white/30" />
+
+            {/* Winning line overlay */}
+            {tttState?.winningLine &&
+              tttState.winner &&
+              tttState.winner !== "draw" && (
+                <WinningLineOverlay
+                  line={tttState.winningLine}
+                  winner={tttState.winner}
+                />
+              )}
 
             {/* Cells */}
             <div className="grid grid-cols-3 h-full">

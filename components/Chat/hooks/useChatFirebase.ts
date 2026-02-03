@@ -112,6 +112,7 @@ export function useChatFirebase(
         board?: Array<"1" | "2" | null>;
         turn?: "1" | "2";
         winner?: "1" | "2" | "draw" | null;
+        winningLine?: number[] | null;
         resetVotes?: { "1"?: boolean; "2"?: boolean };
       } | null;
 
@@ -121,6 +122,7 @@ export function useChatFirebase(
           board: Array(9).fill(null) as Array<"1" | "2" | null>,
           turn: "1",
           winner: null,
+          winningLine: null,
           resetVotes: {},
         });
         return;
@@ -141,10 +143,20 @@ export function useChatFirebase(
         board = Array(9).fill(null) as Array<"1" | "2" | null>;
       }
 
+      // Handle winningLine - Firebase might store it as object
+      let winningLine: number[] | null = null;
+      if (Array.isArray(val.winningLine)) {
+        winningLine = val.winningLine;
+      } else if (val.winningLine && typeof val.winningLine === 'object') {
+        const lineObj = val.winningLine as unknown as Record<string, number>;
+        winningLine = [lineObj["0"], lineObj["1"], lineObj["2"]];
+      }
+
       setTttState({
         board,
         turn: val.turn === "2" ? "2" : "1",
         winner: val.winner ?? null,
+        winningLine,
         resetVotes: val.resetVotes ?? {},
       });
     });
