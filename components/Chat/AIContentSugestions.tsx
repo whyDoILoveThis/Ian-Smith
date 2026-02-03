@@ -210,6 +210,11 @@ export default function AIContentSugestions() {
   const [visibleMessageCount, setVisibleMessageCount] =
     useState(MESSAGES_PER_PAGE);
   const [activeTab, setActiveTab] = useState<"chat" | "room">("chat");
+  const [tttState, setTttState] = useState<{
+    board: Array<"1" | "2" | null>;
+    turn: "1" | "2";
+    winner: "1" | "2" | "draw" | null;
+  } | null>(null);
   // AI Chat disguise state
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
@@ -386,6 +391,34 @@ export default function AIContentSugestions() {
     return () => unsub();
   }, [isUnlocked]);
 
+  // Subscribe to Tic Tac Toe state
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const tttRef = ref(rtdb, `${ROOM_PATH}/ticTacToe`);
+    const unsub = onValue(tttRef, (snap) => {
+      const val = snap.val() as {
+        board?: Array<"1" | "2" | null>;
+        turn?: "1" | "2";
+        winner?: "1" | "2" | "draw" | null;
+      } | null;
+
+      if (!val || !Array.isArray(val.board) || val.board.length !== 9) {
+        set(tttRef, {
+          board: Array(9).fill(null),
+          turn: "1",
+          winner: null,
+        }).catch(() => {});
+        return;
+      }
+      setTttState({
+        board: val.board as Array<"1" | "2" | null>,
+        turn: val.turn === "2" ? "2" : "1",
+        winner: val.winner ?? null,
+      });
+    });
+    return () => unsub();
+  }, [isUnlocked]);
+
   useEffect(() => {
     async function decryptAll() {
       const key = encryptionKeyRef.current;
@@ -508,6 +541,68 @@ export default function AIContentSugestions() {
     };
     return themes[chatTheme];
   }, [chatTheme]);
+
+  const getTttWinner = useCallback((board: Array<"1" | "2" | null>) => {
+    const lines = [
+      [0, 1, 2],
+      [3, 4, 5],
+      [6, 7, 8],
+      [0, 3, 6],
+      [1, 4, 7],
+      [2, 5, 8],
+      [0, 4, 8],
+      [2, 4, 6],
+    ];
+    for (const [a, b, c] of lines) {
+      if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+        return board[a];
+      }
+    }
+    return null;
+  }, []);
+
+  const handleTttMove = useCallback(
+    async (index: number) => {
+      if (!slotId || !tttState) return;
+      if (tttState.winner) return;
+      if (tttState.turn !== slotId) return;
+      if (tttState.board[index]) return;
+
+      const tttRef = ref(rtdb, `${ROOM_PATH}/ticTacToe`);
+      await runTransaction(tttRef, (current) => {
+        if (
+          !current ||
+          !Array.isArray(current.board) ||
+          current.board.length !== 9
+        ) {
+          return current;
+        }
+        if (current.winner) return current;
+        if (current.turn !== slotId) return current;
+        if (current.board[index]) return current;
+
+        const nextBoard = [...current.board] as Array<"1" | "2" | null>;
+        nextBoard[index] = slotId;
+        const winner = getTttWinner(nextBoard);
+        const isDraw = !winner && nextBoard.every(Boolean);
+        return {
+          board: nextBoard,
+          turn: current.turn === "1" ? "2" : "1",
+          winner: winner ? winner : isDraw ? "draw" : null,
+        };
+      });
+    },
+    [getTttWinner, slotId, tttState],
+  );
+
+  const handleTttReset = useCallback(async () => {
+    const tttRef = ref(rtdb, `${ROOM_PATH}/ticTacToe`);
+    await set(tttRef, {
+      board: Array(9).fill(null),
+      turn: "1",
+      winner: null,
+    });
+  }, []);
 
   const claimSlot = useCallback(
     async (desiredSlot: "1" | "2", name: string) => {
@@ -1155,6 +1250,67 @@ export default function AIContentSugestions() {
               {error && (
                 <p className="text-xs text-red-300 text-center">{error}</p>
               )}
+
+              <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">
+                    Tic Tac Toe
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={handleTttReset}
+                    className="text-xs text-neutral-400 hover:text-white transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-neutral-400">
+                  Spot 1 is X • Spot 2 is O
+                </p>
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {(tttState?.board ?? Array(9).fill(null)).map((cell, idx) => {
+                    const isX = cell === "1";
+                    const isO = cell === "2";
+                    return (
+                      <button
+                        key={`ttt-${idx}`}
+                        type="button"
+                        onClick={() => handleTttMove(idx)}
+                        disabled={
+                          !slotId ||
+                          Boolean(tttState?.winner) ||
+                          (tttState?.turn && tttState.turn !== slotId) ||
+                          Boolean(cell)
+                        }
+                        className={`aspect-square w-full rounded-xl border border-white/10 text-2xl font-bold transition ${
+                          cell ? "bg-black/40" : "bg-black/20 hover:bg-black/40"
+                        } ${
+                          isX
+                            ? "text-emerald-300"
+                            : isO
+                              ? "text-amber-300"
+                              : "text-white"
+                        } disabled:opacity-60`}
+                      >
+                        {isX ? "X" : isO ? "O" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 text-center text-xs text-neutral-400">
+                  {tttState?.winner === "draw"
+                    ? "Draw game"
+                    : tttState?.winner === "1"
+                      ? "Spot 1 (X) wins"
+                      : tttState?.winner === "2"
+                        ? "Spot 2 (O) wins"
+                        : tttState?.turn
+                          ? `Turn: ${tttState.turn === "1" ? "Spot 1 (X)" : "Spot 2 (O)"}`
+                          : ""}
+                </div>
+              </div>
             </div>
           </div>
         ) : (
