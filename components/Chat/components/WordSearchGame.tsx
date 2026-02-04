@@ -372,8 +372,8 @@ export function WordSearchGame({
               return (
                 <div
                   key={key}
-                  className={`flex items-center justify-center text-xs sm:text-sm font-bold text-white transition-colors duration-100 ${
-                    borderColor ? `border ${borderColor}` : ""
+                  className={`flex items-center justify-center text-base sm:text-lg md:text-xl font-bold text-white transition-colors duration-100 ${
+                    borderColor ? `border-2 ${borderColor}` : ""
                   }`}
                   style={{ backgroundColor: bgColor }}
                 >

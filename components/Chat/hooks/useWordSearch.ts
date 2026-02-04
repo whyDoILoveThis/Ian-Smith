@@ -12,7 +12,7 @@ const DEFAULT_STATE: WordSearchState = {
   grid: [],
   words: [],
   theme: "",
-  gridSize: 12,
+  gridSize: 10,
   scores: { "1": 0, "2": 0 },
   prompt: "",
   status: "idle",
@@ -115,7 +115,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: state.prompt,
-          gridSize: 12,
+          gridSize: 10,
         }),
       });
 
@@ -162,23 +162,36 @@ export function useWordSearch(slotId: "1" | "2" | null) {
   // Check if cells form a word
   const checkWord = useCallback(
     (selectedCells: WordCell[]): WordSearchWord | null => {
-      if (selectedCells.length < 3) return null;
+      if (selectedCells.length < 2) return null;
 
-      // Sort cells to check against word placements
-      const cellKey = (c: WordCell) => `${c.row},${c.col}`;
-      const selectedSet = new Set(selectedCells.map(cellKey));
+      // Normalize cell to ensure row/col are numbers
+      const normalizeCell = (c: WordCell | Record<string, unknown>): string => {
+        const row = Number(c.row);
+        const col = Number(c.col);
+        return `${row},${col}`;
+      };
+
+      const selectedKeys = selectedCells.map(normalizeCell);
+      const selectedSet = new Set(selectedKeys);
 
       for (const wordData of state.words) {
         if (wordData.foundBy) continue; // Already found
+        if (!wordData.cells || !Array.isArray(wordData.cells)) continue;
 
-        // Check if selected cells match this word's cells
+        // Check if selected cells match this word's cells (same length)
         if (wordData.cells.length !== selectedCells.length) continue;
 
-        const wordCellSet = new Set(wordData.cells.map(cellKey));
-        const allMatch = selectedCells.every((c) => wordCellSet.has(cellKey(c)));
-        const sameSize = wordCellSet.size === selectedSet.size;
+        // Normalize word cells too
+        const wordCellKeys = wordData.cells.map(normalizeCell);
+        const wordCellSet = new Set(wordCellKeys);
 
-        if (allMatch && sameSize) {
+        // Check if all selected cells are in the word
+        const allMatch = selectedKeys.every((key) => wordCellSet.has(key));
+        
+        // Also check reverse - the word cells are exactly the selected cells
+        const reverseMatch = wordCellKeys.every((key) => selectedSet.has(key));
+
+        if (allMatch && reverseMatch) {
           return wordData;
         }
       }
@@ -222,8 +235,8 @@ export function useWordSearch(slotId: "1" | "2" | null) {
 
         // Check if all words are found
         const allFound = words.every((w: WordSearchWord) => w.foundBy);
-        let winner = current.winner;
-        let status = current.status;
+        let winner: "1" | "2" | "tie" | null = current.winner ?? null;
+        let status = current.status || "playing";
 
         if (allFound) {
           status = "finished";
@@ -241,7 +254,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
           words,
           scores,
           status,
-          winner,
+          winner: winner ?? null,
           currentSelection: null,
         };
       });

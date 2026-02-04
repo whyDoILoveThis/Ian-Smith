@@ -158,7 +158,7 @@ function generateGrid(
 
 export async function POST(request: Request) {
   try {
-    const { prompt, gridSize = 12 } = await request.json();
+    const { prompt, gridSize = 10 } = await request.json();
 
     if (!prompt) {
       return NextResponse.json(
