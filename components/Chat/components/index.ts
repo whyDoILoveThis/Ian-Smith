@@ -8,3 +8,4 @@ export { ImageConfirmModal } from "./ImageConfirmModal";
 export { VoiceCallOverlay } from "./VoiceCallOverlay";
 export { CallButton } from "./CallButton";
 export { ActiveCallBanner } from "./ActiveCallBanner";
+export { WordSearchGame } from "./WordSearchGame";

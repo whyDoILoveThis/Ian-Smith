@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { RING_COLORS } from "../constants";
-import type { Slots, TttState } from "../types";
+import { RING_COLORS, THEME_COLORS } from "../constants";
+import type { Slots, TttState, ThemeColors } from "../types";
+import { WordSearchGame } from "./WordSearchGame";
 
 // Calculate the winning line position and rotation
 function WinningLineOverlay({
@@ -69,6 +70,7 @@ type RoomSpotsViewProps = {
   handleTttReset: () => void;
   combo: [number, number, number, number] | null;
   onEditPasskey: () => void;
+  themeColors: ThemeColors;
 };
 
 export function RoomSpotsView({
@@ -87,8 +89,10 @@ export function RoomSpotsView({
   handleTttReset,
   combo,
   onEditPasskey,
+  themeColors,
 }: RoomSpotsViewProps) {
   const [leaveConfirmText, setLeaveConfirmText] = useState("");
+  const [activeGame, setActiveGame] = useState<"ttt" | "wordsearch">("ttt");
   const LEAVE_CONFIRMATION = "yesireallywanttoactuallyleavefrfr";
   const canLeave = leaveConfirmText === LEAVE_CONFIRMATION;
 
@@ -215,115 +219,155 @@ export function RoomSpotsView({
 
         {error && <p className="text-xs text-red-300 text-center">{error}</p>}
 
-        {/* Tic Tac Toe Game */}
-        <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Tic Tac Toe</h3>
+        {/* Games Section */}
+        <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 overflow-hidden">
+          {/* Game Tabs */}
+          <div className="flex border-b border-white/10">
             <button
               type="button"
-              onClick={handleTttReset}
-              disabled={!slotId}
-              className="relative text-xs text-neutral-400 hover:text-white transition-colors disabled:opacity-50"
+              onClick={() => setActiveGame("ttt")}
+              className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+                activeGame === "ttt"
+                  ? "bg-white/10 text-white"
+                  : "text-neutral-400 hover:text-white hover:bg-white/5"
+              }`}
             >
-              Reset
-              {/* Red dot if other player voted to reset */}
-              {slotId &&
-                tttState?.resetVotes &&
-                ((slotId === "1" &&
-                  tttState.resetVotes["2"] &&
-                  !tttState.resetVotes["1"]) ||
-                  (slotId === "2" &&
-                    tttState.resetVotes["1"] &&
-                    !tttState.resetVotes["2"])) && (
-                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                )}
-              {/* Check if you already voted */}
-              {slotId && tttState?.resetVotes?.[slotId] && (
-                <span className="ml-1 text-emerald-400">✓</span>
-              )}
+              ❌⭕ Tic Tac Toe
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveGame("wordsearch")}
+              className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+                activeGame === "wordsearch"
+                  ? "bg-white/10 text-white"
+                  : "text-neutral-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              🔤 Word Search
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-neutral-400">
-            Spot 1 is X • Spot 2 is O
-          </p>
 
-          {/* Turn indicator */}
-          <div className="mt-2 text-center">
-            {tttState?.winner === "draw" ? (
-              <span className="text-sm font-semibold text-neutral-300">
-                Draw game!
-              </span>
-            ) : tttState?.winner === "1" ? (
-              <span className="text-sm font-semibold text-emerald-300">
-                X wins! 🎉
-              </span>
-            ) : tttState?.winner === "2" ? (
-              <span className="text-sm font-semibold text-amber-300">
-                O wins! 🎉
-              </span>
-            ) : tttState?.turn === slotId ? (
-              <span className="text-sm font-semibold text-emerald-300">
-                Your turn! ({slotId === "1" ? "X" : "O"})
-              </span>
-            ) : (
-              <span className="text-sm text-neutral-400">
-                Waiting for {tttState?.turn === "1" ? "X" : "O"}...
-              </span>
-            )}
-          </div>
+          {/* Tic Tac Toe Game */}
+          {activeGame === "ttt" && (
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">
+                  Tic Tac Toe
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleTttReset}
+                  disabled={!slotId}
+                  className="relative text-xs text-neutral-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  Reset
+                  {slotId &&
+                    tttState?.resetVotes &&
+                    ((slotId === "1" &&
+                      tttState.resetVotes["2"] &&
+                      !tttState.resetVotes["1"]) ||
+                      (slotId === "2" &&
+                        tttState.resetVotes["1"] &&
+                        !tttState.resetVotes["2"])) && (
+                      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                    )}
+                  {slotId && tttState?.resetVotes?.[slotId] && (
+                    <span className="ml-1 text-emerald-400">✓</span>
+                  )}
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-neutral-400">
+                Spot 1 is X • Spot 2 is O
+              </p>
 
-          {/* Classic TTT grid with lines */}
-          <div
-            className="mt-3 relative mx-auto"
-            style={{ width: "180px", height: "180px" }}
-          >
-            {/* Vertical lines */}
-            <div className="absolute top-0 left-[60px] w-0.5 h-full bg-white/30" />
-            <div className="absolute top-0 left-[120px] w-0.5 h-full bg-white/30" />
-            {/* Horizontal lines */}
-            <div className="absolute top-[60px] left-0 h-0.5 w-full bg-white/30" />
-            <div className="absolute top-[120px] left-0 h-0.5 w-full bg-white/30" />
+              {/* Turn indicator */}
+              <div className="mt-2 text-center">
+                {tttState?.winner === "draw" ? (
+                  <span className="text-sm font-semibold text-neutral-300">
+                    Draw game!
+                  </span>
+                ) : tttState?.winner === "1" ? (
+                  <span className="text-sm font-semibold text-emerald-300">
+                    X wins! 🎉
+                  </span>
+                ) : tttState?.winner === "2" ? (
+                  <span className="text-sm font-semibold text-amber-300">
+                    O wins! 🎉
+                  </span>
+                ) : tttState?.turn === slotId ? (
+                  <span className="text-sm font-semibold text-emerald-300">
+                    Your turn! ({slotId === "1" ? "X" : "O"})
+                  </span>
+                ) : (
+                  <span className="text-sm text-neutral-400">
+                    Waiting for {tttState?.turn === "1" ? "X" : "O"}...
+                  </span>
+                )}
+              </div>
 
-            {/* Winning line overlay */}
-            {tttState?.winningLine &&
-              tttState.winner &&
-              tttState.winner !== "draw" && (
-                <WinningLineOverlay
-                  line={tttState.winningLine}
-                  winner={tttState.winner}
-                />
-              )}
+              {/* Classic TTT grid with lines */}
+              <div
+                className="mt-3 relative mx-auto"
+                style={{ width: "180px", height: "180px" }}
+              >
+                {/* Vertical lines */}
+                <div className="absolute top-0 left-[60px] w-0.5 h-full bg-white/30" />
+                <div className="absolute top-0 left-[120px] w-0.5 h-full bg-white/30" />
+                {/* Horizontal lines */}
+                <div className="absolute top-[60px] left-0 h-0.5 w-full bg-white/30" />
+                <div className="absolute top-[120px] left-0 h-0.5 w-full bg-white/30" />
 
-            {/* Cells */}
-            <div className="grid grid-cols-3 h-full">
-              {(tttState?.board ?? Array(9).fill(null)).map((cell, idx) => {
-                const isX = cell === "1";
-                const isO = cell === "2";
-                const isMyTurn = tttState?.turn === slotId;
-                const canClick =
-                  slotId && !tttState?.winner && isMyTurn && !cell;
-                return (
-                  <button
-                    key={`ttt-${idx}`}
-                    type="button"
-                    onClick={() => handleTttMove(idx)}
-                    disabled={!canClick}
-                    className={`flex items-center justify-center text-3xl font-bold transition-colors ${
-                      canClick ? "hover:bg-white/5 cursor-pointer" : ""
-                    } ${
-                      isX
-                        ? "text-emerald-400"
-                        : isO
-                          ? "text-amber-400"
-                          : "text-white"
-                    } disabled:cursor-default`}
-                  >
-                    {isX ? "X" : isO ? "O" : ""}
-                  </button>
-                );
-              })}
+                {/* Winning line overlay */}
+                {tttState?.winningLine &&
+                  tttState.winner &&
+                  tttState.winner !== "draw" && (
+                    <WinningLineOverlay
+                      line={tttState.winningLine}
+                      winner={tttState.winner}
+                    />
+                  )}
+
+                {/* Cells */}
+                <div className="grid grid-cols-3 h-full">
+                  {(tttState?.board ?? Array(9).fill(null)).map((cell, idx) => {
+                    const isX = cell === "1";
+                    const isO = cell === "2";
+                    const isMyTurn = tttState?.turn === slotId;
+                    const canClick =
+                      slotId && !tttState?.winner && isMyTurn && !cell;
+                    return (
+                      <button
+                        key={`ttt-${idx}`}
+                        type="button"
+                        onClick={() => handleTttMove(idx)}
+                        disabled={!canClick}
+                        className={`flex items-center justify-center text-3xl font-bold transition-colors ${
+                          canClick ? "hover:bg-white/5 cursor-pointer" : ""
+                        } ${
+                          isX
+                            ? "text-emerald-400"
+                            : isO
+                              ? "text-amber-400"
+                              : "text-white"
+                        } disabled:cursor-default`}
+                      >
+                        {isX ? "X" : isO ? "O" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Word Search Game */}
+          {activeGame === "wordsearch" && (
+            <WordSearchGame
+              slotId={slotId}
+              themeColors={themeColors}
+              slots={slots}
+            />
+          )}
         </div>
       </div>
     </div>

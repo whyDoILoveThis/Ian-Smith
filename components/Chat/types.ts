@@ -73,3 +73,33 @@ export type ThemeColors = {
   ring: string;
   btn: string;
 };
+
+// Word Search Game Types
+export type WordCell = {
+  row: number;
+  col: number;
+};
+
+export type WordSearchWord = {
+  word: string;
+  cells: WordCell[];
+  points: number;
+  foundBy?: "1" | "2" | null;
+};
+
+export type WordSearchState = {
+  grid: string[][];
+  words: WordSearchWord[];
+  theme: string;
+  gridSize: number;
+  scores: { "1": number; "2": number };
+  prompt: string;
+  status: "idle" | "prompting" | "generating" | "playing" | "finished";
+  generatedAt?: number;
+  winner?: "1" | "2" | "tie" | null;
+  currentSelection?: {
+    slotId: "1" | "2";
+    cells: WordCell[];
+  } | null;
+  resetVotes?: { "1"?: boolean; "2"?: boolean };
+};

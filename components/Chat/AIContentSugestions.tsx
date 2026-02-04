@@ -269,6 +269,7 @@ export default function AIContentSugestions() {
               setShowLockBox(true);
               setShowRealChat(false);
             }}
+            themeColors={themeColors}
           />
         ) : (
           <>
