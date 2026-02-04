@@ -23,6 +23,8 @@ export type Message = {
   decryptedText?: string; // Decrypted text for display
   imageUrl?: string;
   imageFileId?: string;
+  videoUrl?: string;
+  videoFileId?: string;
   createdAt?: number | object;
   decryptionFailed?: boolean;
   replyToId?: string;

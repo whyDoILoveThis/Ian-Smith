@@ -37,7 +37,8 @@ export function ChatInputArea({
             </p>
             <p className="text-[10px] text-neutral-400 truncate">
               {replyingTo.decryptedText?.slice(0, 40) ||
-                (replyingTo.imageUrl ? "📷 Image" : "")}
+                (replyingTo.imageUrl ? "📷 Image" : "") ||
+                (replyingTo.videoUrl ? "📹 Video" : "")}
             </p>
           </div>
           <button
@@ -66,7 +67,7 @@ export function ChatInputArea({
         >
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             disabled={!slotId || isSending}
             onChange={handleImageUpload}
             className="hidden"

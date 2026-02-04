@@ -92,6 +92,7 @@ export default function AIContentSugestions() {
         session.pendingImageUrl,
         session.setPendingImageFile,
         session.setPendingImageUrl,
+        session.setPendingIsVideo,
         session.setIsImageConfirmOpen,
       );
     },
@@ -164,7 +165,8 @@ export default function AIContentSugestions() {
       {/* Image Confirm Modal */}
       {session.isImageConfirmOpen && session.pendingImageUrl && (
         <ImageConfirmModal
-          pendingImageUrl={session.pendingImageUrl}
+          pendingMediaUrl={session.pendingImageUrl}
+          isVideo={session.pendingIsVideo}
           isSending={chatMessages.isSending}
           onConfirm={handleConfirmImageWrapper}
           onCancel={handleCancelImageWrapper}

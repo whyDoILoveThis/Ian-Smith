@@ -195,6 +195,13 @@ export function ChatMessagesView({
                   className="mt-2 w-full rounded-xl border border-white/10"
                 />
               )}
+              {msg.videoUrl && (
+                <video
+                  src={msg.videoUrl}
+                  controls
+                  className="mt-2 w-full rounded-xl border border-white/10"
+                />
+              )}
               {timestamp && (
                 <div
                   className={`mt-1 flex ${isMine ? "justify-end" : "justify-start"}`}
@@ -208,14 +215,10 @@ export function ChatMessagesView({
                   </span>
                 </div>
               )}
-              {/* Read receipt checkmark */}
-              {isMine && (
+              {/* Read receipt checkmark - only shows when other person has seen it */}
+              {isMine && msg.readBy?.[slotId === "1" ? "2" : "1"] && (
                 <span
-                  className={`absolute bottom-1 right-1 text-[9px] ${
-                    msg.readBy?.[slotId === "1" ? "2" : "1"]
-                      ? themeColors.accent
-                      : "opacity-40"
-                  }`}
+                  className={`absolute bottom-1 right-1 text-[9px] ${themeColors.accent}`}
                 >
                   ✓
                 </span>

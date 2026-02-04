@@ -29,6 +29,7 @@ export function useChatSession(
   } | null>(null);
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
+  const [pendingIsVideo, setPendingIsVideo] = useState(false);
   const [isImageConfirmOpen, setIsImageConfirmOpen] = useState(false);
 
   const restoreAttemptedRef = useRef(false);
@@ -281,6 +282,8 @@ export function useChatSession(
     setPendingImageFile,
     pendingImageUrl,
     setPendingImageUrl,
+    pendingIsVideo,
+    setPendingIsVideo,
     isImageConfirmOpen,
     setIsImageConfirmOpen,
   };

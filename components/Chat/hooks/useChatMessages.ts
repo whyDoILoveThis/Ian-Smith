@@ -79,6 +79,7 @@ export function useChatMessages(
       pendingImageUrl: string | null,
       setPendingImageFile: (file: File | null) => void,
       setPendingImageUrl: (url: string | null) => void,
+      setPendingIsVideo: (isVideo: boolean) => void,
       setIsImageConfirmOpen: (open: boolean) => void,
     ) => {
       if (!slotId || !screenName.trim()) return;
@@ -92,6 +93,7 @@ export function useChatMessages(
       const previewUrl = URL.createObjectURL(file);
       setPendingImageFile(file);
       setPendingImageUrl(previewUrl);
+      setPendingIsVideo(file.type.startsWith("video/"));
       setIsImageConfirmOpen(true);
       event.target.value = "";
     },
@@ -111,16 +113,26 @@ export function useChatMessages(
 
       try {
         const upload = await appwrImgUp(pendingImageFile);
+        const isVideo = pendingImageFile.type.startsWith("video/");
         const msgRef = ref(rtdb, `${ROOM_PATH}/messages`);
-        await push(msgRef, {
+        
+        const msgData: Record<string, unknown> = {
           slotId,
           sender: screenName.trim(),
-          imageUrl: upload.url,
-          imageFileId: upload.fileId,
           createdAt: { ".sv": "timestamp" },
-        });
+        };
+        
+        if (isVideo) {
+          msgData.videoUrl = upload.url;
+          msgData.videoFileId = upload.fileId;
+        } else {
+          msgData.imageUrl = upload.url;
+          msgData.imageFileId = upload.fileId;
+        }
+        
+        await push(msgRef, msgData);
       } catch {
-        throw new Error("Image failed to send.");
+        throw new Error("Media failed to send.");
       } finally {
         setIsSending(false);
       }
