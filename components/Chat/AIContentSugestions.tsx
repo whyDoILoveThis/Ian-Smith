@@ -224,13 +224,8 @@ export default function AIContentSugestions() {
       <ChatHeader
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        combo={combo}
         chatTheme={chatTheme}
         handleThemeChange={handleThemeChange}
-        onEditPasskey={() => {
-          setShowLockBox(true);
-          setShowRealChat(false);
-        }}
         slotId={slotId}
         callStatus={voiceCall.callStatus}
         otherPersonOnline={otherPersonOnline}
@@ -269,6 +264,11 @@ export default function AIContentSugestions() {
             tttState={firebaseWithSlot.tttState}
             handleTttMove={ticTacToe.handleTttMove}
             handleTttReset={ticTacToe.handleTttReset}
+            combo={combo}
+            onEditPasskey={() => {
+              setShowLockBox(true);
+              setShowRealChat(false);
+            }}
           />
         ) : (
           <>

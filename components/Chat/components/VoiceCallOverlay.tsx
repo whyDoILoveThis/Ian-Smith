@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { CallStatus, ThemeColors } from "../types";
 
 type VoiceCallOverlayProps = {
@@ -37,8 +37,6 @@ export function VoiceCallOverlay({
   onMinimize,
 }: VoiceCallOverlayProps) {
   const [pulseScale, setPulseScale] = useState(1);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const oscillatorRef = useRef<OscillatorNode | null>(null);
 
   // Pulse animation for ringing
   useEffect(() => {
@@ -47,94 +45,6 @@ export function VoiceCallOverlay({
       setPulseScale((prev) => (prev === 1 ? 1.15 : 1));
     }, 600);
     return () => clearInterval(interval);
-  }, [callStatus]);
-
-  // Vibration and ringtone for incoming calls
-  useEffect(() => {
-    if (callStatus !== "ringing") {
-      // Stop ringtone
-      if (oscillatorRef.current) {
-        oscillatorRef.current.stop();
-        oscillatorRef.current = null;
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(() => {});
-        audioContextRef.current = null;
-      }
-      return;
-    }
-
-    // Vibrate on mobile
-    if (navigator.vibrate) {
-      const vibrationPattern = [200, 100, 200, 100, 200, 500];
-      const vibrateInterval = setInterval(() => {
-        navigator.vibrate(vibrationPattern);
-      }, 1500);
-
-      return () => {
-        clearInterval(vibrateInterval);
-        navigator.vibrate(0);
-      };
-    }
-  }, [callStatus]);
-
-  // Create ringtone sound
-  useEffect(() => {
-    if (callStatus !== "ringing") return;
-
-    try {
-      const audioContext = new AudioContext();
-      audioContextRef.current = audioContext;
-
-      const playRingTone = () => {
-        if (
-          !audioContextRef.current ||
-          audioContextRef.current.state === "closed"
-        )
-          return;
-
-        const osc = audioContextRef.current.createOscillator();
-        const gain = audioContextRef.current.createGain();
-
-        osc.connect(gain);
-        gain.connect(audioContextRef.current.destination);
-
-        osc.frequency.value = 440;
-        gain.gain.value = 0.1;
-
-        osc.start();
-        osc.stop(audioContextRef.current.currentTime + 0.15);
-
-        setTimeout(() => {
-          if (
-            !audioContextRef.current ||
-            audioContextRef.current.state === "closed"
-          )
-            return;
-          const osc2 = audioContextRef.current.createOscillator();
-          const gain2 = audioContextRef.current.createGain();
-          osc2.connect(gain2);
-          gain2.connect(audioContextRef.current.destination);
-          osc2.frequency.value = 520;
-          gain2.gain.value = 0.1;
-          osc2.start();
-          osc2.stop(audioContextRef.current.currentTime + 0.15);
-        }, 200);
-      };
-
-      playRingTone();
-      const ringInterval = setInterval(playRingTone, 2000);
-
-      return () => {
-        clearInterval(ringInterval);
-        if (audioContextRef.current) {
-          audioContextRef.current.close().catch(() => {});
-          audioContextRef.current = null;
-        }
-      };
-    } catch {
-      // Audio not supported
-    }
   }, [callStatus]);
 
   if (callStatus === "idle" || callStatus === "ended") return null;
@@ -219,83 +129,81 @@ export function VoiceCallOverlay({
           </p>
         </div>
 
-        {/* Call controls */}
-        <div className="flex items-center gap-6">
-          {/* Decline/End button */}
-          <button
-            onClick={onEnd}
-            className="group relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-500/30 transition-all duration-200 hover:scale-110 hover:shadow-xl hover:shadow-red-500/40 active:scale-95"
-          >
-            <svg
-              className="h-7 w-7 text-white transition-transform duration-200 group-hover:rotate-[135deg]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z"
-              />
-            </svg>
-          </button>
-
-          {/* Mute button (only when connected) */}
-          {isConnected && (
-            <button
-              onClick={onToggleMute}
-              className={`group flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
-                isMuted
-                  ? "bg-gradient-to-br from-amber-500 to-orange-500 shadow-amber-500/30"
-                  : "bg-white/10 backdrop-blur-sm hover:bg-white/20"
-              }`}
-            >
-              {isMuted ? (
+        {/* Call controls - INCOMING CALL (Ringing) */}
+        {isRinging && (
+          <div className="flex items-center gap-12">
+            {/* DECLINE button */}
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEnd();
+                }}
+                className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-rose-600 shadow-2xl shadow-red-500/50 transition-all duration-200 hover:scale-110 active:scale-95"
+              >
                 <svg
-                  className="h-6 w-6 text-white"
+                  className="h-9 w-9 text-white"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                 >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
+                    d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z"
                   />
                 </svg>
-              ) : (
+              </button>
+              <span className="text-lg font-bold uppercase tracking-wider text-red-400">
+                Decline
+              </span>
+            </div>
+
+            {/* ANSWER button */}
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAnswer();
+                }}
+                className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 shadow-2xl shadow-emerald-500/50 transition-all duration-200 hover:scale-110 active:scale-95"
+              >
                 <svg
-                  className="h-6 w-6 text-white"
+                  className="h-9 w-9 text-white"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                 >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
                   />
                 </svg>
-              )}
-            </button>
-          )}
+              </button>
+              <span className="text-lg font-bold uppercase tracking-wider text-emerald-400">
+                Answer
+              </span>
+            </div>
+          </div>
+        )}
 
-          {/* Answer button (only when ringing) */}
-          {isRinging && (
+        {/* Call controls - OUTGOING CALL (Calling/Connecting) */}
+        {(isCalling || isConnecting) && (
+          <div className="flex flex-col items-center gap-3">
             <button
-              onClick={onAnswer}
-              className="group flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:scale-110 hover:shadow-xl hover:shadow-emerald-500/40 active:scale-95"
+              type="button"
+              onClick={onEnd}
+              className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-rose-600 shadow-2xl shadow-red-500/50 transition-all duration-200 hover:scale-110 active:scale-95"
             >
               <svg
-                className="h-7 w-7 text-white"
+                className="h-9 w-9 text-white"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -304,34 +212,123 @@ export function VoiceCallOverlay({
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                  d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z"
                 />
               </svg>
             </button>
-          )}
+            <span className="text-lg font-bold uppercase tracking-wider text-red-400">
+              Cancel
+            </span>
+          </div>
+        )}
 
-          {/* Minimize button (only when connected) */}
-          {isConnected && onMinimize && (
-            <button
-              onClick={onMinimize}
-              className="group flex h-14 w-14 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm shadow-lg transition-all duration-200 hover:scale-110 hover:bg-white/20 active:scale-95"
-            >
-              <svg
-                className="h-6 w-6 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
+        {/* Call controls - CONNECTED */}
+        {isConnected && (
+          <div className="flex items-center gap-6">
+            {/* End call button */}
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={onEnd}
+                className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-500/30 transition-all duration-200 hover:scale-110 active:scale-95"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </button>
-          )}
-        </div>
+                <svg
+                  className="h-7 w-7 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z"
+                  />
+                </svg>
+              </button>
+              <span className="text-xs font-medium text-red-400">End</span>
+            </div>
+
+            {/* Mute button */}
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={onToggleMute}
+                className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
+                  isMuted
+                    ? "bg-gradient-to-br from-amber-500 to-orange-500 shadow-amber-500/30"
+                    : "bg-white/10 backdrop-blur-sm hover:bg-white/20"
+                }`}
+              >
+                {isMuted ? (
+                  <svg
+                    className="h-6 w-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="h-6 w-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    />
+                  </svg>
+                )}
+              </button>
+              <span className="text-xs font-medium text-white/70">
+                {isMuted ? "Unmute" : "Mute"}
+              </span>
+            </div>
+
+            {/* Minimize button */}
+            {onMinimize && (
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onMinimize}
+                  className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm shadow-lg transition-all duration-200 hover:scale-110 hover:bg-white/20 active:scale-95"
+                >
+                  <svg
+                    className="h-6 w-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+                <span className="text-xs font-medium text-white/70">
+                  Minimize
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Mute indicator text */}
         {isConnected && isMuted && (

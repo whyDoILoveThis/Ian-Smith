@@ -204,7 +204,9 @@ export function ChatMessagesView({
               )}
               {timestamp && (
                 <div
-                  className={`mt-1 flex ${isMine ? "justify-end" : "justify-start"}`}
+                  className={`mt-1 flex items-center gap-1 ${
+                    isMine ? "justify-end" : "justify-start"
+                  }`}
                 >
                   <span
                     className={`text-[9px] ${
@@ -213,15 +215,13 @@ export function ChatMessagesView({
                   >
                     {timestamp}
                   </span>
+                  {/* Read receipt checkmark - only shows when other person has seen it */}
+                  {isMine && msg.readBy?.[slotId === "1" ? "2" : "1"] && (
+                    <span className={`text-[9px] ${themeColors.accent}`}>
+                      ✓
+                    </span>
+                  )}
                 </div>
-              )}
-              {/* Read receipt checkmark - only shows when other person has seen it */}
-              {isMine && msg.readBy?.[slotId === "1" ? "2" : "1"] && (
-                <span
-                  className={`absolute bottom-1 right-1 text-[9px] ${themeColors.accent}`}
-                >
-                  ✓
-                </span>
               )}
             </div>
           </div>

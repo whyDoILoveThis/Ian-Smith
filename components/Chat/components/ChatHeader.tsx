@@ -1,17 +1,14 @@
 "use client";
 
 import React from "react";
-import { RING_COLORS } from "../constants";
 import type { CallStatus, ChatTheme } from "../types";
 import { CallButton } from "./CallButton";
 
 type ChatHeaderProps = {
   activeTab: "chat" | "room";
   setActiveTab: (tab: "chat" | "room") => void;
-  combo: [number, number, number, number] | null;
   chatTheme: ChatTheme;
   handleThemeChange: (theme: ChatTheme) => void;
-  onEditPasskey: () => void;
   slotId: "1" | "2" | null;
   callStatus: CallStatus;
   otherPersonOnline: boolean;
@@ -21,10 +18,8 @@ type ChatHeaderProps = {
 export function ChatHeader({
   activeTab,
   setActiveTab,
-  combo,
   chatTheme,
   handleThemeChange,
-  onEditPasskey,
   slotId,
   callStatus,
   otherPersonOnline,
@@ -53,35 +48,13 @@ export function ChatHeader({
           </span>
         </div>
 
-        {/* Center: Passkey + Call Button */}
-        <div className="flex items-center gap-3">
-          {combo && (
-            <div className="flex items-center gap-1.5">
-              {combo.map((value, index) => (
-                <span
-                  key={`${value}-${index}`}
-                  className="text-xs font-bold"
-                  style={{ color: RING_COLORS[index] }}
-                >
-                  {value}
-                </span>
-              ))}
-              <button
-                type="button"
-                onClick={onEditPasskey}
-                className="ml-1 text-neutral-400 hover:text-white text-xs"
-              >
-                ✎
-              </button>
-            </div>
-          )}
-          <CallButton
-            slotId={slotId}
-            callStatus={callStatus}
-            otherPersonOnline={otherPersonOnline}
-            onStartCall={onStartCall}
-          />
-        </div>
+        {/* Center: Call Button */}
+        <CallButton
+          slotId={slotId}
+          callStatus={callStatus}
+          otherPersonOnline={otherPersonOnline}
+          onStartCall={onStartCall}
+        />
 
         {/* Right: Theme Switcher */}
         <div className="flex gap-1">
