@@ -41,6 +41,29 @@ export type TttState = {
   resetVotes: { "1"?: boolean; "2"?: boolean };
 };
 
+export type CallStatus = 
+  | "idle"           // No call
+  | "calling"        // Outgoing call, waiting for answer
+  | "ringing"        // Incoming call, waiting to accept/decline
+  | "connecting"     // Call accepted, WebRTC connecting
+  | "connected"      // Call active
+  | "ended";         // Call ended
+
+export type CallSignal = {
+  from: "1" | "2";
+  to: "1" | "2";
+  type: "offer" | "answer" | "candidate" | "hangup";
+  sdp?: string;
+  candidate?: RTCIceCandidateInit;
+  timestamp: number | object;
+};
+
+export type CallState = {
+  status: CallStatus;
+  callerId: "1" | "2" | null;
+  startedAt: number | null;
+};
+
 export type ChatTheme = "emerald" | "blue" | "purple" | "rose";
 
 export type ThemeColors = {

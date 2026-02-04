@@ -2,7 +2,8 @@
 
 import React from "react";
 import { RING_COLORS } from "../constants";
-import type { ChatTheme } from "../types";
+import type { CallStatus, ChatTheme } from "../types";
+import { CallButton } from "./CallButton";
 
 type ChatHeaderProps = {
   activeTab: "chat" | "room";
@@ -11,6 +12,10 @@ type ChatHeaderProps = {
   chatTheme: ChatTheme;
   handleThemeChange: (theme: ChatTheme) => void;
   onEditPasskey: () => void;
+  slotId: "1" | "2" | null;
+  callStatus: CallStatus;
+  otherPersonOnline: boolean;
+  onStartCall: () => void;
 };
 
 export function ChatHeader({
@@ -20,6 +25,10 @@ export function ChatHeader({
   chatTheme,
   handleThemeChange,
   onEditPasskey,
+  slotId,
+  callStatus,
+  otherPersonOnline,
+  onStartCall,
 }: ChatHeaderProps) {
   return (
     <div className="flex-shrink-0 border-b border-white/10 bg-black/60 px-3 py-2 safe-area-inset-top">
@@ -44,27 +53,35 @@ export function ChatHeader({
           </span>
         </div>
 
-        {/* Center: Passkey */}
-        {combo && (
-          <div className="flex items-center gap-1.5">
-            {combo.map((value, index) => (
-              <span
-                key={`${value}-${index}`}
-                className="text-xs font-bold"
-                style={{ color: RING_COLORS[index] }}
+        {/* Center: Passkey + Call Button */}
+        <div className="flex items-center gap-3">
+          {combo && (
+            <div className="flex items-center gap-1.5">
+              {combo.map((value, index) => (
+                <span
+                  key={`${value}-${index}`}
+                  className="text-xs font-bold"
+                  style={{ color: RING_COLORS[index] }}
+                >
+                  {value}
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={onEditPasskey}
+                className="ml-1 text-neutral-400 hover:text-white text-xs"
               >
-                {value}
-              </span>
-            ))}
-            <button
-              type="button"
-              onClick={onEditPasskey}
-              className="ml-1 text-neutral-400 hover:text-white text-xs"
-            >
-              ✎
-            </button>
-          </div>
-        )}
+                ✎
+              </button>
+            </div>
+          )}
+          <CallButton
+            slotId={slotId}
+            callStatus={callStatus}
+            otherPersonOnline={otherPersonOnline}
+            onStartCall={onStartCall}
+          />
+        </div>
 
         {/* Right: Theme Switcher */}
         <div className="flex gap-1">

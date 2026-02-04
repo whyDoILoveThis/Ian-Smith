@@ -12,6 +12,7 @@ import {
   useChatMessages,
   useTicTacToe,
   useAIChat,
+  useVoiceCall,
 } from "./hooks";
 import {
   LockBoxScreen,
@@ -21,6 +22,8 @@ import {
   ChatMessagesView,
   ChatInputArea,
   ImageConfirmModal,
+  VoiceCallOverlay,
+  ActiveCallBanner,
 } from "./components";
 
 export default function AIContentSugestions() {
@@ -34,6 +37,7 @@ export default function AIContentSugestions() {
   const [activeTab, setActiveTab] = useState<"chat" | "room">("chat");
   const [visibleMessageCount, setVisibleMessageCount] =
     useState(MESSAGES_PER_PAGE);
+  const [isCallExpanded, setIsCallExpanded] = useState(true);
 
   // Store combo locally (user-entered)
   useEffect(() => {
@@ -66,6 +70,22 @@ export default function AIContentSugestions() {
 
   // Tic Tac Toe
   const ticTacToe = useTicTacToe(slotId);
+
+  // Voice Call
+  const voiceCall = useVoiceCall(slotId);
+
+  // Check if other person is online
+  const otherPersonOnline = useMemo(() => {
+    if (!slotId) return false;
+    const otherSlot = slotId === "1" ? "2" : "1";
+    return !!slots[otherSlot]?.name;
+  }, [slotId, slots]);
+
+  // Get caller name for overlay
+  const callerName = useMemo(() => {
+    if (!voiceCall.callerId) return "Unknown";
+    return slots[voiceCall.callerId]?.name || "Unknown";
+  }, [voiceCall.callerId, slots]);
 
   const themeColors = useMemo(() => THEME_COLORS[chatTheme], [chatTheme]);
 
@@ -160,8 +180,35 @@ export default function AIContentSugestions() {
   }
 
   // Main chat UI
+  // Show call overlay when: ringing, calling, connecting, or (connected AND expanded)
+  const showCallOverlay =
+    voiceCall.callStatus === "ringing" ||
+    voiceCall.callStatus === "calling" ||
+    voiceCall.callStatus === "connecting" ||
+    (voiceCall.callStatus === "connected" && isCallExpanded);
+
   return (
     <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-black">
+      {/* Voice Call Overlay */}
+      {showCallOverlay && (
+        <VoiceCallOverlay
+          callStatus={voiceCall.callStatus}
+          callerId={voiceCall.callerId}
+          callerName={callerName}
+          isMuted={voiceCall.isMuted}
+          callDuration={voiceCall.callDuration}
+          remoteAudioLevel={voiceCall.remoteAudioLevel}
+          themeColors={themeColors}
+          onAnswer={() => {
+            voiceCall.answerCall();
+            setIsCallExpanded(true);
+          }}
+          onEnd={voiceCall.endCall}
+          onToggleMute={voiceCall.toggleMute}
+          onMinimize={() => setIsCallExpanded(false)}
+        />
+      )}
+
       {/* Image Confirm Modal */}
       {session.isImageConfirmOpen && session.pendingImageUrl && (
         <ImageConfirmModal
@@ -184,7 +231,26 @@ export default function AIContentSugestions() {
           setShowLockBox(true);
           setShowRealChat(false);
         }}
+        slotId={slotId}
+        callStatus={voiceCall.callStatus}
+        otherPersonOnline={otherPersonOnline}
+        onStartCall={() => {
+          voiceCall.startCall();
+          setIsCallExpanded(true);
+        }}
       />
+
+      {/* Active Call Banner (when minimized) */}
+      {!isCallExpanded && voiceCall.callStatus === "connected" && (
+        <ActiveCallBanner
+          callStatus={voiceCall.callStatus}
+          callDuration={voiceCall.callDuration}
+          isMuted={voiceCall.isMuted}
+          onToggleMute={voiceCall.toggleMute}
+          onEndCall={voiceCall.endCall}
+          onExpand={() => setIsCallExpanded(true)}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">

@@ -5,3 +5,6 @@ export { RoomSpotsView } from "./RoomSpotsView";
 export { ChatMessagesView } from "./ChatMessagesView";
 export { ChatInputArea } from "./ChatInputArea";
 export { ImageConfirmModal } from "./ImageConfirmModal";
+export { VoiceCallOverlay } from "./VoiceCallOverlay";
+export { CallButton } from "./CallButton";
+export { ActiveCallBanner } from "./ActiveCallBanner";
