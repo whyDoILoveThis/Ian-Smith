@@ -5,3 +5,4 @@ export { useTicTacToe } from "./useTicTacToe";
 export { useAIChat } from "./useAIChat";
 export { useVoiceCall } from "./useVoiceCall";
 export { useWordSearch } from "./useWordSearch";
+export { useTouchIndicators } from "./useTouchIndicators";

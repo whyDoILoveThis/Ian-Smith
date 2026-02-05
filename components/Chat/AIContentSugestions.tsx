@@ -13,6 +13,7 @@ import {
   useTicTacToe,
   useAIChat,
   useVoiceCall,
+  useTouchIndicators,
 } from "./hooks";
 import {
   LockBoxScreen,
@@ -25,6 +26,7 @@ import {
   VoiceCallOverlay,
   ActiveCallBanner,
   VideoRecorder,
+  TouchIndicatorsOverlay,
 } from "./components";
 
 export default function AIContentSugestions() {
@@ -75,6 +77,9 @@ export default function AIContentSugestions() {
 
   // Voice Call
   const voiceCall = useVoiceCall(slotId);
+
+  // Touch Indicators
+  const touchIndicators = useTouchIndicators(slotId);
 
   // Check if other person is online
   const otherPersonOnline = useMemo(() => {
@@ -325,6 +330,18 @@ export default function AIContentSugestions() {
           </>
         )}
       </div>
+
+      {/* Touch Indicators Overlay - only visible when in chat mode and not in other modals */}
+      {showRealChat &&
+        !showCallOverlay &&
+        !session.isImageConfirmOpen &&
+        !isVideoRecorderOpen && (
+          <TouchIndicatorsOverlay
+            touches={touchIndicators.touches}
+            onTouch={touchIndicators.sendTouch}
+            enabled={!!slotId}
+          />
+        )}
     </div>
   );
 }

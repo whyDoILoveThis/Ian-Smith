@@ -156,6 +156,10 @@ export function VideoRecorder({
     "low" | "medium" | "high"
   >("medium");
   const [isInitializing, setIsInitializing] = useState(true);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>(
+    [],
+  );
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
 
   const timerRef = useRef<number | null>(null);
   const recorderMimeTypeRef = useRef<string>("video/webm");
@@ -163,6 +167,42 @@ export function VideoRecorder({
   // Detect device capability on mount
   useEffect(() => {
     setDeviceCapability(detectDeviceCapability());
+  }, []);
+
+  // Enumerate available cameras on mount
+  useEffect(() => {
+    async function enumerateCameras() {
+      try {
+        // Need to request permission first to get device labels
+        const tempStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        tempStream.getTracks().forEach((track) => track.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(
+          (device) => device.kind === "videoinput",
+        );
+        console.log(
+          "Available cameras:",
+          cameras.map((c) => ({ label: c.label, id: c.deviceId })),
+        );
+        setAvailableCameras(cameras);
+
+        // Find front camera index (usually contains "front" or "user" in label, or is first)
+        const frontIndex = cameras.findIndex(
+          (c) =>
+            c.label.toLowerCase().includes("front") ||
+            c.label.toLowerCase().includes("user") ||
+            c.label.toLowerCase().includes("facetime"),
+        );
+        setCurrentCameraIndex(frontIndex >= 0 ? frontIndex : 0);
+      } catch (err) {
+        console.error("Failed to enumerate cameras:", err);
+      }
+    }
+    enumerateCameras();
   }, []);
 
   // Start camera stream with optimized settings
@@ -178,77 +218,118 @@ export function VideoRecorder({
       }
 
       const audioConstraints = getAudioConstraints(deviceCapability);
+      const selectedCamera = availableCameras[currentCameraIndex];
 
-      // Try multiple constraint strategies for camera access
+      // Build video constraints
+      let videoConstraints: MediaTrackConstraints;
+
+      if (selectedCamera?.deviceId) {
+        // Use specific device ID - most reliable method
+        console.log(
+          "Using device ID:",
+          selectedCamera.deviceId,
+          "Label:",
+          selectedCamera.label,
+        );
+        videoConstraints = {
+          deviceId: { exact: selectedCamera.deviceId },
+        };
+
+        // Add quality constraints for device capability
+        if (deviceCapability === "low") {
+          videoConstraints.width = { ideal: 480, max: 640 };
+          videoConstraints.height = { ideal: 360, max: 480 };
+          videoConstraints.frameRate = { ideal: 15, max: 24 };
+        } else if (deviceCapability === "medium") {
+          videoConstraints.width = { ideal: 640, max: 1280 };
+          videoConstraints.height = { ideal: 480, max: 720 };
+          videoConstraints.frameRate = { ideal: 24, max: 30 };
+        }
+      } else {
+        // Fallback to facingMode if no devices enumerated yet
+        videoConstraints = getVideoConstraints(
+          facingMode,
+          deviceCapability,
+          false,
+        );
+      }
+
       let stream: MediaStream | null = null;
-      const strategies = [
-        // Strategy 1: Exact facingMode with optimized settings
-        () => {
-          const constraints = getVideoConstraints(
-            facingMode,
-            deviceCapability,
-            true,
-          );
-          console.log("Trying exact facingMode with optimized settings");
-          return navigator.mediaDevices.getUserMedia({
-            video: constraints,
-            audio: audioConstraints,
-          });
-        },
-        // Strategy 2: Ideal facingMode with optimized settings
-        () => {
-          const constraints = getVideoConstraints(
-            facingMode,
-            deviceCapability,
-            false,
-          );
-          console.log("Trying ideal facingMode with optimized settings");
-          return navigator.mediaDevices.getUserMedia({
-            video: constraints,
-            audio: audioConstraints,
-          });
-        },
-        // Strategy 3: Just facingMode, no other constraints
-        () => {
-          console.log("Trying basic facingMode only");
-          return navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { exact: facingMode } },
+
+      // Strategy 1: Use device ID or optimized constraints
+      try {
+        console.log("Trying with constraints:", videoConstraints);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: audioConstraints,
+        });
+      } catch (err) {
+        console.log("Primary strategy failed:", err);
+      }
+
+      // Strategy 2: If device ID failed, try without quality constraints
+      if (!stream && selectedCamera?.deviceId) {
+        try {
+          console.log("Trying device ID only without quality constraints");
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: selectedCamera.deviceId } },
             audio: true,
           });
-        },
-        // Strategy 4: Ideal facingMode only
-        () => {
-          console.log("Trying ideal facingMode only");
-          return navigator.mediaDevices.getUserMedia({
+        } catch (err) {
+          console.log("Device ID only failed:", err);
+        }
+      }
+
+      // Strategy 3: Try with ideal device ID (less strict)
+      if (!stream && selectedCamera?.deviceId) {
+        try {
+          console.log("Trying with ideal device ID");
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { ideal: selectedCamera.deviceId } },
+            audio: true,
+          });
+        } catch (err) {
+          console.log("Ideal device ID failed:", err);
+        }
+      }
+
+      // Strategy 4: Fallback to facingMode
+      if (!stream) {
+        try {
+          console.log("Falling back to facingMode");
+          stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: facingMode } },
             audio: true,
           });
-        },
-        // Strategy 5: Any camera
-        () => {
-          console.log("Falling back to any available camera");
-          return navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-        },
-      ];
-
-      for (const strategy of strategies) {
-        try {
-          stream = await strategy();
-          if (stream) {
-            console.log("Camera stream acquired successfully");
-            break;
-          }
         } catch (err) {
-          console.log("Strategy failed, trying next...", err);
-          continue;
+          console.log("FacingMode fallback failed:", err);
         }
+      }
+
+      // Strategy 5: Any camera
+      if (!stream) {
+        console.log("Last resort: any camera");
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
       }
 
       if (!stream) {
         throw new Error("All camera strategies failed");
+      }
+
+      // Log what we got
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        const settings = videoTrack.getSettings();
+        console.log("Video track settings:", settings);
+        console.log(
+          "Video track enabled:",
+          videoTrack.enabled,
+          "readyState:",
+          videoTrack.readyState,
+        );
       }
 
       streamRef.current = stream;
@@ -276,11 +357,11 @@ export function VideoRecorder({
       setError("Could not access camera. Please check permissions.");
       setIsInitializing(false);
     }
-  }, [facingMode, deviceCapability]);
+  }, [facingMode, deviceCapability, availableCameras, currentCameraIndex]);
 
-  // Initialize camera when component mounts
+  // Initialize camera when component mounts or camera changes
   useEffect(() => {
-    if (!recordedBlob) {
+    if (!recordedBlob && availableCameras.length > 0) {
       startCamera();
     }
     return () => {
@@ -293,7 +374,13 @@ export function VideoRecorder({
         URL.revokeObjectURL(recordedUrl);
       }
     };
-  }, [facingMode, recordedBlob, startCamera, recordedUrl]);
+  }, [
+    currentCameraIndex,
+    recordedBlob,
+    startCamera,
+    recordedUrl,
+    availableCameras.length,
+  ]);
 
   // Handle recording with optimized settings
   const startRecording = useCallback(() => {
@@ -399,6 +486,8 @@ export function VideoRecorder({
   }, [onClose, recordedUrl]);
 
   const toggleCamera = useCallback(() => {
+    if (availableCameras.length < 2) return;
+
     // Stop current stream before switching
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -408,8 +497,20 @@ export function VideoRecorder({
       videoRef.current.srcObject = null;
     }
     setIsInitializing(true);
-    setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
-  }, []);
+
+    // Cycle to next camera
+    setCurrentCameraIndex((prev) => (prev + 1) % availableCameras.length);
+
+    // Also update facingMode for the mirror effect
+    const nextIndex = (currentCameraIndex + 1) % availableCameras.length;
+    const nextCamera = availableCameras[nextIndex];
+    const isLikelyFront =
+      nextCamera?.label?.toLowerCase().includes("front") ||
+      nextCamera?.label?.toLowerCase().includes("user") ||
+      nextCamera?.label?.toLowerCase().includes("facetime") ||
+      nextIndex === 0;
+    setFacingMode(isLikelyFront ? "user" : "environment");
+  }, [availableCameras, currentCameraIndex]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
