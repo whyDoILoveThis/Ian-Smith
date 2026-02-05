@@ -8,6 +8,130 @@ type VideoRecorderProps = {
   isSending: boolean;
 };
 
+// Detect if device is low-end based on hardware concurrency and device memory
+function detectDeviceCapability(): "low" | "medium" | "high" {
+  if (typeof navigator === "undefined") return "medium";
+
+  const cores = navigator.hardwareConcurrency || 2;
+  // @ts-expect-error - deviceMemory is not in all browsers
+  const memory = navigator.deviceMemory || 4;
+
+  // Low-end: 2 or fewer cores, or less than 4GB RAM
+  if (cores <= 2 || memory < 4) return "low";
+  // High-end: 6+ cores and 8GB+ RAM
+  if (cores >= 6 && memory >= 8) return "high";
+  return "medium";
+}
+
+// Get video constraints based on device capability
+function getVideoConstraints(
+  facingMode: "user" | "environment",
+  capability: "low" | "medium" | "high",
+) {
+  const base = { facingMode };
+
+  switch (capability) {
+    case "low":
+      return {
+        ...base,
+        width: { ideal: 480, max: 640 },
+        height: { ideal: 360, max: 480 },
+        frameRate: { ideal: 15, max: 24 },
+      };
+    case "medium":
+      return {
+        ...base,
+        width: { ideal: 640, max: 1280 },
+        height: { ideal: 480, max: 720 },
+        frameRate: { ideal: 24, max: 30 },
+      };
+    case "high":
+    default:
+      return {
+        ...base,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 },
+      };
+  }
+}
+
+// Get audio constraints optimized for device
+function getAudioConstraints(capability: "low" | "medium" | "high") {
+  switch (capability) {
+    case "low":
+      return {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 22050,
+        channelCount: 1,
+      };
+    case "medium":
+      return {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 44100,
+        channelCount: 1,
+      };
+    case "high":
+    default:
+      return {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 48000,
+        channelCount: 2,
+      };
+  }
+}
+
+// Get MediaRecorder options based on device capability
+function getRecorderOptions(
+  capability: "low" | "medium" | "high",
+): MediaRecorderOptions {
+  // Determine best supported mime type
+  const mimeTypes = [
+    "video/webm;codecs=vp8,opus", // VP8 is more efficient on low-end devices
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8",
+    "video/webm",
+    "video/mp4",
+  ];
+
+  let mimeType = "";
+  for (const type of mimeTypes) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      mimeType = type;
+      break;
+    }
+  }
+
+  // Set bitrate based on capability
+  let videoBitsPerSecond: number;
+  let audioBitsPerSecond: number;
+
+  switch (capability) {
+    case "low":
+      videoBitsPerSecond = 500000; // 500 Kbps
+      audioBitsPerSecond = 64000; // 64 Kbps
+      break;
+    case "medium":
+      videoBitsPerSecond = 1000000; // 1 Mbps
+      audioBitsPerSecond = 96000; // 96 Kbps
+      break;
+    case "high":
+    default:
+      videoBitsPerSecond = 2500000; // 2.5 Mbps
+      audioBitsPerSecond = 128000; // 128 Kbps
+      break;
+  }
+
+  return {
+    mimeType,
+    videoBitsPerSecond,
+    audioBitsPerSecond,
+  };
+}
+
 export function VideoRecorder({
   onClose,
   onSend,
@@ -24,33 +148,67 @@ export function VideoRecorder({
   const [recordingTime, setRecordingTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [deviceCapability, setDeviceCapability] = useState<
+    "low" | "medium" | "high"
+  >("medium");
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const timerRef = useRef<number | null>(null);
+  const recorderMimeTypeRef = useRef<string>("video/webm");
 
-  // Start camera stream
+  // Detect device capability on mount
+  useEffect(() => {
+    setDeviceCapability(detectDeviceCapability());
+  }, []);
+
+  // Start camera stream with optimized settings
   const startCamera = useCallback(async () => {
     try {
       setError(null);
+      setIsInitializing(true);
 
       // Stop any existing stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: true,
-      });
+      const videoConstraints = getVideoConstraints(
+        facingMode,
+        deviceCapability,
+      );
+      const audioConstraints = getAudioConstraints(deviceCapability);
+
+      // Try to get stream with optimal constraints, fall back if needed
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: audioConstraints,
+        });
+      } catch {
+        // Fallback to basic constraints if optimized ones fail
+        console.log("Falling back to basic constraints");
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode },
+          audio: true,
+        });
+      }
 
       streamRef.current = stream;
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Wait for video to be ready before hiding loader
+        videoRef.current.onloadedmetadata = () => {
+          setIsInitializing(false);
+        };
       }
     } catch (err) {
       console.error("Camera error:", err);
       setError("Could not access camera. Please check permissions.");
+      setIsInitializing(false);
     }
-  }, [facingMode]);
+  }, [facingMode, deviceCapability]);
 
   // Initialize camera when component mounts
   useEffect(() => {
@@ -69,18 +227,24 @@ export function VideoRecorder({
     };
   }, [facingMode, recordedBlob, startCamera, recordedUrl]);
 
-  // Handle recording
+  // Handle recording with optimized settings
   const startRecording = useCallback(() => {
     if (!streamRef.current) return;
 
     chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : MediaRecorder.isTypeSupported("video/webm")
-        ? "video/webm"
-        : "video/mp4";
 
-    const mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
+    const recorderOptions = getRecorderOptions(deviceCapability);
+    recorderMimeTypeRef.current = recorderOptions.mimeType || "video/webm";
+
+    let mediaRecorder: MediaRecorder;
+    try {
+      mediaRecorder = new MediaRecorder(streamRef.current, recorderOptions);
+    } catch {
+      // Fallback if options aren't supported
+      mediaRecorder = new MediaRecorder(streamRef.current);
+      recorderMimeTypeRef.current = "video/webm";
+    }
+
     mediaRecorderRef.current = mediaRecorder;
 
     mediaRecorder.ondataavailable = (event) => {
@@ -90,7 +254,9 @@ export function VideoRecorder({
     };
 
     mediaRecorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType });
+      const blob = new Blob(chunksRef.current, {
+        type: recorderMimeTypeRef.current,
+      });
       setRecordedBlob(blob);
       const url = URL.createObjectURL(blob);
       setRecordedUrl(url);
@@ -102,7 +268,14 @@ export function VideoRecorder({
       }
     };
 
-    mediaRecorder.start(100);
+    // Use larger timeslice on low-end devices to reduce processing overhead
+    const timeslice =
+      deviceCapability === "low"
+        ? 500
+        : deviceCapability === "medium"
+          ? 250
+          : 100;
+    mediaRecorder.start(timeslice);
     setIsRecording(true);
     setRecordingTime(0);
 
@@ -110,7 +283,7 @@ export function VideoRecorder({
     timerRef.current = window.setInterval(() => {
       setRecordingTime((prev) => prev + 1);
     }, 1000);
-  }, []);
+  }, [deviceCapability]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -207,16 +380,32 @@ export function VideoRecorder({
       {/* Camera/Preview view */}
       {!error && (
         <div className="relative w-full h-full flex flex-col">
-          {/* Video element */}
+          {/* Loading indicator */}
+          {isInitializing && !recordedUrl && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black">
+              <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4" />
+              <p className="text-white/70 text-sm">Initializing camera...</p>
+              {deviceCapability === "low" && (
+                <p className="text-amber-400/70 text-xs mt-2">
+                  Optimizing for your device...
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Video element - Live camera */}
           {!recordedUrl ? (
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
-              className="w-full h-full object-cover"
+              disablePictureInPicture
+              className={`w-full h-full object-cover ${isInitializing ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}
               style={{
                 transform: facingMode === "user" ? "scaleX(-1)" : "none",
+                // Hardware acceleration hints
+                willChange: "transform",
               }}
             />
           ) : (
@@ -347,10 +536,20 @@ export function VideoRecorder({
           </div>
 
           {/* Ephemeral video notice */}
-          <div className="absolute top-6 left-6 flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/20 backdrop-blur-sm border border-amber-500/30">
-            <span className="text-amber-400 text-xs">
-              👁️ Disappears after viewing
-            </span>
+          <div className="absolute top-6 left-6 flex flex-col gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/20 backdrop-blur-sm border border-amber-500/30">
+              <span className="text-amber-400 text-xs">
+                👁️ Disappears after viewing
+              </span>
+            </div>
+            {/* Quality indicator for low-end devices */}
+            {deviceCapability === "low" && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 backdrop-blur-sm border border-blue-500/30">
+                <span className="text-blue-400 text-xs">
+                  📱 Optimized quality
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
