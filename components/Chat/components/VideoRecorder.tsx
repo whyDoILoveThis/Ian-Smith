@@ -27,20 +27,24 @@ function detectDeviceCapability(): "low" | "medium" | "high" {
 function getVideoConstraints(
   facingMode: "user" | "environment",
   capability: "low" | "medium" | "high",
+  useExactFacing = false,
 ) {
-  const base = { facingMode };
+  // Use exact facingMode for more reliable camera switching on mobile
+  const facingConstraint = useExactFacing
+    ? { facingMode: { exact: facingMode } }
+    : { facingMode: { ideal: facingMode } };
 
   switch (capability) {
     case "low":
       return {
-        ...base,
+        ...facingConstraint,
         width: { ideal: 480, max: 640 },
         height: { ideal: 360, max: 480 },
         frameRate: { ideal: 15, max: 24 },
       };
     case "medium":
       return {
-        ...base,
+        ...facingConstraint,
         width: { ideal: 640, max: 1280 },
         height: { ideal: 480, max: 720 },
         frameRate: { ideal: 24, max: 30 },
@@ -48,7 +52,7 @@ function getVideoConstraints(
     case "high":
     default:
       return {
-        ...base,
+        ...facingConstraint,
         width: { ideal: 1280 },
         height: { ideal: 720 },
         frameRate: { ideal: 30 },
@@ -170,37 +174,101 @@ export function VideoRecorder({
       // Stop any existing stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
 
-      const videoConstraints = getVideoConstraints(
-        facingMode,
-        deviceCapability,
-      );
       const audioConstraints = getAudioConstraints(deviceCapability);
 
-      // Try to get stream with optimal constraints, fall back if needed
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
-          audio: audioConstraints,
-        });
-      } catch {
-        // Fallback to basic constraints if optimized ones fail
-        console.log("Falling back to basic constraints");
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode },
-          audio: true,
-        });
+      // Try multiple constraint strategies for camera access
+      let stream: MediaStream | null = null;
+      const strategies = [
+        // Strategy 1: Exact facingMode with optimized settings
+        () => {
+          const constraints = getVideoConstraints(
+            facingMode,
+            deviceCapability,
+            true,
+          );
+          console.log("Trying exact facingMode with optimized settings");
+          return navigator.mediaDevices.getUserMedia({
+            video: constraints,
+            audio: audioConstraints,
+          });
+        },
+        // Strategy 2: Ideal facingMode with optimized settings
+        () => {
+          const constraints = getVideoConstraints(
+            facingMode,
+            deviceCapability,
+            false,
+          );
+          console.log("Trying ideal facingMode with optimized settings");
+          return navigator.mediaDevices.getUserMedia({
+            video: constraints,
+            audio: audioConstraints,
+          });
+        },
+        // Strategy 3: Just facingMode, no other constraints
+        () => {
+          console.log("Trying basic facingMode only");
+          return navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: facingMode } },
+            audio: true,
+          });
+        },
+        // Strategy 4: Ideal facingMode only
+        () => {
+          console.log("Trying ideal facingMode only");
+          return navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: facingMode } },
+            audio: true,
+          });
+        },
+        // Strategy 5: Any camera
+        () => {
+          console.log("Falling back to any available camera");
+          return navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+        },
+      ];
+
+      for (const strategy of strategies) {
+        try {
+          stream = await strategy();
+          if (stream) {
+            console.log("Camera stream acquired successfully");
+            break;
+          }
+        } catch (err) {
+          console.log("Strategy failed, trying next...", err);
+          continue;
+        }
+      }
+
+      if (!stream) {
+        throw new Error("All camera strategies failed");
       }
 
       streamRef.current = stream;
 
       if (videoRef.current) {
+        // Clear any existing source
+        videoRef.current.srcObject = null;
         videoRef.current.srcObject = stream;
-        // Wait for video to be ready before hiding loader
-        videoRef.current.onloadedmetadata = () => {
-          setIsInitializing(false);
+
+        // Ensure video plays
+        videoRef.current.onloadedmetadata = async () => {
+          try {
+            if (videoRef.current) {
+              await videoRef.current.play();
+            }
+            setIsInitializing(false);
+          } catch (playErr) {
+            console.error("Error playing video:", playErr);
+            setIsInitializing(false);
+          }
         };
       }
     } catch (err) {
@@ -331,6 +399,15 @@ export function VideoRecorder({
   }, [onClose, recordedUrl]);
 
   const toggleCamera = useCallback(() => {
+    // Stop current stream before switching
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsInitializing(true);
     setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
   }, []);
 
@@ -410,12 +487,28 @@ export function VideoRecorder({
             />
           ) : (
             <video
+              key={recordedUrl} // Force remount when URL changes
               src={recordedUrl}
               controls
               autoPlay
               loop
               playsInline
+              muted={false}
+              preload="auto"
               className="w-full h-full object-contain bg-black"
+              onLoadedData={(e) => {
+                // Ensure video starts playing when loaded
+                const video = e.currentTarget;
+                video.play().catch((err) => {
+                  console.log(
+                    "Autoplay blocked, user interaction needed:",
+                    err,
+                  );
+                });
+              }}
+              onError={(e) => {
+                console.error("Video playback error:", e);
+              }}
             />
           )}
 
