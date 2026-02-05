@@ -31,6 +31,10 @@ export type Message = {
   replyToSender?: string;
   replyToText?: string;
   readBy?: { "1"?: boolean; "2"?: boolean };
+  // Ephemeral video fields
+  isEphemeral?: boolean;
+  viewedBy?: { "1"?: boolean; "2"?: boolean };
+  disappearedFor?: { "1"?: boolean; "2"?: boolean };
 };
 
 export type TttState = {

@@ -13,6 +13,7 @@ type ChatInputAreaProps = {
   handleSendMessage: () => void;
   handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setReplyingTo: (msg: Message | null) => void;
+  onOpenVideoRecorder: () => void;
 };
 
 export function ChatInputArea({
@@ -25,6 +26,7 @@ export function ChatInputArea({
   handleSendMessage,
   handleImageUpload,
   setReplyingTo,
+  onOpenVideoRecorder,
 }: ChatInputAreaProps) {
   return (
     <div className="flex-shrink-0 border-t border-white/10 bg-black/60 px-2 py-2 safe-area-inset-bottom">
@@ -86,6 +88,28 @@ export function ChatInputArea({
             />
           </svg>
         </label>
+        {/* Ephemeral video record button */}
+        <button
+          type="button"
+          onClick={onOpenVideoRecorder}
+          disabled={!slotId || isSending}
+          className={`flex-shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 p-2.5 text-amber-400 transition ${slotId ? "hover:bg-amber-500/20" : "opacity-50"} disabled:opacity-50`}
+          title="Record ephemeral video"
+        >
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+            />
+          </svg>
+        </button>
         <button
           onClick={handleSendMessage}
           disabled={!slotId || isSending || !messageText.trim()}

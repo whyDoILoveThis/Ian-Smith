@@ -9,3 +9,6 @@ export { VoiceCallOverlay } from "./VoiceCallOverlay";
 export { CallButton } from "./CallButton";
 export { ActiveCallBanner } from "./ActiveCallBanner";
 export { WordSearchGame } from "./WordSearchGame";
+export { VideoRecorder } from "./VideoRecorder";
+export { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
+export { CloudPoofAnimation } from "./CloudPoofAnimation";

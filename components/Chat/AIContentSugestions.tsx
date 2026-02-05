@@ -24,6 +24,7 @@ import {
   ImageConfirmModal,
   VoiceCallOverlay,
   ActiveCallBanner,
+  VideoRecorder,
 } from "./components";
 
 export default function AIContentSugestions() {
@@ -38,6 +39,7 @@ export default function AIContentSugestions() {
   const [visibleMessageCount, setVisibleMessageCount] =
     useState(MESSAGES_PER_PAGE);
   const [isCallExpanded, setIsCallExpanded] = useState(true);
+  const [isVideoRecorderOpen, setIsVideoRecorderOpen] = useState(false);
 
   // Store combo locally (user-entered)
   useEffect(() => {
@@ -150,6 +152,19 @@ export default function AIContentSugestions() {
     }
   }, [chatMessages, session]);
 
+  // Ephemeral video send handler
+  const handleSendEphemeralVideoWrapper = useCallback(
+    async (videoBlob: Blob) => {
+      try {
+        await chatMessages.handleSendEphemeralVideo(videoBlob);
+        setIsVideoRecorderOpen(false);
+      } catch {
+        session.setError("Ephemeral video failed to send.");
+      }
+    },
+    [chatMessages, session],
+  );
+
   // LockBox screen
   if (showLockBox) {
     return (
@@ -220,6 +235,15 @@ export default function AIContentSugestions() {
         />
       )}
 
+      {/* Video Recorder Modal */}
+      {isVideoRecorderOpen && (
+        <VideoRecorder
+          onSend={handleSendEphemeralVideoWrapper}
+          onClose={() => setIsVideoRecorderOpen(false)}
+          isSending={chatMessages.isSending}
+        />
+      )}
+
       {/* Header */}
       <ChatHeader
         activeTab={activeTab}
@@ -283,6 +307,8 @@ export default function AIContentSugestions() {
               formatTimestamp={formatTimestamp}
               setReplyingTo={chatMessages.setReplyingTo}
               markMessageAsRead={chatMessages.markMessageAsRead}
+              onMarkEphemeralViewed={chatMessages.markEphemeralViewed}
+              onDeleteEphemeralMessage={chatMessages.deleteEphemeralMessage}
             />
             <ChatInputArea
               slotId={slotId}
@@ -294,6 +320,7 @@ export default function AIContentSugestions() {
               handleSendMessage={handleSendMessageWrapper}
               handleImageUpload={handleImageUploadWrapper}
               setReplyingTo={chatMessages.setReplyingTo}
+              onOpenVideoRecorder={() => setIsVideoRecorderOpen(true)}
             />
           </>
         )}

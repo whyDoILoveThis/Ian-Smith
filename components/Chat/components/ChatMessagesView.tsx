@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { MESSAGES_PER_PAGE } from "../constants";
 import type { Message, ThemeColors } from "../types";
+import { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
+import { CloudPoofAnimation } from "./CloudPoofAnimation";
 
 type ChatMessagesViewProps = {
   messages: Message[];
@@ -14,6 +16,8 @@ type ChatMessagesViewProps = {
   formatTimestamp: (createdAt?: number | object) => string;
   setReplyingTo: (msg: Message | null) => void;
   markMessageAsRead: (msg: Message) => void;
+  onMarkEphemeralViewed: (messageId: string) => void;
+  onDeleteEphemeralMessage: (messageId: string, videoFileId?: string) => void;
 };
 
 export function ChatMessagesView({
@@ -26,9 +30,48 @@ export function ChatMessagesView({
   formatTimestamp,
   setReplyingTo,
   markMessageAsRead,
+  onMarkEphemeralViewed,
+  onDeleteEphemeralMessage,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Ephemeral video state
+  const [activeEphemeralVideo, setActiveEphemeralVideo] = useState<{
+    messageId: string;
+    videoUrl: string;
+    sender: string;
+    videoFileId?: string;
+  } | null>(null);
+  const [poofingMessageIds, setPoofingMessageIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  // Handle ephemeral video close - trigger poof animation then delete
+  const handleEphemeralVideoClose = useCallback(() => {
+    if (activeEphemeralVideo && slotId) {
+      const { messageId, videoFileId } = activeEphemeralVideo;
+      // Mark as viewed first
+      onMarkEphemeralViewed(messageId);
+      // Start poof animation
+      setPoofingMessageIds((prev) => new Set(prev).add(messageId));
+      // After animation completes, delete the message completely
+      setTimeout(() => {
+        onDeleteEphemeralMessage(messageId, videoFileId);
+        setPoofingMessageIds((prev) => {
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        });
+      }, 800);
+    }
+    setActiveEphemeralVideo(null);
+  }, [
+    activeEphemeralVideo,
+    slotId,
+    onMarkEphemeralViewed,
+    onDeleteEphemeralMessage,
+  ]);
 
   // Auto-scroll when new messages arrive
   useEffect(() => {
@@ -132,13 +175,23 @@ export function ChatMessagesView({
       {messages.slice(-visibleMessageCount).map((msg) => {
         const isMine = slotId === msg.slotId;
         const timestamp = formatTimestamp(msg.createdAt);
+        const isPoofing = poofingMessageIds.has(msg.id);
+
         return (
           <div
             key={msg.id}
-            className={`group flex ${isMine ? "justify-end" : "justify-start"}`}
+            className={`group flex ${isMine ? "justify-end" : "justify-start"} relative`}
           >
+            {/* Cloud Poof Animation overlay */}
+            {isPoofing && (
+              <div className="absolute inset-0 z-20">
+                <CloudPoofAnimation onComplete={() => {}} />
+              </div>
+            )}
             <div
-              className={`relative max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-md select-none ${
+              className={`relative max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-md select-none transition-all duration-300 ${
+                isPoofing ? "opacity-0 scale-75" : ""
+              } ${
                 isMine
                   ? `${themeColors.bg} ${themeColors.text} rounded-br-none`
                   : "bg-white/10 text-white rounded-bl-none"
@@ -195,13 +248,78 @@ export function ChatMessagesView({
                   className="mt-2 w-full rounded-xl border border-white/10"
                 />
               )}
-              {msg.videoUrl && (
+              {msg.videoUrl && !msg.isEphemeral && (
                 <video
                   src={msg.videoUrl}
                   controls
                   className="mt-2 w-full rounded-xl border border-white/10"
                 />
               )}
+              {/* Ephemeral video - show icon button instead of inline video */}
+              {msg.videoUrl &&
+                msg.isEphemeral &&
+                !msg.disappearedFor?.[slotId ?? "1"] && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveEphemeralVideo({
+                        messageId: msg.id,
+                        videoUrl: msg.videoUrl!,
+                        sender: msg.sender,
+                        videoFileId: msg.videoFileId,
+                      })
+                    }
+                    className="mt-2 w-full flex items-center justify-center gap-2 py-6 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-600/20 hover:from-amber-500/30 hover:to-orange-600/30 transition-all duration-300 group"
+                  >
+                    <div className="relative">
+                      {/* Play icon */}
+                      <svg
+                        className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                      {/* Ephemeral indicator */}
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+                    </div>
+                    <div className="flex flex-col items-start">
+                      <span className="text-amber-300 text-sm font-medium">
+                        Ephemeral Video
+                      </span>
+                      <span className="text-amber-400/60 text-[10px]">
+                        Tap to view • Disappears after watching
+                      </span>
+                    </div>
+                  </button>
+                )}
+              {/* Ephemeral video that has been viewed - show placeholder */}
+              {msg.videoUrl &&
+                msg.isEphemeral &&
+                msg.disappearedFor?.[slotId ?? "1"] && (
+                  <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </svg>
+                    Video has been viewed
+                  </div>
+                )}
               {timestamp && (
                 <div
                   className={`mt-1 flex items-center gap-1 ${
@@ -252,6 +370,16 @@ export function ChatMessagesView({
         </div>
       )}
       <div ref={bottomRef} />
+
+      {/* Ephemeral Video Player Modal */}
+      {activeEphemeralVideo && (
+        <EphemeralVideoPlayer
+          videoUrl={activeEphemeralVideo.videoUrl}
+          sender={activeEphemeralVideo.sender}
+          onClose={handleEphemeralVideoClose}
+          onViewed={() => {}}
+        />
+      )}
     </div>
   );
 }

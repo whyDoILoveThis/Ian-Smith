@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { push, ref, set } from "firebase/database";
+import { push, ref, set, update, remove } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
-import { appwrImgUp } from "@/appwrite/appwrStorage";
+import { appwrImgUp, appwrImgDelete } from "@/appwrite/appwrStorage";
 import { ROOM_PATH } from "../constants";
 import { encryptMessage } from "../crypto";
 import type { Message } from "../types";
@@ -196,6 +196,83 @@ export function useChatMessages(
     [setTypingState, slotId],
   );
 
+  // Handle sending ephemeral video (recorded in-app)
+  const handleSendEphemeralVideo = useCallback(
+    async (videoBlob: Blob) => {
+      if (!slotId || !screenName.trim()) return;
+      setIsSending(true);
+
+      try {
+        // Convert blob to file for upload
+        const videoFile = new File([videoBlob], `ephemeral-${Date.now()}.webm`, {
+          type: videoBlob.type || "video/webm",
+        });
+
+        const upload = await appwrImgUp(videoFile);
+        const msgRef = ref(rtdb, `${ROOM_PATH}/messages`);
+
+        const msgData: Record<string, unknown> = {
+          slotId,
+          sender: screenName.trim(),
+          videoUrl: upload.url,
+          videoFileId: upload.fileId,
+          isEphemeral: true,
+          createdAt: { ".sv": "timestamp" },
+        };
+
+        await push(msgRef, msgData);
+      } catch {
+        throw new Error("Ephemeral video failed to send.");
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [screenName, slotId],
+  );
+
+  // Mark ephemeral video as viewed by current user
+  const markEphemeralViewed = useCallback(
+    async (messageId: string) => {
+      if (!slotId) return;
+      try {
+        const viewedRef = ref(
+          rtdb,
+          `${ROOM_PATH}/messages/${messageId}/viewedBy/${slotId}`,
+        );
+        await set(viewedRef, true);
+      } catch {
+        // Ignore errors
+      }
+    },
+    [slotId],
+  );
+
+  // Delete ephemeral video completely from Appwrite storage and Firebase
+  const deleteEphemeralMessage = useCallback(
+    async (messageId: string, videoFileId?: string) => {
+      if (!slotId) return;
+      try {
+        // Delete video file from Appwrite storage
+        if (videoFileId) {
+          try {
+            await appwrImgDelete(videoFileId);
+            console.log(`✅ Deleted ephemeral video from Appwrite: ${videoFileId}`);
+          } catch (err) {
+            console.error("Failed to delete video from Appwrite:", err);
+          }
+        }
+
+        // Delete message from Firebase
+        const messageRef = ref(rtdb, `${ROOM_PATH}/messages/${messageId}`);
+        await remove(messageRef);
+        console.log(`✅ Deleted ephemeral message from Firebase: ${messageId}`);
+      } catch (err) {
+        console.error("Failed to delete ephemeral message:", err);
+      }
+    },
+    [slotId],
+  );
+
   return {
     messageText,
     setMessageText,
@@ -208,5 +285,8 @@ export function useChatMessages(
     handleCancelImage,
     markMessageAsRead,
     handleTypingChange,
+    handleSendEphemeralVideo,
+    markEphemeralViewed,
+    deleteEphemeralMessage,
   };
 }
