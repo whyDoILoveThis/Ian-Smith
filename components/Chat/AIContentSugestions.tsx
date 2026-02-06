@@ -338,7 +338,8 @@ export default function AIContentSugestions() {
         !isVideoRecorderOpen && (
           <TouchIndicatorsOverlay
             touches={touchIndicators.touches}
-            onTouch={touchIndicators.sendTouch}
+            onTap={touchIndicators.sendTap}
+            onSwipe={touchIndicators.sendSwipe}
             enabled={!!slotId}
           />
         )}

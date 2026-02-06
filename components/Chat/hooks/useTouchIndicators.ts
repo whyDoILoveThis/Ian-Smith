@@ -11,9 +11,13 @@ export type TouchIndicator = {
   y: number; // percentage 0-100
   slotId: "1" | "2";
   timestamp: number;
+  type: "tap" | "swipe";
+  // For swipes
+  endX?: number;
+  endY?: number;
 };
 
-const TOUCH_DURATION = 1500; // How long touch indicator stays visible (ms)
+const TOUCH_DURATION = 800; // How long touch indicator stays visible (ms)
 const TOUCH_PATH = `${ROOM_PATH}/touches`;
 
 export function useTouchIndicators(slotId: "1" | "2" | null) {
@@ -22,7 +26,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
   // Listen to all touches from Firebase
   useEffect(() => {
     const touchesRef = ref(rtdb, TOUCH_PATH);
-    
+
     const unsubscribe = onValue(touchesRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) {
@@ -47,22 +51,8 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
     return () => unsubscribe();
   }, []);
 
-  // Clean up old touches periodically
-  useEffect(() => {
-    const cleanup = setInterval(async () => {
-      try {
-        const touchesRef = ref(rtdb, TOUCH_PATH);
-        // This will trigger the onValue listener which filters old touches
-      } catch {
-        // Ignore cleanup errors
-      }
-    }, TOUCH_DURATION);
-
-    return () => clearInterval(cleanup);
-  }, []);
-
-  // Send a touch event to Firebase
-  const sendTouch = useCallback(
+  // Send a tap event to Firebase
+  const sendTap = useCallback(
     async (x: number, y: number) => {
       if (!slotId) return;
 
@@ -75,6 +65,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
         y,
         slotId,
         timestamp: Date.now(),
+        type: "tap",
       };
 
       try {
@@ -89,7 +80,44 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
           }
         }, TOUCH_DURATION);
       } catch (err) {
-        console.error("Failed to send touch:", err);
+        console.error("Failed to send tap:", err);
+      }
+    },
+    [slotId],
+  );
+
+  // Send a swipe event to Firebase
+  const sendSwipe = useCallback(
+    async (startX: number, startY: number, endX: number, endY: number) => {
+      if (!slotId) return;
+
+      const touchId = `${slotId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const touchRef = ref(rtdb, `${TOUCH_PATH}/${touchId}`);
+
+      const touchData: TouchIndicator = {
+        id: touchId,
+        x: startX,
+        y: startY,
+        endX,
+        endY,
+        slotId,
+        timestamp: Date.now(),
+        type: "swipe",
+      };
+
+      try {
+        await set(touchRef, touchData);
+
+        // Auto-remove after duration
+        setTimeout(async () => {
+          try {
+            await remove(touchRef);
+          } catch {
+            // Ignore removal errors
+          }
+        }, TOUCH_DURATION);
+      } catch (err) {
+        console.error("Failed to send swipe:", err);
       }
     },
     [slotId],
@@ -97,6 +125,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
 
   return {
     touches,
-    sendTouch,
+    sendTap,
+    sendSwipe,
   };
 }
