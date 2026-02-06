@@ -72,7 +72,7 @@ export function ChatHeader({
             />
           </button>
           <span className="text-sm font-semibold text-white">
-            {activeTab === "chat" ? "Chat" : "Room"}
+            {activeTab === "chat" ? "Chat v1.2" : "Room v1.4"}
           </span>
         </div>
 

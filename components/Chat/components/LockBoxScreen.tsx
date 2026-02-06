@@ -10,8 +10,8 @@ type LockBoxScreenProps = {
 
 export function LockBoxScreen({ onUnlock, onBack }: LockBoxScreenProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-950 via-neutral-900 to-black py-10 px-4">
-      <div className="mx-auto max-w-4xl">
+    <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-black overflow-hidden">
+      <div className="flex-1 flex flex-col justify-center items-center px-2 pb-8">
         <div className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold text-white">
             GPT-4o AI Passkey Generator
@@ -25,8 +25,7 @@ export function LockBoxScreen({ onUnlock, onBack }: LockBoxScreenProps) {
             Back to chat
           </button>
         </div>
-
-        <div className="mt-6">
+        <div className="w-full max-w-4xl flex justify-center">
           <LockBox onUnlock={onUnlock}>
             <div />
           </LockBox>
