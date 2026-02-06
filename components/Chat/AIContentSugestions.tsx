@@ -14,6 +14,7 @@ import {
   useAIChat,
   useVoiceCall,
   useTouchIndicators,
+  useDrawing,
 } from "./hooks";
 import {
   LockBoxScreen,
@@ -27,6 +28,7 @@ import {
   ActiveCallBanner,
   VideoRecorder,
   TouchIndicatorsOverlay,
+  DrawingOverlay,
 } from "./components";
 
 export default function AIContentSugestions() {
@@ -80,6 +82,9 @@ export default function AIContentSugestions() {
 
   // Touch Indicators
   const touchIndicators = useTouchIndicators(slotId);
+
+  // Drawing
+  const drawing = useDrawing(slotId);
 
   // Check if other person is online
   const otherPersonOnline = useMemo(() => {
@@ -262,6 +267,8 @@ export default function AIContentSugestions() {
           voiceCall.startCall();
           setIsCallExpanded(true);
         }}
+        selectedDrawingColor={drawing.selectedColor}
+        onSelectDrawingColor={drawing.setSelectedColor}
       />
 
       {/* Active Call Banner (when minimized) */}
@@ -335,12 +342,29 @@ export default function AIContentSugestions() {
       {showRealChat &&
         !showCallOverlay &&
         !session.isImageConfirmOpen &&
-        !isVideoRecorderOpen && (
+        !isVideoRecorderOpen &&
+        !drawing.isDrawingMode && (
           <TouchIndicatorsOverlay
             touches={touchIndicators.touches}
             onTap={touchIndicators.sendTap}
             onSwipe={touchIndicators.sendSwipe}
             enabled={!!slotId}
+          />
+        )}
+
+      {/* Drawing Overlay - always visible when there are strokes, interactive when drawing mode is on */}
+      {showRealChat &&
+        !showCallOverlay &&
+        !session.isImageConfirmOpen &&
+        !isVideoRecorderOpen && (
+          <DrawingOverlay
+            strokes={drawing.strokes}
+            isDrawingMode={drawing.isDrawingMode}
+            onStartStroke={drawing.startStroke}
+            onAddPoint={drawing.addPoint}
+            onEndStroke={drawing.endStroke}
+            strokeDuration={drawing.STROKE_DURATION}
+            fadeDuration={drawing.FADE_DURATION}
           />
         )}
     </div>

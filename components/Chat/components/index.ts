@@ -13,3 +13,4 @@ export { VideoRecorder } from "./VideoRecorder";
 export { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
 export { CloudPoofAnimation } from "./CloudPoofAnimation";
 export { TouchIndicatorsOverlay } from "./TouchIndicatorsOverlay";
+export { DrawingOverlay } from "./DrawingOverlay";
