@@ -39,6 +39,7 @@ export function useDrawing(slotId: "1" | "2" | null) {
   const [strokes, setStrokes] = useState<DrawingStroke[]>([]);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const currentStrokeId = useRef<string | null>(null);
+  const localStrokePoints = useRef<DrawingPoint[]>([]);
 
   // Listen to all strokes from Firebase
   useEffect(() => {
@@ -79,12 +80,14 @@ export function useDrawing(slotId: "1" | "2" | null) {
       if (!strokeId) return;
 
       currentStrokeId.current = strokeId;
+      localStrokePoints.current = [{ x, y }];
 
+      // Send initial stroke with one point
       const strokeData: Omit<DrawingStroke, "id"> = {
         points: [{ x, y }],
         color: selectedColor,
         slotId,
-        timestamp: Date.now(),
+        timestamp: 0, // Will be set on completion
         isComplete: false,
       };
 
@@ -100,27 +103,11 @@ export function useDrawing(slotId: "1" | "2" | null) {
 
   // Add point to current stroke
   const addPoint = useCallback(
-    async (x: number, y: number) => {
+    (x: number, y: number) => {
       if (!slotId || !selectedColor || !currentStrokeId.current) return;
-
-      const strokeRef = ref(rtdb, `${DRAWING_PATH}/${currentStrokeId.current}`);
-
-      // Get current stroke and add point
-      const currentStroke = strokes.find((s) => s.id === currentStrokeId.current);
-      if (!currentStroke) return;
-
-      const updatedPoints = [...currentStroke.points, { x, y }];
-
-      try {
-        await set(strokeRef, {
-          ...currentStroke,
-          points: updatedPoints,
-        });
-      } catch (err) {
-        console.error("Failed to add point:", err);
-      }
+      localStrokePoints.current.push({ x, y });
     },
-    [slotId, selectedColor, strokes],
+    [slotId, selectedColor],
   );
 
   // End current stroke
@@ -128,14 +115,17 @@ export function useDrawing(slotId: "1" | "2" | null) {
     if (!currentStrokeId.current) return;
 
     const strokeRef = ref(rtdb, `${DRAWING_PATH}/${currentStrokeId.current}`);
+    // Get the current stroke from Firebase
     const currentStroke = strokes.find((s) => s.id === currentStrokeId.current);
 
     if (currentStroke) {
       try {
+        // Send all buffered points and mark as complete
         await set(strokeRef, {
           ...currentStroke,
+          points: localStrokePoints.current,
           isComplete: true,
-          timestamp: Date.now(), // Reset timestamp when complete for fade timing
+          timestamp: Date.now(), // Set timestamp for fade timing
         });
 
         // Schedule removal
@@ -153,6 +143,7 @@ export function useDrawing(slotId: "1" | "2" | null) {
     }
 
     currentStrokeId.current = null;
+    localStrokePoints.current = [];
   }, [strokes]);
 
   // Check if drawing mode is active
