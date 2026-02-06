@@ -104,9 +104,9 @@ export function ChatHeader({
               <Pencil className="w-5 h-5" />
             </button>
 
-            {/* Color Picker Popup */}
+            {/* Color Picker Popup - fixed centered on screen */}
             {showColorPicker && (
-              <div className="absolute top-full right-0 mt-2 p-2 bg-black/90 backdrop-blur-sm rounded-xl border border-white/20 shadow-xl z-[200]">
+              <div className="fixed left-1/2 top-14 -translate-x-1/2 p-2 bg-black/90 backdrop-blur-sm rounded-xl border border-white/20 shadow-xl z-[200]">
                 <div className="flex items-center gap-1.5">
                   {DRAWING_COLORS.map((color) => (
                     <button
