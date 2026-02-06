@@ -91,19 +91,23 @@ export function DrawingOverlay({
     };
 
     // Touch events
+
     const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
       if (e.touches.length === 0) return;
       const touch = e.touches[0];
       handleStart(touch.clientX, touch.clientY);
     };
 
     const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
       if (e.touches.length === 0) return;
       const touch = e.touches[0];
       handleMove(touch.clientX, touch.clientY);
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e: TouchEvent) => {
+      e.preventDefault();
       handleEnd();
     };
 
