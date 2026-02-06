@@ -25,6 +25,11 @@ export function DrawingOverlay({
   const [, forceUpdate] = useState(0);
   const isDrawingRef = useRef(false);
   const overlayRef = useRef<HTMLDivElement>(null);
+  // Local in-progress stroke
+  const [localStroke, setLocalStroke] = useState<{
+    color: string;
+    points: { x: number; y: number }[];
+  } | null>(null);
 
   // Animation loop for smooth fading
   useEffect(() => {
@@ -65,6 +70,12 @@ export function DrawingOverlay({
   useEffect(() => {
     if (!isDrawingMode) return;
 
+    // Get color from the last stroke or fallback
+    const getCurrentColor = () => {
+      if (strokes.length > 0) return strokes[strokes.length - 1].color;
+      return "#fff";
+    };
+
     const getPosition = (clientX: number, clientY: number) => {
       const x = (clientX / window.innerWidth) * 100;
       const y = (clientY / window.innerHeight) * 100;
@@ -75,18 +86,24 @@ export function DrawingOverlay({
       isDrawingRef.current = true;
       const { x, y } = getPosition(clientX, clientY);
       onStartStroke(x, y);
+      // Start local stroke
+      setLocalStroke({ color: getCurrentColor(), points: [{ x, y }] });
     };
 
     const handleMove = (clientX: number, clientY: number) => {
       if (!isDrawingRef.current) return;
       const { x, y } = getPosition(clientX, clientY);
       onAddPoint(x, y);
+      setLocalStroke((prev) =>
+        prev ? { ...prev, points: [...prev.points, { x, y }] } : prev,
+      );
     };
 
     const handleEnd = () => {
       if (isDrawingRef.current) {
         isDrawingRef.current = false;
         onEndStroke();
+        setLocalStroke(null);
       }
     };
 
@@ -212,10 +229,10 @@ export function DrawingOverlay({
             </feMerge>
           </filter>
         </defs>
+        {/* Render finished strokes from Firebase */}
         {strokes.map((stroke) => {
           const opacity = getStrokeOpacity(stroke);
           if (opacity <= 0) return null;
-
           return (
             <path
               key={stroke.id}
@@ -233,6 +250,19 @@ export function DrawingOverlay({
             />
           );
         })}
+        {/* Render local in-progress stroke */}
+        {localStroke && localStroke.points.length > 1 && (
+          <path
+            d={pointsToPath(localStroke.points)}
+            stroke={localStroke.color}
+            strokeWidth="0.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+            opacity={1}
+            filter="url(#drawGlow)"
+          />
+        )}
       </svg>
     </div>
   );
