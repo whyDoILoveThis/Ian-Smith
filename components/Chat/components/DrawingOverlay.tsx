@@ -42,6 +42,25 @@ export function DrawingOverlay({
     };
   }, [strokes.length]);
 
+  // Lock scrolling when in drawing mode
+  useEffect(() => {
+    if (!isDrawingMode) return;
+
+    // Save current overflow style
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    // Disable scrolling
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      // Restore original styles
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [isDrawingMode]);
+
   // Handle touch/mouse events for drawing
   useEffect(() => {
     if (!isDrawingMode) return;
