@@ -5,6 +5,7 @@ import { MESSAGES_PER_PAGE } from "../constants";
 import type { Message, ThemeColors } from "../types";
 import { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
 import { CloudPoofAnimation } from "./CloudPoofAnimation";
+import { ReplyIcon } from "lucide-react";
 
 type ChatMessagesViewProps = {
   messages: Message[];
@@ -209,7 +210,9 @@ export function ChatMessagesView({
                   isMine ? "-left-7" : "-right-7"
                 }`}
               >
-                <span className="text-xs text-neutral-400">↩</span>
+                <span className={`text-xs text-neutral-400`}>
+                  <ReplyIcon size={14} />
+                </span>
               </button>
 
               {/* Reply preview if this is a reply */}

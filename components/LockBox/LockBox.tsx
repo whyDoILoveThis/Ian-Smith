@@ -405,15 +405,8 @@ export default function LockBox({ children, onUnlock }: LockBoxProps) {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 p-4">
+    <div className="flex items-center justify-center ">
       <div className="text-center">
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-          🔒 Locked
-        </h2>
-        <p className="text-neutral-400 mb-6 text-sm sm:text-base">
-          Choose any 4-number code, then unlock
-        </p>
-
         {/* Current combination display */}
         <div className="flex justify-center gap-2 mb-6">
           {rotations.map((rot, i) => (
@@ -531,19 +524,13 @@ export default function LockBox({ children, onUnlock }: LockBoxProps) {
           onClick={unlockWithCurrentCombo}
           className="mt-6 w-full max-w-[280px] rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-neutral-100"
         >
-          Unlock with this code
+          Unlock with this code 😁
         </button>
 
         <div className="mt-6 space-y-2">
           <p className="text-neutral-500 text-xs sm:text-sm">
             Drag any ring to rotate • Align numbers at the top arrow
           </p>
-          <div className="flex flex-wrap justify-center gap-6 text-[11px] sm:text-xs font-medium">
-            <span style={{ color: RING_CONFIGS[0].color.main }}>● Outer</span>
-            <span style={{ color: RING_CONFIGS[1].color.main }}>● Middle</span>
-            <span style={{ color: RING_CONFIGS[2].color.main }}>● Green</span>
-            <span style={{ color: RING_CONFIGS[3].color.main }}>● Inner</span>
-          </div>
         </div>
       </div>
     </div>

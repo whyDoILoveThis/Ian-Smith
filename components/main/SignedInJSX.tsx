@@ -23,9 +23,9 @@ export default function SignedInJSX({ children, adminUserId }: Props) {
           onClick={() => {
             setShowMainContent(!showMainContent);
           }}
-          className={`fixed left-2 top-24 btn btn-purple mt-4 zz-top-plus4`}
+          className={`fixed left-1 top-24 btn btn-purple mt-4 zz-top-plus4 -translate-x-[55px] hover:translate-x-0 transition-transform`}
         >
-          {!showMainContent ? "Main Content" : "CMS"}
+          {!showMainContent ? "Main" : "CMS"}
         </button>
         {showMainContent ? (
           <>{children}</>

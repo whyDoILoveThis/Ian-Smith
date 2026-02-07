@@ -28,15 +28,7 @@ export function AIChatDisguise({
         <div className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold text-white">
             Ian
-            <button
-              type="button"
-              onClick={onOpenLockBox}
-              className="hover:text-emerald-400 transition-colors"
-              title=""
-            >
-              &apos;
-            </button>
-            s AI Assistant
+            <span onClick={onOpenLockBox}>&apos;</span>s AI Assistant v0.9
           </h1>
           <p className="mt-2 text-neutral-400">
             Ask me anything about web development, my projects, or how I can

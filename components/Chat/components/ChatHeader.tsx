@@ -5,6 +5,8 @@ import { Pencil, X } from "lucide-react";
 import type { CallStatus, ChatTheme } from "../types";
 import { CallButton } from "./CallButton";
 import { DRAWING_COLORS } from "../hooks/useDrawing";
+import ColorFilterIcon from "@/components/sub/ColorFilterIcon";
+import PaintBucketIcon from "./PaintBucketIcon";
 
 type ChatHeaderProps = {
   activeTab: "chat" | "room";
@@ -32,6 +34,7 @@ export function ChatHeader({
   onSelectDrawingColor,
 }: ChatHeaderProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
 
   const handlePencilClick = () => {
     if (selectedDrawingColor) {
@@ -72,7 +75,7 @@ export function ChatHeader({
             />
           </button>
           <span className="text-sm font-semibold text-white">
-            {activeTab === "chat" ? "Chat v1.2" : "Room v1.4"}
+            {activeTab === "chat" ? "Chat v1.3" : "Room v1.4"}
           </span>
         </div>
 
@@ -135,24 +138,48 @@ export function ChatHeader({
           </div>
         </div>
 
-        {/* Right: Theme Switcher */}
-        <div className="flex gap-1">
-          {(["emerald", "blue", "purple", "rose"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => handleThemeChange(t)}
-              className={`h-4 w-4 rounded-full transition-transform ${
-                t === "emerald"
-                  ? "bg-emerald-400"
-                  : t === "blue"
-                    ? "bg-blue-500"
-                    : t === "purple"
-                      ? "bg-purple-500"
-                      : "bg-rose-500"
-              } ${chatTheme === t ? "ring-2 ring-white scale-110" : "opacity-50"}`}
-            />
-          ))}
+        {/* Right: Theme Switcher Dropdown */}
+        <div className="relative">
+          <button
+            type="button"
+            className={`h-7 w-7 rounded-full flex items-center justify-center transition-all border border-white/20
+              active:ring-2 ring-white/20`}
+            onClick={() => setShowThemePicker((v) => !v)}
+            title="Change theme color"
+          >
+            <PaintBucketIcon />
+          </button>
+          {showThemePicker && (
+            <div className="fixed right-4 top-14 p-2 bg-black/90 backdrop-blur-sm rounded-xl border border-white/20 shadow-xl z-[200]">
+              <div className="flex items-center gap-1.5">
+                {(["emerald", "blue", "purple", "rose"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      handleThemeChange(t);
+                      setShowThemePicker(false);
+                    }}
+                    className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${
+                      chatTheme === t
+                        ? "ring-2 ring-white ring-offset-1 ring-offset-black/90 scale-110"
+                        : ""
+                    }`}
+                    style={{
+                      backgroundColor:
+                        t === "emerald"
+                          ? "#34d399"
+                          : t === "blue"
+                            ? "#3b82f6"
+                            : t === "purple"
+                              ? "#a855f7"
+                              : "#f43f5e",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
