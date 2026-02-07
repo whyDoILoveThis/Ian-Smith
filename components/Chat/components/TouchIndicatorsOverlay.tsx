@@ -5,8 +5,8 @@ import type { TouchIndicator } from "../hooks/useTouchIndicators";
 
 // Slot colors - Orange for slot 1, Cyan for slot 2 (soft glows only)
 const SLOT_COLORS = {
-  "1": "rgba(249, 115, 22, 0.6)", // orange
-  "2": "rgba(6, 182, 212, 0.6)", // cyan
+  "1": "rgba(255, 61, 63, 0.6)", // coral red
+  "2": "rgba(157, 61, 255, 0.6)", // purple
 };
 
 // Minimum swipe distance (in percentage of screen)
@@ -135,11 +135,11 @@ export function TouchIndicatorsOverlay({
           .map((touch) => {
             const color = SLOT_COLORS[touch.slotId];
             const age = Date.now() - touch.timestamp;
-            const maxAge = 400;
+            const maxAge = 700;
             const progress = Math.min(age / maxAge, 1);
             // Quick fade in then out
             const opacity =
-              progress < 0.15 ? progress / 0.15 : 1 - (progress - 0.15) / 0.85;
+              progress < 0.15 ? progress / 0.15 : 1 - (progress - 0.15) / 0.95;
 
             if (opacity <= 0) return null;
 
@@ -152,7 +152,7 @@ export function TouchIndicatorsOverlay({
                   x2={`${touch.endX}%`}
                   y2={`${touch.endY}%`}
                   stroke={color}
-                  strokeWidth="6"
+                  strokeWidth="18"
                   strokeLinecap="round"
                   filter="url(#swipeGlow)"
                 />
@@ -160,7 +160,7 @@ export function TouchIndicatorsOverlay({
                 <circle
                   cx={`${touch.endX}%`}
                   cy={`${touch.endY}%`}
-                  r="10"
+                  r="24"
                   fill={color}
                   filter="url(#swipeGlow)"
                 />
@@ -200,11 +200,11 @@ export function TouchIndicatorsOverlay({
               <div
                 className="rounded-full"
                 style={{
-                  width: 60,
-                  height: 60,
+                  width: 120,
+                  height: 120,
                   opacity,
                   background: `radial-gradient(circle, ${color} 0%, transparent 60%)`,
-                  filter: "blur(10px)",
+                  filter: "blur(7px)",
                 }}
               />
             </div>
