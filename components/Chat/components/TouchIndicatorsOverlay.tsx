@@ -251,13 +251,12 @@ export function TouchIndicatorsOverlay({
 
   return (
     <div className="fixed inset-0 z-[150] pointer-events-none overflow-hidden">
-      {/* Beautiful swipe trails with gradient effect */}
+      {/* Premium swipe trails */}
       <svg
         className="absolute inset-0 w-full h-full"
         style={{ willChange: "transform" }}
       >
         <defs>
-          {/* Define gradients and filters for each touch */}
           {localTouches
             .filter(
               (t) =>
@@ -269,8 +268,9 @@ export function TouchIndicatorsOverlay({
               const rgb = getColor(touch.slotId);
               return (
                 <React.Fragment key={`defs-${touch.id}`}>
+                  {/* Gradient for thick swipe trail */}
                   <linearGradient
-                    id={`swipeGradient-${touch.id}`}
+                    id={`trail-${touch.id}`}
                     x1={`${touch.x}%`}
                     y1={`${touch.y}%`}
                     x2={`${touch.endX}%`}
@@ -279,47 +279,43 @@ export function TouchIndicatorsOverlay({
                   >
                     <stop
                       offset="0%"
-                      stopColor={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`}
+                      stopColor={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`}
                     />
                     <stop
-                      offset="50%"
-                      stopColor={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`}
+                      offset="30%"
+                      stopColor={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`}
                     />
                     <stop
                       offset="100%"
-                      stopColor={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`}
+                      stopColor={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.9)`}
                     />
                   </linearGradient>
+                  {/* Heavy blur for thick glow */}
                   <filter
-                    id={`swipeGlow-${touch.id}`}
+                    id={`blur-${touch.id}`}
                     x="-100%"
                     y="-100%"
                     width="300%"
                     height="300%"
                   >
-                    <feGaussianBlur stdDeviation="8" result="blur1" />
-                    <feGaussianBlur stdDeviation="4" result="blur2" />
-                    <feMerge>
-                      <feMergeNode in="blur1" />
-                      <feMergeNode in="blur2" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
+                    <feGaussianBlur stdDeviation="12" />
                   </filter>
+                  {/* Medium blur */}
                   <filter
-                    id={`endGlow-${touch.id}`}
-                    x="-200%"
-                    y="-200%"
-                    width="500%"
-                    height="500%"
+                    id={`blur2-${touch.id}`}
+                    x="-50%"
+                    y="-50%"
+                    width="200%"
+                    height="200%"
                   >
-                    <feGaussianBlur stdDeviation="12" result="blur" />
+                    <feGaussianBlur stdDeviation="6" />
                   </filter>
                 </React.Fragment>
               );
             })}
         </defs>
 
-        {/* Render swipe lines */}
+        {/* Render swipe trails */}
         {localTouches
           .filter(
             (t) =>
@@ -330,93 +326,101 @@ export function TouchIndicatorsOverlay({
           .map((touch) => {
             const rgb = getColor(touch.slotId);
             const age = currentTime - touch.timestamp;
-            const maxAge = 600;
+            const maxAge = 1000;
             const progress = Math.min(age / maxAge, 1);
 
-            // Smooth ease-out fade
-            const opacity = Math.pow(1 - progress, 1.5);
+            // Smooth cubic ease-out
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const opacity = 1 - eased;
 
-            if (opacity <= 0.01) return null;
-
-            // Calculate line length for animated dash effect
-            const dx = ((touch.endX! - touch.x) * window.innerWidth) / 100;
-            const dy = ((touch.endY! - touch.y) * window.innerHeight) / 100;
-            const length = Math.sqrt(dx * dx + dy * dy);
+            if (opacity <= 0.02) return null;
 
             return (
-              <g key={touch.id} style={{ opacity, willChange: "opacity" }}>
-                {/* Outer glow */}
+              <g key={touch.id} style={{ opacity }}>
+                {/* Outer heavy blur glow */}
                 <line
                   x1={`${touch.x}%`}
                   y1={`${touch.y}%`}
                   x2={`${touch.endX}%`}
                   y2={`${touch.endY}%`}
-                  stroke={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`}
-                  strokeWidth="24"
+                  stroke={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`}
+                  strokeWidth="40"
                   strokeLinecap="round"
-                  filter={`url(#swipeGlow-${touch.id})`}
+                  filter={`url(#blur-${touch.id})`}
                 />
-                {/* Main line with gradient */}
+                {/* Mid glow layer */}
                 <line
                   x1={`${touch.x}%`}
                   y1={`${touch.y}%`}
                   x2={`${touch.endX}%`}
                   y2={`${touch.endY}%`}
-                  stroke={`url(#swipeGradient-${touch.id})`}
-                  strokeWidth="6"
+                  stroke={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`}
+                  strokeWidth="20"
                   strokeLinecap="round"
-                  strokeDasharray={`${length * (1 - progress * 0.3)} ${length}`}
+                  filter={`url(#blur2-${touch.id})`}
                 />
-                {/* Inner bright core */}
+                {/* Core gradient line */}
                 <line
                   x1={`${touch.x}%`}
                   y1={`${touch.y}%`}
                   x2={`${touch.endX}%`}
                   y2={`${touch.endY}%`}
-                  stroke={`rgba(255, 255, 255, ${0.6 * opacity})`}
+                  stroke={`url(#trail-${touch.id})`}
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                />
+                {/* Bright white center */}
+                <line
+                  x1={`${touch.x}%`}
+                  y1={`${touch.y}%`}
+                  x2={`${touch.endX}%`}
+                  y2={`${touch.endY}%`}
+                  stroke={`rgba(255, 255, 255, ${0.7 * opacity})`}
                   strokeWidth="2"
                   strokeLinecap="round"
                 />
-                {/* End point glow burst */}
+                {/* Endpoint glow */}
                 <circle
                   cx={`${touch.endX}%`}
                   cy={`${touch.endY}%`}
-                  r={16 + progress * 8}
-                  fill={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${0.5 * opacity})`}
-                  filter={`url(#endGlow-${touch.id})`}
+                  r={20}
+                  fill={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${0.4 * opacity})`}
+                  filter={`url(#blur2-${touch.id})`}
                 />
-                {/* End point bright center */}
+                {/* Endpoint bright center */}
                 <circle
                   cx={`${touch.endX}%`}
                   cy={`${touch.endY}%`}
                   r={4}
-                  fill={`rgba(255, 255, 255, ${0.8 * opacity})`}
+                  fill={`rgba(255, 255, 255, ${0.95 * opacity})`}
                 />
               </g>
             );
           })}
       </svg>
 
-      {/* Render tap indicators */}
+      {/* Premium tap indicators */}
       {localTouches
         .filter((t) => t.type === "tap")
         .map((touch) => {
           const rgb = getColor(touch.slotId);
           const age = currentTime - touch.timestamp;
-          const maxAge = 450;
+          const maxAge = 900;
           const progress = Math.min(age / maxAge, 1);
 
-          // Smooth bell curve fade with quick peak
-          const opacity = Math.sin(progress * Math.PI) * (1 - progress * 0.3);
+          // Smooth ease-out
+          const eased = 1 - Math.pow(1 - progress, 2);
 
-          // Expand animation
-          const scale = 0.5 + progress * 0.8;
+          // Opacity peaks early then fades
+          const opacity =
+            progress < 0.08
+              ? progress / 0.08
+              : Math.pow(1 - (progress - 0.08) / 0.92, 1.5);
 
-          // Ring expansion
-          const ringScale = 0.3 + progress * 1.2;
-          const ringOpacity = (1 - progress) * 0.6;
+          // Orb scale animation - starts small, expands slightly
+          const orbScale = 0.6 + eased * 0.5;
 
-          if (opacity <= 0.01) return null;
+          if (opacity <= 0.02) return null;
 
           return (
             <div
@@ -426,84 +430,91 @@ export function TouchIndicatorsOverlay({
                 left: `${touch.x}%`,
                 top: `${touch.y}%`,
                 transform: "translate(-50%, -50%)",
-                willChange: "transform, opacity",
               }}
             >
-              {/* Mouse cursor icon */}
+              {/* Mouse cursor for desktop */}
               {touch.inputType === "mouse" && (
                 <svg
-                  width="28"
-                  height="28"
+                  width="24"
+                  height="24"
                   viewBox="0 0 24 24"
                   fill="none"
                   className="absolute"
                   style={{
-                    opacity,
-                    filter: `drop-shadow(0 0 8px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8))`,
+                    opacity: opacity * 0.9,
                     left: "50%",
                     top: "50%",
-                    marginLeft: "-6px",
-                    marginTop: "-2px",
+                    marginLeft: "-4px",
+                    marginTop: "0px",
                     zIndex: 10,
+                    filter: `drop-shadow(0 2px 4px rgba(0,0,0,0.3))`,
                   }}
                 >
                   <path
                     d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L5.85 2.36a.5.5 0 0 0-.35.85z"
                     fill={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`}
-                    stroke="white"
-                    strokeWidth="1.5"
+                    stroke="rgba(255,255,255,0.9)"
+                    strokeWidth="1.2"
                     strokeLinejoin="round"
                   />
                 </svg>
               )}
 
-              {/* Expanding ring */}
+              {/* Outer soft glow */}
               <div
                 className="absolute rounded-full"
                 style={{
-                  width: 80,
-                  height: 80,
+                  width: 90,
+                  height: 90,
                   left: "50%",
                   top: "50%",
-                  transform: `translate(-50%, -50%) scale(${ringScale})`,
-                  border: `2px solid rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${ringOpacity})`,
-                  boxShadow: `0 0 20px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${ringOpacity * 0.5})`,
+                  transform: `translate(-50%, -50%) scale(${orbScale})`,
+                  opacity: opacity * 0.5,
+                  background: `radial-gradient(circle, 
+                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6) 0%, 
+                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2) 40%,
+                    transparent 70%
+                  )`,
+                  filter: "blur(12px)",
                 }}
               />
 
-              {/* Main glow orb */}
+              {/* Main glowing orb */}
               <div
-                className="rounded-full"
+                className="absolute rounded-full"
                 style={{
-                  width: 100,
-                  height: 100,
-                  transform: `scale(${scale})`,
+                  width: 60,
+                  height: 60,
+                  left: "50%",
+                  top: "50%",
+                  transform: `translate(-50%, -50%) scale(${orbScale})`,
                   opacity,
                   background: `radial-gradient(circle, 
-                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8) 0%, 
-                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4) 30%,
-                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1) 60%,
+                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.9) 0%, 
+                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5) 35%,
+                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15) 60%,
                     transparent 80%
                   )`,
                   filter: "blur(4px)",
                 }}
               />
 
-              {/* Bright center dot */}
+              {/* Bright inner core */}
               <div
                 className="absolute rounded-full"
                 style={{
-                  width: 12,
-                  height: 12,
+                  width: 20,
+                  height: 20,
                   left: "50%",
                   top: "50%",
                   transform: "translate(-50%, -50%)",
                   opacity: opacity * 0.9,
                   background: `radial-gradient(circle, 
-                    rgba(255, 255, 255, 0.9) 0%, 
-                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8) 100%
+                    rgba(255, 255, 255, 0.95) 0%, 
+                    rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8) 50%,
+                    transparent 100%
                   )`,
-                  boxShadow: `0 0 15px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`,
+                  filter: "blur(2px)",
                 }}
               />
             </div>
@@ -522,11 +533,11 @@ export function TouchIndicatorsOverlay({
         .map((touch) => {
           const rgb = getColor(touch.slotId);
           const age = currentTime - touch.timestamp;
-          const maxAge = 600;
+          const maxAge = 1000;
           const progress = Math.min(age / maxAge, 1);
-          const opacity = Math.pow(1 - progress, 1.5);
+          const opacity = 1 - Math.pow(progress, 0.8);
 
-          if (opacity <= 0.01) return null;
+          if (opacity <= 0.02) return null;
 
           return (
             <div
@@ -537,23 +548,20 @@ export function TouchIndicatorsOverlay({
                 top: `${touch.endY}%`,
                 transform: "translate(-50%, -50%)",
                 opacity,
-                willChange: "opacity",
               }}
             >
               <svg
-                width="28"
-                height="28"
+                width="24"
+                height="24"
                 viewBox="0 0 24 24"
                 fill="none"
-                style={{
-                  filter: `drop-shadow(0 0 8px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8))`,
-                }}
+                style={{ filter: `drop-shadow(0 2px 4px rgba(0,0,0,0.3))` }}
               >
                 <path
                   d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L5.85 2.36a.5.5 0 0 0-.35.85z"
                   fill={`rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`}
-                  stroke="white"
-                  strokeWidth="1.5"
+                  stroke="rgba(255,255,255,0.9)"
+                  strokeWidth="1.2"
                   strokeLinejoin="round"
                 />
               </svg>

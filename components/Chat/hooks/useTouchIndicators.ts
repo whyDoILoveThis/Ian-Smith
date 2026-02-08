@@ -18,9 +18,9 @@ export type TouchIndicator = {
   endY?: number;
 };
 
-const TOUCH_DURATION = 650; // How long touch indicator stays visible (ms)
+const TOUCH_DURATION = 1400; // How long touch indicator stays visible (ms)
 const TOUCH_PATH = `${ROOM_PATH}/touches`;
-const THROTTLE_MS = 80; // Minimum time between touch events
+const THROTTLE_MS = 50; // Minimum time between touch events
 
 export function useTouchIndicators(slotId: "1" | "2" | null) {
   const [touches, setTouches] = useState<TouchIndicator[]>([]);

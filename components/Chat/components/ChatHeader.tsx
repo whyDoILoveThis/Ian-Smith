@@ -112,7 +112,15 @@ export function ChatHeader({
             />
           </button>
           <span className="text-sm font-semibold text-white flex items-center gap-1.5">
-            {activeTab === "chat" ? "Chat v1.4" : "Room v1.5"}
+            {activeTab === "chat" ? (
+              <span>
+                Chat <span className="text-[8px]">v1.4</span>
+              </span>
+            ) : (
+              <span>
+                Room <span className="text-[8px]">v1.5</span>
+              </span>
+            )}
             {otherPersonOnline && (
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
