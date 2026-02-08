@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { ref, onValue, set, remove } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
-import { ROOM_PATH } from "../constants";
 
 export type TouchIndicator = {
   id: string;
@@ -19,10 +18,10 @@ export type TouchIndicator = {
 };
 
 const TOUCH_DURATION = 1400; // How long touch indicator stays visible (ms)
-const TOUCH_PATH = `${ROOM_PATH}/touches`;
 const THROTTLE_MS = 50; // Minimum time between touch events
 
-export function useTouchIndicators(slotId: "1" | "2" | null) {
+export function useTouchIndicators(slotId: "1" | "2" | null, roomPath: string) {
+  const TOUCH_PATH = `${roomPath}/touches`;
   const [touches, setTouches] = useState<TouchIndicator[]>([]);
   const lastSendTimeRef = useRef(0);
   const pendingRemovalsRef = useRef<Set<string>>(new Set());
@@ -59,7 +58,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [TOUCH_PATH]);
 
   // Send a tap event to Firebase with throttling
   const sendTap = useCallback(
@@ -97,7 +96,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
         remove(touchRef).catch(() => {});
       }, TOUCH_DURATION);
     },
-    [slotId],
+    [slotId, TOUCH_PATH],
   );
 
   // Send a swipe event to Firebase with throttling
@@ -138,7 +137,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
         remove(touchRef).catch(() => {});
       }, TOUCH_DURATION);
     },
-    [slotId],
+    [slotId, TOUCH_PATH],
   );
 
   return {

@@ -11,12 +11,13 @@ import {
 } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { appwrImgDelete } from "@/appwrite/appwrStorage";
-import { ROOM_PATH, STORAGE_KEY } from "../constants";
+import { roomStorageKey } from "../constants";
 import type { Slots, Message } from "../types";
 
 export function useChatSession(
   isUnlocked: boolean,
   slots: Slots,
+  roomPath: string,
 ) {
   const [screenName, setScreenName] = useState("");
   const [slotId, setSlotId] = useState<"1" | "2" | null>(null);
@@ -34,13 +35,20 @@ export function useChatSession(
 
   const restoreAttemptedRef = useRef(false);
 
+  const storageKey = roomStorageKey(roomPath);
+
   const databaseUrl = (
     rtdb as unknown as { app?: { options?: { databaseURL?: string } } }
   )?.app?.options?.databaseURL;
 
   // Load session from localStorage on mount
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    restoreAttemptedRef.current = false;
+    setSlotId(null);
+    setRestoreSession(null);
+    setError(null);
+
+    const raw = window.localStorage.getItem(storageKey);
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as { slotId: "1" | "2"; name: string };
@@ -49,10 +57,10 @@ export function useChatSession(
           setRestoreSession(parsed);
         }
       } catch {
-        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(storageKey);
       }
     }
-  }, []);
+  }, [storageKey]);
 
   const availability = useMemo(() => {
     const isSlot1Taken = !!slots["1"]?.name;
@@ -66,7 +74,7 @@ export function useChatSession(
 
   const claimSlot = useCallback(
     async (desiredSlot: "1" | "2", name: string) => {
-      const slotRef = ref(rtdb, `${ROOM_PATH}/slots/${desiredSlot}`);
+      const slotRef = ref(rtdb, `${roomPath}/slots/${desiredSlot}`);
       const result = await runTransaction(slotRef, (current) => {
         if (current) return current;
         return {
@@ -76,7 +84,7 @@ export function useChatSession(
       });
       return result.committed;
     },
-    [],
+    [roomPath],
   );
 
   const formatJoinError = useCallback(
@@ -120,22 +128,22 @@ export function useChatSession(
             setSlotId(desiredSlot);
           } else {
             setRestoreSession(null);
-            window.localStorage.removeItem(STORAGE_KEY);
+            window.localStorage.removeItem(storageKey);
           }
         })
         .catch((err) => {
           setError(formatJoinError(err));
           setRestoreSession(null);
-          window.localStorage.removeItem(STORAGE_KEY);
+          window.localStorage.removeItem(storageKey);
         })
         .finally(() => setIsJoining(false));
       return;
     }
 
     setRestoreSession(null);
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(storageKey);
     restoreAttemptedRef.current = true;
-  }, [claimSlot, formatJoinError, isUnlocked, restoreSession, slotId, slots]);
+  }, [claimSlot, formatJoinError, isUnlocked, restoreSession, slotId, slots, storageKey, roomPath]);
 
   const handleJoin = useCallback(async () => {
     if (!screenName.trim()) {
@@ -196,13 +204,13 @@ export function useChatSession(
   useEffect(() => {
     if (!slotId) return;
     window.localStorage.setItem(
-      STORAGE_KEY,
+      storageKey,
       JSON.stringify({ slotId, name: screenName.trim() }),
     );
-  }, [screenName, slotId]);
+  }, [screenName, slotId, storageKey]);
 
   const clearAllMessages = useCallback(async () => {
-    const messageSnapshotRef = ref(rtdb, `${ROOM_PATH}/messages`);
+    const messageSnapshotRef = ref(rtdb, `${roomPath}/messages`);
     return new Promise<Message[]>((resolve) => {
       onValue(
         messageSnapshotRef,
@@ -217,7 +225,7 @@ export function useChatSession(
         { onlyOnce: true },
       );
     });
-  }, []);
+  }, [roomPath]);
 
   const handleLeave = useCallback(async () => {
     if (!slotId || isLeaving) return;
@@ -235,9 +243,9 @@ export function useChatSession(
         ),
       );
 
-      await remove(ref(rtdb, `${ROOM_PATH}/messages`));
-      await remove(ref(rtdb, `${ROOM_PATH}/slots/${slotId}`));
-      await set(ref(rtdb, `${ROOM_PATH}/typing/${slotId}`), false);
+      await remove(ref(rtdb, `${roomPath}/messages`));
+      await remove(ref(rtdb, `${roomPath}/slots/${slotId}`));
+      await set(ref(rtdb, `${roomPath}/typing/${slotId}`), false);
     } catch {
       setError("Unable to leave cleanly. Try again.");
     } finally {
@@ -250,21 +258,21 @@ export function useChatSession(
       setPendingImageFile(null);
       setPendingImageUrl(null);
       setIsImageConfirmOpen(false);
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(storageKey);
     }
-  }, [clearAllMessages, isLeaving, pendingImageUrl, slotId]);
+  }, [clearAllMessages, isLeaving, pendingImageUrl, slotId, storageKey, roomPath]);
 
   // Save session on unmount
   useEffect(() => {
     return () => {
       if (slotId) {
         window.localStorage.setItem(
-          STORAGE_KEY,
+          storageKey,
           JSON.stringify({ slotId, name: screenName.trim() }),
         );
       }
     };
-  }, [screenName, slotId]);
+  }, [screenName, slotId, storageKey]);
 
   return {
     screenName,

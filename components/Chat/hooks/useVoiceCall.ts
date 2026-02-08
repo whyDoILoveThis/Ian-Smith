@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onValue, push, ref, remove, set, onChildAdded } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
-import { ROOM_PATH } from "../constants";
 import type { CallStatus, CallSignal } from "../types";
 
 // Free STUN servers - TURN would need a paid service for production
@@ -15,7 +14,7 @@ const ICE_SERVERS: RTCConfiguration = {
   ],
 };
 
-export function useVoiceCall(slotId: "1" | "2" | null) {
+export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
   const [callStatus, setCallStatus] = useState<CallStatus>("idle");
   const [callerId, setCallerId] = useState<"1" | "2" | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -66,7 +65,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
 
     pc.onicecandidate = (event) => {
       if (event.candidate && slotId) {
-        const signalRef = ref(rtdb, `${ROOM_PATH}/callSignals`);
+        const signalRef = ref(rtdb, `${roomPath}/callSignals`);
         push(signalRef, {
           from: slotId,
           to: otherSlotId,
@@ -125,7 +124,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
 
     peerConnectionRef.current = pc;
     return pc;
-  }, [slotId, otherSlotId, cleanup]);
+  }, [slotId, otherSlotId, cleanup, roomPath]);
 
   // Start an outgoing call
   const startCall = useCallback(async () => {
@@ -146,7 +145,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const signalRef = ref(rtdb, `${ROOM_PATH}/callSignals`);
+      const signalRef = ref(rtdb, `${roomPath}/callSignals`);
       await push(signalRef, {
         from: slotId,
         to: otherSlotId,
@@ -156,7 +155,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
       } as CallSignal);
 
       // Set call state in Firebase
-      await set(ref(rtdb, `${ROOM_PATH}/callState`), {
+      await set(ref(rtdb, `${roomPath}/callState`), {
         status: "calling",
         callerId: slotId,
         startedAt: { ".sv": "timestamp" },
@@ -167,7 +166,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
       setCallStatus("idle");
       setCallerId(null);
     }
-  }, [slotId, callStatus, otherSlotId, createPeerConnection, cleanup]);
+  }, [slotId, callStatus, otherSlotId, createPeerConnection, cleanup, roomPath]);
 
   // Answer an incoming call
   const answerCall = useCallback(async () => {
@@ -187,7 +186,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      const signalRef = ref(rtdb, `${ROOM_PATH}/callSignals`);
+      const signalRef = ref(rtdb, `${roomPath}/callSignals`);
       await push(signalRef, {
         from: slotId,
         to: otherSlotId,
@@ -196,21 +195,21 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
         timestamp: { ".sv": "timestamp" },
       } as CallSignal);
 
-      await set(ref(rtdb, `${ROOM_PATH}/callState/status`), "connected");
+      await set(ref(rtdb, `${roomPath}/callState/status`), "connected");
     } catch (err) {
       console.error("Failed to answer call:", err);
       cleanup();
       setCallStatus("idle");
       setCallerId(null);
     }
-  }, [slotId, callStatus, otherSlotId, createPeerConnection, cleanup]);
+  }, [slotId, callStatus, otherSlotId, createPeerConnection, cleanup, roomPath]);
 
   // End/decline call
   const endCall = useCallback(async () => {
     if (!slotId) return;
 
     try {
-      const signalRef = ref(rtdb, `${ROOM_PATH}/callSignals`);
+      const signalRef = ref(rtdb, `${roomPath}/callSignals`);
       await push(signalRef, {
         from: slotId,
         to: otherSlotId,
@@ -218,8 +217,8 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
         timestamp: { ".sv": "timestamp" },
       } as CallSignal);
 
-      await remove(ref(rtdb, `${ROOM_PATH}/callState`));
-      await remove(ref(rtdb, `${ROOM_PATH}/callSignals`));
+      await remove(ref(rtdb, `${roomPath}/callState`));
+      await remove(ref(rtdb, `${roomPath}/callSignals`));
     } catch {
       // Ignore cleanup errors
     }
@@ -227,7 +226,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
     cleanup();
     setCallStatus("idle");
     setCallerId(null);
-  }, [slotId, otherSlotId, cleanup]);
+  }, [slotId, otherSlotId, cleanup, roomPath]);
 
   // Toggle mute
   const toggleMute = useCallback(() => {
@@ -244,7 +243,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
   useEffect(() => {
     if (!slotId) return;
 
-    const callStateRef = ref(rtdb, `${ROOM_PATH}/callState`);
+    const callStateRef = ref(rtdb, `${roomPath}/callState`);
     const unsubscribe = onValue(callStateRef, (snapshot) => {
       const state = snapshot.val();
       
@@ -266,13 +265,13 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
     });
 
     return () => unsubscribe();
-  }, [slotId, callStatus, cleanup]);
+  }, [slotId, callStatus, cleanup, roomPath]);
 
   // Listen for signaling messages
   useEffect(() => {
     if (!slotId) return;
 
-    const signalsRef = ref(rtdb, `${ROOM_PATH}/callSignals`);
+    const signalsRef = ref(rtdb, `${roomPath}/callSignals`);
     const unsubscribe = onChildAdded(signalsRef, async (snapshot) => {
       const signal = snapshot.val() as CallSignal;
       
@@ -317,7 +316,7 @@ export function useVoiceCall(slotId: "1" | "2" | null) {
     });
 
     return () => unsubscribe();
-  }, [slotId, createPeerConnection, cleanup]);
+  }, [slotId, createPeerConnection, cleanup, roomPath]);
 
   // Create audio element for remote stream
   useEffect(() => {

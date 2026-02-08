@@ -4,7 +4,6 @@ import { useCallback, useRef, useState } from "react";
 import { push, ref, set, update, remove } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { appwrImgUp, appwrImgDelete } from "@/appwrite/appwrStorage";
-import { ROOM_PATH } from "../constants";
 import { encryptMessage } from "../crypto";
 import type { Message } from "../types";
 
@@ -13,6 +12,7 @@ export function useChatMessages(
   screenName: string,
   encryptionKey: CryptoKey | null,
   messages: Message[],
+  roomPath: string,
 ) {
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -26,12 +26,12 @@ export function useChatMessages(
     async (isTyping: boolean) => {
       if (!slotId) return;
       try {
-        await set(ref(rtdb, `${ROOM_PATH}/typing/${slotId}`), isTyping);
+        await set(ref(rtdb, `${roomPath}/typing/${slotId}`), isTyping);
       } catch {
         // ignore typing errors
       }
     },
-    [slotId],
+    [slotId, roomPath],
   );
 
   const handleSendMessage = useCallback(async () => {
@@ -62,7 +62,7 @@ export function useChatMessages(
         msgData.replyToText = replyingTo.decryptedText?.slice(0, 100) || "";
       }
 
-      const msgRef = ref(rtdb, `${ROOM_PATH}/messages`);
+      const msgRef = ref(rtdb, `${roomPath}/messages`);
       await push(msgRef, msgData);
       setMessageText("");
       setReplyingTo(null);
@@ -72,7 +72,7 @@ export function useChatMessages(
     } finally {
       setIsSending(false);
     }
-  }, [encryptionKey, messageText, replyingTo, screenName, setTypingState, slotId]);
+  }, [encryptionKey, messageText, replyingTo, screenName, setTypingState, slotId, roomPath]);
 
   const handleImageUpload = useCallback(
     async (
@@ -115,7 +115,7 @@ export function useChatMessages(
       try {
         const upload = await appwrImgUp(pendingImageFile);
         const isVideo = pendingImageFile.type.startsWith("video/");
-        const msgRef = ref(rtdb, `${ROOM_PATH}/messages`);
+        const msgRef = ref(rtdb, `${roomPath}/messages`);
         
         const msgData: Record<string, unknown> = {
           slotId,
@@ -145,7 +145,7 @@ export function useChatMessages(
       setPendingImageUrl(null);
       setIsImageConfirmOpen(false);
     },
-    [screenName, slotId],
+    [screenName, slotId, roomPath],
   );
 
   const handleCancelImage = useCallback(
@@ -173,12 +173,12 @@ export function useChatMessages(
         markedAsReadRef.current.add(msg.id);
         const readRef = ref(
           rtdb,
-          `${ROOM_PATH}/messages/${msg.id}/readBy/${slotId}`,
+          `${roomPath}/messages/${msg.id}/readBy/${slotId}`,
         );
         set(readRef, true).catch(() => {});
       }
     },
-    [slotId],
+    [slotId, roomPath],
   );
 
   // Mark that I've seen my read receipt (so they know I saw that they saw it)
@@ -195,12 +195,12 @@ export function useChatMessages(
         markedReceiptAsSeenRef.current.add(msg.id);
         const seenRef = ref(
           rtdb,
-          `${ROOM_PATH}/messages/${msg.id}/seenReceiptBy/${slotId}`,
+          `${roomPath}/messages/${msg.id}/seenReceiptBy/${slotId}`,
         );
         set(seenRef, true).catch(() => {});
       }
     },
-    [slotId],
+    [slotId, roomPath],
   );
 
   const handleTypingChange = useCallback(
@@ -232,7 +232,7 @@ export function useChatMessages(
         });
 
         const upload = await appwrImgUp(videoFile);
-        const msgRef = ref(rtdb, `${ROOM_PATH}/messages`);
+        const msgRef = ref(rtdb, `${roomPath}/messages`);
 
         const msgData: Record<string, unknown> = {
           slotId,
@@ -250,7 +250,7 @@ export function useChatMessages(
         setIsSending(false);
       }
     },
-    [screenName, slotId],
+    [screenName, slotId, roomPath],
   );
 
   // Mark ephemeral video as viewed by current user
@@ -260,14 +260,14 @@ export function useChatMessages(
       try {
         const viewedRef = ref(
           rtdb,
-          `${ROOM_PATH}/messages/${messageId}/viewedBy/${slotId}`,
+          `${roomPath}/messages/${messageId}/viewedBy/${slotId}`,
         );
         await set(viewedRef, true);
       } catch {
         // Ignore errors
       }
     },
-    [slotId],
+    [slotId, roomPath],
   );
 
   // Delete ephemeral video completely from Appwrite storage and Firebase
@@ -286,14 +286,14 @@ export function useChatMessages(
         }
 
         // Delete message from Firebase
-        const messageRef = ref(rtdb, `${ROOM_PATH}/messages/${messageId}`);
+        const messageRef = ref(rtdb, `${roomPath}/messages/${messageId}`);
         await remove(messageRef);
         console.log(`✅ Deleted ephemeral message from Firebase: ${messageId}`);
       } catch (err) {
         console.error("Failed to delete ephemeral message:", err);
       }
     },
-    [slotId],
+    [slotId, roomPath],
   );
 
   return {

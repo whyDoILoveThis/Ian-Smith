@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { ref, onValue, set, remove, push } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
-import { ROOM_PATH } from "../constants";
 
 // Massive rainbow palette grid - organized by hue with light to dark shades
 export const DRAWING_COLORS = [
@@ -50,9 +49,9 @@ export type DrawingStroke = {
 
 const STROKE_DURATION = 4000; // How long strokes stay visible before fading (ms)
 const FADE_DURATION = 1500; // How long the fade takes (ms)
-const DRAWING_PATH = `${ROOM_PATH}/drawing`;
 
-export function useDrawing(slotId: "1" | "2" | null) {
+export function useDrawing(slotId: "1" | "2" | null, roomPath: string) {
+  const DRAWING_PATH = `${roomPath}/drawing`;
   const [strokes, setStrokes] = useState<DrawingStroke[]>([]);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const currentStrokeId = useRef<string | null>(null);
@@ -86,7 +85,7 @@ export function useDrawing(slotId: "1" | "2" | null) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [DRAWING_PATH]);
 
   // Start a new stroke
   const startStroke = useCallback(
@@ -117,7 +116,7 @@ export function useDrawing(slotId: "1" | "2" | null) {
         localPoints.current = null;
       }
     },
-    [slotId, selectedColor],
+    [slotId, selectedColor, DRAWING_PATH],
   );
 
   // Add point to current stroke
@@ -164,7 +163,7 @@ export function useDrawing(slotId: "1" | "2" | null) {
 
     currentStrokeId.current = null;
     localPoints.current = null;
-  }, [strokes]);
+  }, [strokes, DRAWING_PATH]);
 
   // Check if drawing mode is active
   const isDrawingMode = selectedColor !== null;

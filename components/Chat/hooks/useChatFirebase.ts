@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { onValue, ref, set, onDisconnect } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
-import { ROOM_PATH, COMBO_STORAGE_KEY } from "../constants";
+import { COMBO_STORAGE_KEY } from "../constants";
 import { deriveKeyFromCombo, decryptMessage } from "../crypto";
 import type { Slots, Message, TttState, ChatTheme } from "../types";
 
@@ -11,6 +11,7 @@ export function useChatFirebase(
   isUnlocked: boolean,
   combo: [number, number, number, number] | null,
   slotId: "1" | "2" | null,
+  roomPath: string,
 ) {
   const [slots, setSlots] = useState<Slots>({});
   const [messages, setMessages] = useState<Message[]>([]);
@@ -48,13 +49,13 @@ export function useChatFirebase(
   useEffect(() => {
     if (!isUnlocked) return;
 
-    const slotsRef = ref(rtdb, `${ROOM_PATH}/slots`);
+    const slotsRef = ref(rtdb, `${roomPath}/slots`);
     const unsubSlots = onValue(slotsRef, (snap) => {
       const val = (snap.val() || {}) as Slots;
       setSlots(val);
     });
 
-    const messagesRef = ref(rtdb, `${ROOM_PATH}/messages`);
+    const messagesRef = ref(rtdb, `${roomPath}/messages`);
     const unsubMessages = onValue(messagesRef, (snap) => {
       const val = (snap.val() || {}) as Record<string, Omit<Message, "id">>;
       const msgs = Object.entries(val)
@@ -71,39 +72,39 @@ export function useChatFirebase(
       unsubSlots();
       unsubMessages();
     };
-  }, [isUnlocked]);
+  }, [isUnlocked, roomPath]);
 
   // Subscribe to presence
   useEffect(() => {
     if (!isUnlocked) return;
 
-    const presenceRef = ref(rtdb, `${ROOM_PATH}/presence`);
+    const presenceRef = ref(rtdb, `${roomPath}/presence`);
     const unsub = onValue(presenceRef, (snap) => {
       const val = (snap.val() || {}) as { "1"?: boolean; "2"?: boolean };
       setPresence(val);
     });
 
     return () => unsub();
-  }, [isUnlocked]);
+  }, [isUnlocked, roomPath]);
 
   // Subscribe to indicator colors
   useEffect(() => {
     if (!isUnlocked) return;
 
-    const colorsRef = ref(rtdb, `${ROOM_PATH}/indicatorColors`);
+    const colorsRef = ref(rtdb, `${roomPath}/indicatorColors`);
     const unsub = onValue(colorsRef, (snap) => {
       const val = (snap.val() || {}) as { "1"?: string; "2"?: string };
       setIndicatorColors(val);
     });
 
     return () => unsub();
-  }, [isUnlocked]);
+  }, [isUnlocked, roomPath]);
 
   // Set up presence for this user
   useEffect(() => {
     if (!isUnlocked || !slotId) return;
 
-    const myPresenceRef = ref(rtdb, `${ROOM_PATH}/presence/${slotId}`);
+    const myPresenceRef = ref(rtdb, `${roomPath}/presence/${slotId}`);
     const connectedRef = ref(rtdb, ".info/connected");
 
     const unsub = onValue(connectedRef, (snap) => {
@@ -120,7 +121,7 @@ export function useChatFirebase(
       // Clear presence when component unmounts
       set(myPresenceRef, false);
     };
-  }, [isUnlocked, slotId]);
+  }, [isUnlocked, slotId, roomPath]);
 
   // Subscribe to typing indicator (needs slotId)
   useEffect(() => {
@@ -129,7 +130,7 @@ export function useChatFirebase(
       return;
     }
 
-    const typingRef = ref(rtdb, `${ROOM_PATH}/typing`);
+    const typingRef = ref(rtdb, `${roomPath}/typing`);
     const unsubTyping = onValue(typingRef, (snap) => {
       const val = (snap.val() || {}) as Record<string, boolean>;
       const otherSlot = slotId === "1" ? "2" : "1";
@@ -139,12 +140,12 @@ export function useChatFirebase(
     return () => {
       unsubTyping();
     };
-  }, [isUnlocked, slotId]);
+  }, [isUnlocked, slotId, roomPath]);
 
   // Subscribe to shared theme
   useEffect(() => {
     if (!isUnlocked) return;
-    const themeRef = ref(rtdb, `${ROOM_PATH}/theme`);
+    const themeRef = ref(rtdb, `${roomPath}/theme`);
     const unsub = onValue(themeRef, (snap) => {
       const val = snap.val() as string | null;
       if (
@@ -166,12 +167,12 @@ export function useChatFirebase(
       }
     });
     return () => unsub();
-  }, [isUnlocked]);
+  }, [isUnlocked, roomPath]);
 
   // Subscribe to Tic Tac Toe state
   useEffect(() => {
     if (!isUnlocked) return;
-    const tttRef = ref(rtdb, `${ROOM_PATH}/ticTacToe`);
+    const tttRef = ref(rtdb, `${roomPath}/ticTacToe`);
     const unsub = onValue(tttRef, (snap) => {
       const val = snap.val() as {
         board?: Array<"1" | "2" | null>;
@@ -226,7 +227,7 @@ export function useChatFirebase(
       });
     });
     return () => unsub();
-  }, [isUnlocked]);
+  }, [isUnlocked, roomPath]);
 
   // Decrypt messages when raw messages or encryption key changes
   useEffect(() => {
@@ -261,20 +262,20 @@ export function useChatFirebase(
   const handleThemeChange = useCallback(
     (theme: ChatTheme) => {
       if (!isUnlocked) return;
-      const themeRef = ref(rtdb, `${ROOM_PATH}/theme`);
+      const themeRef = ref(rtdb, `${roomPath}/theme`);
       set(themeRef, theme);
       setChatTheme(theme);
     },
-    [isUnlocked]
+    [isUnlocked, roomPath]
   );
 
   const handleIndicatorColorChange = useCallback(
     (color: string) => {
       if (!isUnlocked || !slotId) return;
-      const colorRef = ref(rtdb, `${ROOM_PATH}/indicatorColors/${slotId}`);
+      const colorRef = ref(rtdb, `${roomPath}/indicatorColors/${slotId}`);
       set(colorRef, color);
     },
-    [isUnlocked, slotId]
+    [isUnlocked, slotId, roomPath]
   );
 
   return {

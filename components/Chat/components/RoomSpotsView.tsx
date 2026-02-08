@@ -74,6 +74,7 @@ type RoomSpotsViewProps = {
   themeColors: ThemeColors;
   indicatorColor?: string;
   onIndicatorColorChange: (color: string) => void;
+  roomPath: string;
 };
 
 export function RoomSpotsView({
@@ -95,6 +96,7 @@ export function RoomSpotsView({
   themeColors,
   indicatorColor,
   onIndicatorColorChange,
+  roomPath,
 }: RoomSpotsViewProps) {
   const [leaveConfirmText, setLeaveConfirmText] = useState("");
   const [activeGame, setActiveGame] = useState<"ttt" | "wordsearch">("ttt");
@@ -429,6 +431,7 @@ export function RoomSpotsView({
               slotId={slotId}
               themeColors={themeColors}
               slots={slots}
+              roomPath={roomPath}
             />
           )}
         </div>

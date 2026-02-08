@@ -8,6 +8,7 @@ type WordSearchGameProps = {
   slotId: "1" | "2" | null;
   themeColors: ThemeColors;
   slots: Slots;
+  roomPath: string;
 };
 
 // Player colors
@@ -36,6 +37,7 @@ export function WordSearchGame({
   slotId,
   themeColors,
   slots,
+  roomPath,
 }: WordSearchGameProps) {
   const {
     state,
@@ -48,7 +50,7 @@ export function WordSearchGame({
     updateSelection,
     voteReset,
     endGame,
-  } = useWordSearch(slotId);
+  } = useWordSearch(slotId, roomPath);
 
   const [localPrompt, setLocalPrompt] = useState("");
   const [selectedCells, setSelectedCells] = useState<WordCell[]>([]);

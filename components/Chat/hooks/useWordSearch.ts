@@ -3,10 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ref, onValue, set, runTransaction, update } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
-import { ROOM_PATH } from "../constants";
 import type { WordSearchState, WordCell, WordSearchWord } from "../types";
-
-const WORD_SEARCH_PATH = `${ROOM_PATH}/wordSearch`;
 
 const DEFAULT_STATE: WordSearchState = {
   grid: [],
@@ -21,7 +18,8 @@ const DEFAULT_STATE: WordSearchState = {
   resetVotes: {},
 };
 
-export function useWordSearch(slotId: "1" | "2" | null) {
+export function useWordSearch(slotId: "1" | "2" | null, roomPath: string) {
+  const WORD_SEARCH_PATH = `${roomPath}/wordSearch`;
   const [state, setState] = useState<WordSearchState>(DEFAULT_STATE);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +83,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
       }
     });
     return () => unsub();
-  }, []);
+  }, [WORD_SEARCH_PATH]);
 
   // Update shared prompt
   const updatePrompt = useCallback(async (newPrompt: string) => {
@@ -94,7 +92,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
     } catch (err) {
       console.error("Error updating prompt:", err);
     }
-  }, []);
+  }, [WORD_SEARCH_PATH]);
 
   // Generate new puzzle
   const generatePuzzle = useCallback(async () => {
@@ -149,7 +147,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
     } finally {
       setIsGenerating(false);
     }
-  }, [state.prompt]);
+  }, [state.prompt, WORD_SEARCH_PATH]);
 
   // Start prompting phase
   const startNewGame = useCallback(async () => {
@@ -157,7 +155,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
       ...DEFAULT_STATE,
       status: "prompting",
     });
-  }, []);
+  }, [WORD_SEARCH_PATH]);
 
   // Check if cells form a word
   const checkWord = useCallback(
@@ -259,7 +257,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
         };
       });
     },
-    [slotId, checkWord]
+    [slotId, checkWord, WORD_SEARCH_PATH]
   );
 
   // Update current selection (for showing other player's selection)
@@ -276,7 +274,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
         await set(ref(rtdb, `${WORD_SEARCH_PATH}/currentSelection`), null);
       }
     },
-    [slotId]
+    [slotId, WORD_SEARCH_PATH]
   );
 
   // Vote to reset
@@ -302,7 +300,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
         resetVotes: newVotes,
       };
     });
-  }, [slotId]);
+  }, [slotId, WORD_SEARCH_PATH]);
 
   // End game early
   const endGame = useCallback(async () => {
@@ -321,7 +319,7 @@ export function useWordSearch(slotId: "1" | "2" | null) {
       status: "finished",
       winner,
     });
-  }, [state.scores]);
+  }, [state.scores, WORD_SEARCH_PATH]);
 
   return {
     state,

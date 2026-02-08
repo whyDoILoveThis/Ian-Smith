@@ -3,7 +3,6 @@
 import { useCallback } from "react";
 import { ref, runTransaction } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
-import { ROOM_PATH } from "../constants";
 import type { TttState } from "../types";
 
 const WINNING_LINES = [
@@ -17,7 +16,7 @@ const WINNING_LINES = [
   [2, 4, 6],
 ];
 
-export function useTicTacToe(slotId: "1" | "2" | null) {
+export function useTicTacToe(slotId: "1" | "2" | null, roomPath: string) {
   // Helper to convert Firebase board (object or array) to proper array
   const parseBoard = useCallback((boardData: unknown): Array<"1" | "2" | null> => {
     if (Array.isArray(boardData) && boardData.length === 9) {
@@ -48,7 +47,7 @@ export function useTicTacToe(slotId: "1" | "2" | null) {
     async (index: number) => {
       if (!slotId) return;
 
-      const tttRef = ref(rtdb, `${ROOM_PATH}/ticTacToe`);
+      const tttRef = ref(rtdb, `${roomPath}/ticTacToe`);
       try {
         await runTransaction(tttRef, (current) => {
           // Parse the board from Firebase (handles both array and object formats)
@@ -78,12 +77,12 @@ export function useTicTacToe(slotId: "1" | "2" | null) {
         console.error("TTT move error:", err);
       }
     },
-    [getTttWinner, parseBoard, slotId],
+    [getTttWinner, parseBoard, slotId, roomPath],
   );
 
   const handleTttReset = useCallback(async () => {
     if (!slotId) return;
-    const tttRef = ref(rtdb, `${ROOM_PATH}/ticTacToe`);
+    const tttRef = ref(rtdb, `${roomPath}/ticTacToe`);
     await runTransaction(tttRef, (current) => {
       const resetVotes = current?.resetVotes ?? {};
       const newVotes = { ...resetVotes, [slotId]: true };
@@ -105,7 +104,7 @@ export function useTicTacToe(slotId: "1" | "2" | null) {
         resetVotes: newVotes,
       };
     });
-  }, [slotId]);
+  }, [slotId, roomPath]);
 
   return {
     getTttWinner,

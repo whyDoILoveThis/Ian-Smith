@@ -7,6 +7,25 @@ export const DERIVATION_SALT = "twoWayChatComboSalt:v1";
 export const SECRET_PHRASE = "takemetothemagicalplacenow";
 export const MESSAGES_PER_PAGE = 50;
 
+/** Convert a combo to a unique room path in Firebase RTDB.
+ *  [1000,1000,1000,1000] → "twoWayChat" (legacy backward-compat)
+ *  Any other combo → "twoWayChat_rooms/{a}-{b}-{c}-{d}"
+ */
+export function comboToRoomPath(
+  combo: [number, number, number, number] | null,
+): string {
+  if (!combo) return ROOM_PATH;
+  const key = combo.join("-");
+  if (key === "1000-1000-1000-1000") return ROOM_PATH;
+  return `twoWayChat_rooms/${key}`;
+}
+
+/** Get a per-room localStorage key for session persistence */
+export function roomStorageKey(roomPath: string): string {
+  if (roomPath === ROOM_PATH) return STORAGE_KEY;
+  return `${STORAGE_KEY}_${roomPath.replace(/\//g, "_")}`;
+}
+
 export const RING_COLORS = ["#f97316", "#3b82f6", "#22c55e", "#ec4899"] as const;
 
 export const THEME_COLORS: Record<ChatTheme, ThemeColors> = {

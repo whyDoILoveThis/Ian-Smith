@@ -5,6 +5,7 @@ import {
   COMBO_STORAGE_KEY,
   MESSAGES_PER_PAGE,
   THEME_COLORS,
+  comboToRoomPath,
 } from "./constants";
 import {
   useChatFirebase,
@@ -55,17 +56,20 @@ export default function AIContentSugestions() {
   // AI Chat hook for disguise
   const aiChat = useAIChat(combo, setShowRealChat);
 
+  // Compute the room path from the combo
+  const roomPath = useMemo(() => comboToRoomPath(combo), [combo]);
+
   // Firebase subscriptions
-  const chatFirebase = useChatFirebase(isUnlocked, combo, null); // We'll update slotId after session hook
+  const chatFirebase = useChatFirebase(isUnlocked, combo, null, roomPath); // We'll update slotId after session hook
   const { slots, messages, encryptionKey, chatTheme, handleThemeChange } =
     chatFirebase;
 
   // Session management (join/leave)
-  const session = useChatSession(isUnlocked, slots);
+  const session = useChatSession(isUnlocked, slots, roomPath);
   const { slotId, screenName } = session;
 
   // Re-initialize firebase with slotId for typing indicator
-  const firebaseWithSlot = useChatFirebase(isUnlocked, combo, slotId);
+  const firebaseWithSlot = useChatFirebase(isUnlocked, combo, slotId, roomPath);
 
   // Message handling
   const chatMessages = useChatMessages(
@@ -73,19 +77,20 @@ export default function AIContentSugestions() {
     screenName,
     encryptionKey,
     messages,
+    roomPath,
   );
 
   // Tic Tac Toe
-  const ticTacToe = useTicTacToe(slotId);
+  const ticTacToe = useTicTacToe(slotId, roomPath);
 
   // Voice Call
-  const voiceCall = useVoiceCall(slotId);
+  const voiceCall = useVoiceCall(slotId, roomPath);
 
   // Touch Indicators
-  const touchIndicators = useTouchIndicators(slotId);
+  const touchIndicators = useTouchIndicators(slotId, roomPath);
 
   // Drawing
-  const drawing = useDrawing(slotId);
+  const drawing = useDrawing(slotId, roomPath);
 
   // Check if other person is online (uses real-time presence)
   const otherPersonOnline = useMemo(() => {
@@ -315,6 +320,7 @@ export default function AIContentSugestions() {
               slotId ? firebaseWithSlot.indicatorColors?.[slotId] : undefined
             }
             onIndicatorColorChange={firebaseWithSlot.handleIndicatorColorChange}
+            roomPath={roomPath}
           />
         ) : (
           <>
