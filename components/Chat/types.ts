@@ -36,6 +36,8 @@ export type Message = {
   isEphemeral?: boolean;
   viewedBy?: { "1"?: boolean; "2"?: boolean };
   disappearedFor?: { "1"?: boolean; "2"?: boolean };
+  // Reactions
+  reactions?: Record<string, { "1"?: boolean; "2"?: boolean }>;
 };
 
 export type TttState = {

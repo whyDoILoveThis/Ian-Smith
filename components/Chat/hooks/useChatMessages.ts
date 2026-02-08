@@ -296,6 +296,30 @@ export function useChatMessages(
     [slotId, roomPath],
   );
 
+  // Toggle an emoji reaction on a message
+  const toggleReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!slotId) return;
+      const reactionRef = ref(
+        rtdb,
+        `${roomPath}/messages/${messageId}/reactions/${emoji}/${slotId}`,
+      );
+      // Check current state from local messages
+      const msg = messages.find((m) => m.id === messageId);
+      const alreadyReacted = !!msg?.reactions?.[emoji]?.[slotId];
+      try {
+        if (alreadyReacted) {
+          await set(reactionRef, null);
+        } else {
+          await set(reactionRef, true);
+        }
+      } catch (err) {
+        console.error("Failed to toggle reaction:", err);
+      }
+    },
+    [slotId, roomPath, messages],
+  );
+
   return {
     messageText,
     setMessageText,
@@ -312,5 +336,6 @@ export function useChatMessages(
     handleSendEphemeralVideo,
     markEphemeralViewed,
     deleteEphemeralMessage,
+    toggleReaction,
   };
 }

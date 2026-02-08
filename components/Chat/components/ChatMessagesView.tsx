@@ -5,6 +5,10 @@ import { MESSAGES_PER_PAGE } from "../constants";
 import type { Message, ThemeColors } from "../types";
 import { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
 import { CloudPoofAnimation } from "./CloudPoofAnimation";
+import {
+  EmojiReactionPicker,
+  EmojiReactionsDisplay,
+} from "./EmojiReactionPicker";
 import Image from "next/image";
 import ReplyIcon from "@/components/sub/ReplyIcon";
 
@@ -21,6 +25,7 @@ type ChatMessagesViewProps = {
   markReceiptAsSeen: (msg: Message) => void;
   onMarkEphemeralViewed: (messageId: string) => void;
   onDeleteEphemeralMessage: (messageId: string, videoFileId?: string) => void;
+  onReact: (messageId: string, emoji: string) => void;
 };
 
 export function ChatMessagesView({
@@ -36,6 +41,7 @@ export function ChatMessagesView({
   markReceiptAsSeen,
   onMarkEphemeralViewed,
   onDeleteEphemeralMessage,
+  onReact,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -201,172 +207,198 @@ export function ChatMessagesView({
               </div>
             )}
             <div
-              className={`relative max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-md select-none transition-all duration-300 ${
-                isPoofing ? "opacity-0 scale-75" : ""
-              } ${
-                isMine
-                  ? `${themeColors.bg} ${themeColors.text} rounded-br-none`
-                  : "bg-white/10 text-white rounded-bl-none"
-              }`}
-              onTouchStart={(e) => handleSwipeStart(e, msg, isMine)}
+              className={`flex flex-col ${isMine ? "items-end" : "items-start"} max-w-[85%] sm:max-w-[75%]`}
             >
-              {/* Reply button on hover (desktop) */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setReplyingTo(msg);
-                }}
-                className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 w-7 h-7 rounded-full hover:bg-white/10 ${
-                  isMine ? "-left-8" : "-right-8"
+              <div
+                className={`relative w-full rounded-2xl px-3 py-2 text-sm shadow-md select-none transition-all duration-300 ${
+                  isPoofing ? "opacity-0 scale-75" : ""
+                } ${
+                  isMine
+                    ? `${themeColors.bg} ${themeColors.text} rounded-br-none`
+                    : "bg-white/10 text-white rounded-bl-none"
                 }`}
+                onTouchStart={(e) => handleSwipeStart(e, msg, isMine)}
               >
-                <span
-                  className="text-xs text-neutral-400"
-                  style={{
-                    transform: isMine ? "scaleX(-1)" : "none",
-                    display: "inline-block",
+                {/* Reply button on hover (desktop) */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReplyingTo(msg);
                   }}
-                >
-                  <ReplyIcon size={14} />
-                </span>
-              </button>
-
-              {/* Reply preview if this is a reply */}
-              {msg.replyToText && (
-                <div
-                  className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] border-l-4 ${
-                    isMine
-                      ? "bg-black/10 border-black/40"
-                      : "bg-white/5 border-white/20"
-                  }`}
-                  style={{
-                    boxShadow:
-                      "inset 0 2px 3px rgba(0, 0, 0, 0.3), inset 0 -2px 3px rgba(0, 0, 0, 0.2), inset -2px 0 3px rgba(0, 0, 0, 0.2)",
-                  }}
-                >
-                  <p className="font-semibold opacity-80">
-                    {msg.replyToSender}
-                  </p>
-                  <p className="truncate opacity-60 max-w-[200px]">
-                    {msg.replyToText}
-                  </p>
-                </div>
-              )}
-
-              <p className="text-[11px] uppercase tracking-wide opacity-70">
-                {msg.sender}
-                {msg.decryptionFailed && (
-                  <span className="ml-2 text-amber-400">⚠️ unencrypted</span>
-                )}
-              </p>
-              {msg.decryptedText && (
-                <p className="mt-1 whitespace-pre-line break-words">
-                  {msg.decryptedText}
-                </p>
-              )}
-              {msg.imageUrl && (
-                <Image
-                  src={msg.imageUrl}
-                  alt="Uploaded"
-                  width={500} // Adjust width as needed
-                  height={320} // Adjust height as needed
-                  className="mt-2 w-full rounded-xl border border-white/10"
-                />
-              )}
-              {msg.videoUrl && !msg.isEphemeral && (
-                <video
-                  src={msg.videoUrl}
-                  controls
-                  className="mt-2 w-full rounded-xl border border-white/10"
-                />
-              )}
-              {/* Ephemeral video - show icon button instead of inline video */}
-              {msg.videoUrl &&
-                msg.isEphemeral &&
-                !msg.disappearedFor?.[slotId ?? "1"] && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setActiveEphemeralVideo({
-                        messageId: msg.id,
-                        videoUrl: msg.videoUrl!,
-                        sender: msg.sender,
-                        videoFileId: msg.videoFileId,
-                      })
-                    }
-                    className="mt-2 w-full flex items-center justify-center gap-2 py-6 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-600/20 hover:from-amber-500/30 hover:to-orange-600/30 transition-all duration-300 group"
-                  >
-                    <div className="relative">
-                      {/* Play icon */}
-                      <svg
-                        className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                      {/* Ephemeral indicator */}
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
-                    </div>
-                    <div className="flex flex-col items-start">
-                      <span className="text-amber-300 text-sm font-medium">
-                        Ephemeral Video
-                      </span>
-                      <span className="text-amber-400/60 text-[10px]">
-                        Tap to view • Disappears after watching
-                      </span>
-                    </div>
-                  </button>
-                )}
-              {/* Ephemeral video that has been viewed - show placeholder */}
-              {msg.videoUrl &&
-                msg.isEphemeral &&
-                msg.disappearedFor?.[slotId ?? "1"] && (
-                  <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </svg>
-                    Video has been viewed
-                  </div>
-                )}
-              {timestamp && (
-                <div
-                  className={`mt-1 flex items-center gap-1 ${
-                    isMine ? "justify-end" : "justify-start"
+                  className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 w-7 h-7 rounded-full hover:bg-white/10 ${
+                    isMine ? "-left-8" : "-right-8"
                   }`}
                 >
                   <span
-                    className={`text-[9px] ${
-                      isMine ? themeColors.accent : "text-neutral-400"
+                    className="text-xs text-neutral-400"
+                    style={{
+                      transform: isMine ? "scaleX(-1)" : "none",
+                      display: "inline-block",
+                    }}
+                  >
+                    <ReplyIcon size={14} />
+                  </span>
+                </button>
+
+                {/* Emoji reaction picker on hover (desktop) */}
+                <EmojiReactionPicker
+                  messageId={msg.id}
+                  isMine={isMine}
+                  currentReactions={msg.reactions}
+                  slotId={slotId}
+                  onReact={onReact}
+                />
+
+                {/* Reply preview if this is a reply */}
+                {msg.replyToText && (
+                  <div
+                    className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] border-l-4 ${
+                      isMine
+                        ? "bg-black/10 border-black/40"
+                        : "bg-white/5 border-white/20"
+                    }`}
+                    style={{
+                      boxShadow:
+                        "inset 0 2px 3px rgba(0, 0, 0, 0.3), inset 0 -2px 3px rgba(0, 0, 0, 0.2), inset -2px 0 3px rgba(0, 0, 0, 0.2)",
+                    }}
+                  >
+                    <p className="font-semibold opacity-80">
+                      {msg.replyToSender}
+                    </p>
+                    <p className="truncate opacity-60 max-w-[200px]">
+                      {msg.replyToText}
+                    </p>
+                  </div>
+                )}
+
+                <p className="text-[11px] uppercase tracking-wide opacity-70">
+                  {msg.sender}
+                  {msg.decryptionFailed && (
+                    <span className="ml-2 text-amber-400">⚠️ unencrypted</span>
+                  )}
+                </p>
+                {msg.decryptedText && (
+                  <p className="mt-1 whitespace-pre-line break-words">
+                    {msg.decryptedText}
+                  </p>
+                )}
+                {msg.imageUrl && (
+                  <Image
+                    src={msg.imageUrl}
+                    alt="Uploaded"
+                    width={500} // Adjust width as needed
+                    height={320} // Adjust height as needed
+                    className="mt-2 w-full rounded-xl border border-white/10"
+                  />
+                )}
+                {msg.videoUrl && !msg.isEphemeral && (
+                  <video
+                    src={msg.videoUrl}
+                    controls
+                    className="mt-2 w-full rounded-xl border border-white/10"
+                  />
+                )}
+                {/* Ephemeral video - show icon button instead of inline video */}
+                {msg.videoUrl &&
+                  msg.isEphemeral &&
+                  !msg.disappearedFor?.[slotId ?? "1"] && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveEphemeralVideo({
+                          messageId: msg.id,
+                          videoUrl: msg.videoUrl!,
+                          sender: msg.sender,
+                          videoFileId: msg.videoFileId,
+                        })
+                      }
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-6 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-600/20 hover:from-amber-500/30 hover:to-orange-600/30 transition-all duration-300 group"
+                    >
+                      <div className="relative">
+                        {/* Play icon */}
+                        <svg
+                          className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                        {/* Ephemeral indicator */}
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+                      </div>
+                      <div className="flex flex-col items-start">
+                        <span className="text-amber-300 text-sm font-medium">
+                          Ephemeral Video
+                        </span>
+                        <span className="text-amber-400/60 text-[10px]">
+                          Tap to view • Disappears after watching
+                        </span>
+                      </div>
+                    </button>
+                  )}
+                {/* Ephemeral video that has been viewed - show placeholder */}
+                {msg.videoUrl &&
+                  msg.isEphemeral &&
+                  msg.disappearedFor?.[slotId ?? "1"] && (
+                    <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        />
+                      </svg>
+                      Video has been viewed
+                    </div>
+                  )}
+                {timestamp && (
+                  <div
+                    className={`mt-1 flex items-center gap-1 ${
+                      isMine ? "justify-end" : "justify-start"
                     }`}
                   >
-                    {timestamp}
-                  </span>
-                  {/* Read receipt checkmarks */}
-                  {isMine && msg.readBy?.[slotId === "1" ? "2" : "1"] && (
-                    <span className={`text-[9px] ${themeColors.accent}`}>
-                      ✓
-                      {/* Second checkmark - shows when they've seen that you saw it */}
-                      {msg.seenReceiptBy?.[slotId === "1" ? "2" : "1"] && "✓"}
+                    <span
+                      className={`text-[9px] ${
+                        isMine ? themeColors.accent : "text-neutral-400"
+                      }`}
+                    >
+                      {timestamp}
                     </span>
-                  )}
+                    {/* Read receipt checkmarks */}
+                    {isMine && msg.readBy?.[slotId === "1" ? "2" : "1"] && (
+                      <span className={`text-[9px] ${themeColors.accent}`}>
+                        ✓
+                        {/* Second checkmark - shows when they've seen that you saw it */}
+                        {msg.seenReceiptBy?.[slotId === "1" ? "2" : "1"] && "✓"}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* Emoji reactions display below bubble */}
+              {msg.reactions && (
+                <div
+                  className={`${isMine ? "flex justify-end" : "flex justify-start"}`}
+                >
+                  <EmojiReactionsDisplay
+                    reactions={msg.reactions}
+                    slotId={slotId}
+                    onReact={onReact}
+                    messageId={msg.id}
+                  />
                 </div>
               )}
             </div>

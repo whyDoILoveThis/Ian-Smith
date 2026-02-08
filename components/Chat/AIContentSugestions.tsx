@@ -337,6 +337,7 @@ export default function AIContentSugestions() {
               markReceiptAsSeen={chatMessages.markReceiptAsSeen}
               onMarkEphemeralViewed={chatMessages.markEphemeralViewed}
               onDeleteEphemeralMessage={chatMessages.deleteEphemeralMessage}
+              onReact={chatMessages.toggleReaction}
             />
             <ChatInputArea
               slotId={slotId}
