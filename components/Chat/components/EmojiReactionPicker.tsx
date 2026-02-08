@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 const QUICK_EMOJIS = ["❤️", "😂", "😮", "😢", "🔥", "👍", "🖕"];
 
@@ -264,6 +270,41 @@ export function EmojiReactionPicker({
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const quickBarRef = useRef<HTMLDivElement>(null);
+  const fullPickerRef = useRef<HTMLDivElement>(null);
+
+  // Clamp a popup so it doesn't overflow the viewport
+  const clampToViewport = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    // Reset any prior inline adjustments
+    el.style.left = "";
+    el.style.right = "";
+    el.style.removeProperty("left");
+    el.style.removeProperty("right");
+
+    const rect = el.getBoundingClientRect();
+    const pad = 8;
+    if (rect.left < pad) {
+      el.style.left = `${pad - rect.left}px`;
+      el.style.right = "auto";
+    } else if (rect.right > window.innerWidth - pad) {
+      el.style.right = `${rect.right - (window.innerWidth - pad)}px`;
+      el.style.left = "auto";
+    }
+  }, []);
+
+  // Re-clamp whenever the quick bar or full picker opens
+  useLayoutEffect(() => {
+    if (showQuickBar && !showFullPicker) {
+      clampToViewport(quickBarRef.current);
+    }
+  }, [showQuickBar, showFullPicker, clampToViewport]);
+
+  useLayoutEffect(() => {
+    if (showFullPicker) {
+      clampToViewport(fullPickerRef.current);
+    }
+  }, [showFullPicker, clampToViewport]);
 
   // Close on click outside
   useEffect(() => {
@@ -358,6 +399,7 @@ export function EmojiReactionPicker({
       {/* Quick reaction bar */}
       {showQuickBar && !showFullPicker && (
         <div
+          ref={quickBarRef}
           className={`pointer-events-auto absolute z-50 bottom-8 flex items-center gap-0.5 rounded-full bg-neutral-900/95 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg shadow-black/40 ${
             isMine ? "left-0" : "right-0"
           }`}
@@ -404,6 +446,7 @@ export function EmojiReactionPicker({
       {/* Full emoji picker */}
       {showFullPicker && (
         <div
+          ref={fullPickerRef}
           className={`pointer-events-auto absolute z-50 bottom-8 w-72 max-h-64 overflow-y-auto rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-xl shadow-black/50 ${
             isMine ? "left-0" : "right-0"
           }`}
