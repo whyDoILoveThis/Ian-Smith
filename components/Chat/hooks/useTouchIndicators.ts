@@ -12,6 +12,7 @@ export type TouchIndicator = {
   slotId: "1" | "2";
   timestamp: number;
   type: "tap" | "swipe";
+  inputType: "touch" | "mouse";
   // For swipes
   endX?: number;
   endY?: number;
@@ -53,7 +54,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
 
   // Send a tap event to Firebase
   const sendTap = useCallback(
-    async (x: number, y: number) => {
+    async (x: number, y: number, inputType: "touch" | "mouse" = "touch") => {
       if (!slotId) return;
 
       const touchId = `${slotId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -66,6 +67,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
         slotId,
         timestamp: Date.now(),
         type: "tap",
+        inputType,
       };
 
       try {
@@ -88,7 +90,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
 
   // Send a swipe event to Firebase
   const sendSwipe = useCallback(
-    async (startX: number, startY: number, endX: number, endY: number) => {
+    async (startX: number, startY: number, endX: number, endY: number, inputType: "touch" | "mouse" = "touch") => {
       if (!slotId) return;
 
       const touchId = `${slotId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -103,6 +105,7 @@ export function useTouchIndicators(slotId: "1" | "2" | null) {
         slotId,
         timestamp: Date.now(),
         type: "swipe",
+        inputType,
       };
 
       try {

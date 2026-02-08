@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import type { DrawingStroke } from "../hooks/useDrawing";
+import { isNeonColor } from "../hooks/useDrawing";
 
 type DrawingOverlayProps = {
   strokes: DrawingStroke[];
@@ -228,22 +229,34 @@ export function DrawingOverlay({
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+          <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="0.8" result="blur1" />
+            <feGaussianBlur stdDeviation="1.5" result="blur2" />
+            <feGaussianBlur stdDeviation="2.5" result="blur3" />
+            <feMerge>
+              <feMergeNode in="blur3" />
+              <feMergeNode in="blur2" />
+              <feMergeNode in="blur1" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
         {/* Render finished strokes from Firebase */}
         {strokes.map((stroke) => {
           const opacity = getStrokeOpacity(stroke);
           if (opacity <= 0) return null;
+          const isNeon = isNeonColor(stroke.color);
           return (
             <path
               key={stroke.id}
               d={pointsToPath(stroke.points)}
               stroke={stroke.color}
-              strokeWidth="0.5"
+              strokeWidth={isNeon ? "0.6" : "0.5"}
               strokeLinecap="round"
               strokeLinejoin="round"
               fill="none"
               opacity={opacity}
-              filter="url(#drawGlow)"
+              filter={isNeon ? "url(#neonGlow)" : "url(#drawGlow)"}
               style={{
                 transition: "opacity 0.1s ease-out",
               }}
@@ -255,12 +268,16 @@ export function DrawingOverlay({
           <path
             d={pointsToPath(localStroke.points)}
             stroke={localStroke.color}
-            strokeWidth="0.5"
+            strokeWidth={isNeonColor(localStroke.color) ? "0.6" : "0.5"}
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
             opacity={1}
-            filter="url(#drawGlow)"
+            filter={
+              isNeonColor(localStroke.color)
+                ? "url(#neonGlow)"
+                : "url(#drawGlow)"
+            }
           />
         )}
       </svg>

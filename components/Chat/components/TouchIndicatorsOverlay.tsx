@@ -3,20 +3,47 @@
 import React, { useEffect, useState, useRef } from "react";
 import type { TouchIndicator } from "../hooks/useTouchIndicators";
 
-// Slot colors - Orange for slot 1, Cyan for slot 2 (soft glows only)
-const SLOT_COLORS = {
+// Minimum swipe distance (in percentage of screen)
+const SWIPE_THRESHOLD = 3;
+
+// Default slot colors as fallback
+const DEFAULT_SLOT_COLORS = {
   "1": "rgba(255, 61, 63, 0.6)", // coral red
   "2": "rgba(157, 61, 255, 0.6)", // purple
 };
 
-// Minimum swipe distance (in percentage of screen)
-const SWIPE_THRESHOLD = 3;
+// Convert hex to rgba with opacity
+function hexToRgba(hex: string, opacity: number = 0.6): string {
+  // Remove # if present
+  hex = hex.replace(/^#/, "");
+
+  // Parse hex values
+  let r: number, g: number, b: number;
+  if (hex.length === 3) {
+    r = parseInt(hex[0] + hex[0], 16);
+    g = parseInt(hex[1] + hex[1], 16);
+    b = parseInt(hex[2] + hex[2], 16);
+  } else {
+    r = parseInt(hex.substring(0, 2), 16);
+    g = parseInt(hex.substring(2, 4), 16);
+    b = parseInt(hex.substring(4, 6), 16);
+  }
+
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
 
 type TouchIndicatorsOverlayProps = {
   touches: TouchIndicator[];
-  onTap: (x: number, y: number) => void;
-  onSwipe: (startX: number, startY: number, endX: number, endY: number) => void;
+  onTap: (x: number, y: number, inputType?: "touch" | "mouse") => void;
+  onSwipe: (
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    inputType?: "touch" | "mouse",
+  ) => void;
   enabled: boolean;
+  customColors?: { "1"?: string; "2"?: string };
 };
 
 export function TouchIndicatorsOverlay({
@@ -24,12 +51,17 @@ export function TouchIndicatorsOverlay({
   onTap,
   onSwipe,
   enabled,
+  customColors,
 }: TouchIndicatorsOverlayProps) {
   const [localTouches, setLocalTouches] = useState<TouchIndicator[]>([]);
   const [, forceUpdate] = useState(0);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(
     null,
   );
+  const mouseStartRef = useRef<{ x: number; y: number; time: number } | null>(
+    null,
+  );
+  const isMouseDownRef = useRef(false);
 
   // Update local touches
   useEffect(() => {
@@ -84,10 +116,10 @@ export function TouchIndicatorsOverlay({
 
       if (distance >= SWIPE_THRESHOLD) {
         // It's a swipe
-        onSwipe(startX, startY, endX, endY);
+        onSwipe(startX, startY, endX, endY, "touch");
       } else {
         // It's a tap
-        onTap(startX, startY);
+        onTap(startX, startY, "touch");
       }
 
       touchStartRef.current = null;
@@ -113,6 +145,63 @@ export function TouchIndicatorsOverlay({
     };
   }, [enabled, onTap, onSwipe]);
 
+  // Listen to mouse events on document (for desktop users)
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // Ignore if it was triggered by a touch (avoid double-fire)
+      if (e.button !== 0) return;
+
+      const x = (e.clientX / window.innerWidth) * 100;
+      const y = (e.clientY / window.innerHeight) * 100;
+
+      mouseStartRef.current = { x, y, time: Date.now() };
+      isMouseDownRef.current = true;
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!mouseStartRef.current || !isMouseDownRef.current) return;
+
+      const endX = (e.clientX / window.innerWidth) * 100;
+      const endY = (e.clientY / window.innerHeight) * 100;
+
+      const startX = mouseStartRef.current.x;
+      const startY = mouseStartRef.current.y;
+
+      const distance = Math.sqrt(
+        Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2),
+      );
+
+      if (distance >= SWIPE_THRESHOLD) {
+        onSwipe(startX, startY, endX, endY, "mouse");
+      } else {
+        onTap(startX, startY, "mouse");
+      }
+
+      mouseStartRef.current = null;
+      isMouseDownRef.current = false;
+    };
+
+    document.addEventListener("mousedown", handleMouseDown, {
+      capture: true,
+      passive: true,
+    });
+    document.addEventListener("mouseup", handleMouseUp, {
+      capture: true,
+      passive: true,
+    });
+
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown, {
+        capture: true,
+      });
+      document.removeEventListener("mouseup", handleMouseUp, {
+        capture: true,
+      });
+    };
+  }, [enabled, onTap, onSwipe]);
+
   // Don't render if no touches
   if (localTouches.length === 0) return null;
 
@@ -133,7 +222,10 @@ export function TouchIndicatorsOverlay({
               t.endY !== undefined,
           )
           .map((touch) => {
-            const color = SLOT_COLORS[touch.slotId];
+            const customColor = customColors?.[touch.slotId];
+            const color = customColor
+              ? hexToRgba(customColor)
+              : DEFAULT_SLOT_COLORS[touch.slotId];
             const age = Date.now() - touch.timestamp;
             const maxAge = 700;
             const progress = Math.min(age / maxAge, 1);
@@ -173,7 +265,10 @@ export function TouchIndicatorsOverlay({
       {localTouches
         .filter((t) => t.type === "tap")
         .map((touch) => {
-          const color = SLOT_COLORS[touch.slotId];
+          const customColor = customColors?.[touch.slotId];
+          const color = customColor
+            ? hexToRgba(customColor)
+            : DEFAULT_SLOT_COLORS[touch.slotId];
           const age = Date.now() - touch.timestamp;
           const maxAge = 500;
           const progress = Math.min(age / maxAge, 1);
@@ -196,6 +291,32 @@ export function TouchIndicatorsOverlay({
                 transform: `translate(-50%, -50%) scale(${scale})`,
               }}
             >
+              {/* SVG cursor icon for mouse inputs */}
+              {touch.inputType === "mouse" && (
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="absolute drop-shadow-lg"
+                  style={{
+                    opacity,
+                    filter: `drop-shadow(0 0 6px ${color})`,
+                    left: "50%",
+                    top: "50%",
+                    marginLeft: "-7px",
+                    marginTop: "-4px",
+                  }}
+                >
+                  <path
+                    d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L5.85 2.36a.5.5 0 0 0-.35.85z"
+                    fill={color}
+                    stroke="white"
+                    strokeWidth="1.2"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
               {/* Soft glowing orb - pure blur, no solid center */}
               <div
                 className="rounded-full"
@@ -207,6 +328,59 @@ export function TouchIndicatorsOverlay({
                   filter: "blur(7px)",
                 }}
               />
+            </div>
+          );
+        })}
+
+      {/* Render SVG cursors on swipe endpoints for mouse inputs */}
+      {localTouches
+        .filter(
+          (t) =>
+            t.type === "swipe" &&
+            t.inputType === "mouse" &&
+            t.endX !== undefined &&
+            t.endY !== undefined,
+        )
+        .map((touch) => {
+          const customColor = customColors?.[touch.slotId];
+          const color = customColor
+            ? hexToRgba(customColor)
+            : DEFAULT_SLOT_COLORS[touch.slotId];
+          const age = Date.now() - touch.timestamp;
+          const maxAge = 700;
+          const progress = Math.min(age / maxAge, 1);
+          const opacity =
+            progress < 0.15 ? progress / 0.15 : 1 - (progress - 0.15) / 0.95;
+
+          if (opacity <= 0) return null;
+
+          return (
+            <div
+              key={`cursor-${touch.id}`}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${touch.endX}%`,
+                top: `${touch.endY}%`,
+                transform: "translate(-50%, -50%)",
+                opacity,
+              }}
+            >
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                className="drop-shadow-lg"
+                style={{ filter: `drop-shadow(0 0 6px ${color})` }}
+              >
+                <path
+                  d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L5.85 2.36a.5.5 0 0 0-.35.85z"
+                  fill={color}
+                  stroke="white"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
           );
         })}

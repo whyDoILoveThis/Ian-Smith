@@ -14,6 +14,7 @@ type ChatInputAreaProps = {
   handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setReplyingTo: (msg: Message | null) => void;
   onOpenVideoRecorder: () => void;
+  chatTheme: string;
 };
 
 export function ChatInputArea({
@@ -27,14 +28,15 @@ export function ChatInputArea({
   handleImageUpload,
   setReplyingTo,
   onOpenVideoRecorder,
+  chatTheme,
 }: ChatInputAreaProps) {
   return (
     <div className="flex-shrink-0 border-t border-white/10 bg-black/60 px-2 py-2 safe-area-inset-bottom">
       {/* Reply preview bar */}
       {replyingTo && (
         <div className="mb-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-2 py-1.5 text-sm">
-          <div className="flex-1 border-l-2 border-emerald-400 pl-2">
-            <p className="text-[10px] text-emerald-400 font-semibold">
+          <div className={`flex-1 border-l-2 border-${chatTheme}-400 pl-2`}>
+            <p className={`text-[10px] text-${chatTheme}-400 font-semibold`}>
               Replying to {replyingTo.sender}
             </p>
             <p className="text-[10px] text-neutral-400 truncate">
@@ -62,7 +64,7 @@ export function ChatInputArea({
           onKeyDown={(e) => {
             if (e.key === "Enter") handleSendMessage();
           }}
-          className="flex-1 rounded-full border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 disabled:opacity-50"
+          className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-${chatTheme}-400 border-opacity-70 disabled:opacity-50`}
         />
         <label
           className={`flex-shrink-0 rounded-full border border-white/10 p-2.5 text-white transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"}`}
@@ -113,7 +115,7 @@ export function ChatInputArea({
         <button
           onClick={handleSendMessage}
           disabled={!slotId || isSending || !messageText.trim()}
-          className={`flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${themeColors.btn} text-black`}
+          className={`flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${themeColors.btn} ${themeColors.text} hover:opacity-80`}
         >
           <svg
             className="h-5 w-5"

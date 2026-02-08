@@ -56,8 +56,9 @@ export default function AIContentSugestions() {
   const aiChat = useAIChat(combo, setShowRealChat);
 
   // Firebase subscriptions
+  const chatFirebase = useChatFirebase(isUnlocked, combo, null); // We'll update slotId after session hook
   const { slots, messages, encryptionKey, chatTheme, handleThemeChange } =
-    useChatFirebase(isUnlocked, combo, null); // We'll update slotId after session hook
+    chatFirebase;
 
   // Session management (join/leave)
   const session = useChatSession(isUnlocked, slots);
@@ -86,12 +87,12 @@ export default function AIContentSugestions() {
   // Drawing
   const drawing = useDrawing(slotId);
 
-  // Check if other person is online
+  // Check if other person is online (uses real-time presence)
   const otherPersonOnline = useMemo(() => {
     if (!slotId) return false;
     const otherSlot = slotId === "1" ? "2" : "1";
-    return !!slots[otherSlot]?.name;
-  }, [slotId, slots]);
+    return !!firebaseWithSlot.presence?.[otherSlot];
+  }, [slotId, firebaseWithSlot.presence]);
 
   // Get caller name for overlay
   const callerName = useMemo(() => {
@@ -99,7 +100,10 @@ export default function AIContentSugestions() {
     return slots[voiceCall.callerId]?.name || "Unknown";
   }, [voiceCall.callerId, slots]);
 
-  const themeColors = useMemo(() => THEME_COLORS[chatTheme], [chatTheme]);
+  const themeColors = useMemo(
+    () => THEME_COLORS[chatTheme as keyof typeof THEME_COLORS],
+    [chatTheme],
+  );
 
   const formatTimestamp = useCallback((createdAt?: number | object) => {
     if (typeof createdAt !== "number") return "";
@@ -238,6 +242,7 @@ export default function AIContentSugestions() {
       {session.isImageConfirmOpen && session.pendingImageUrl && (
         <ImageConfirmModal
           pendingMediaUrl={session.pendingImageUrl}
+          themeColors={themeColors}
           isVideo={session.pendingIsVideo}
           isSending={chatMessages.isSending}
           onConfirm={handleConfirmImageWrapper}
@@ -306,6 +311,10 @@ export default function AIContentSugestions() {
               setShowRealChat(false);
             }}
             themeColors={themeColors}
+            indicatorColor={
+              slotId ? firebaseWithSlot.indicatorColors?.[slotId] : undefined
+            }
+            onIndicatorColorChange={firebaseWithSlot.handleIndicatorColorChange}
           />
         ) : (
           <>
@@ -319,6 +328,7 @@ export default function AIContentSugestions() {
               formatTimestamp={formatTimestamp}
               setReplyingTo={chatMessages.setReplyingTo}
               markMessageAsRead={chatMessages.markMessageAsRead}
+              markReceiptAsSeen={chatMessages.markReceiptAsSeen}
               onMarkEphemeralViewed={chatMessages.markEphemeralViewed}
               onDeleteEphemeralMessage={chatMessages.deleteEphemeralMessage}
             />
@@ -328,6 +338,7 @@ export default function AIContentSugestions() {
               isSending={chatMessages.isSending}
               replyingTo={chatMessages.replyingTo}
               themeColors={themeColors}
+              chatTheme={chatTheme}
               handleTypingChange={chatMessages.handleTypingChange}
               handleSendMessage={handleSendMessageWrapper}
               handleImageUpload={handleImageUploadWrapper}
@@ -349,6 +360,7 @@ export default function AIContentSugestions() {
             onTap={touchIndicators.sendTap}
             onSwipe={touchIndicators.sendSwipe}
             enabled={!!slotId}
+            customColors={firebaseWithSlot.indicatorColors}
           />
         )}
 

@@ -5,7 +5,8 @@ import { MESSAGES_PER_PAGE } from "../constants";
 import type { Message, ThemeColors } from "../types";
 import { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
 import { CloudPoofAnimation } from "./CloudPoofAnimation";
-import { ReplyIcon } from "lucide-react";
+import Image from "next/image";
+import ReplyIcon from "@/components/sub/ReplyIcon";
 
 type ChatMessagesViewProps = {
   messages: Message[];
@@ -17,6 +18,7 @@ type ChatMessagesViewProps = {
   formatTimestamp: (createdAt?: number | object) => string;
   setReplyingTo: (msg: Message | null) => void;
   markMessageAsRead: (msg: Message) => void;
+  markReceiptAsSeen: (msg: Message) => void;
   onMarkEphemeralViewed: (messageId: string) => void;
   onDeleteEphemeralMessage: (messageId: string, videoFileId?: string) => void;
 };
@@ -31,6 +33,7 @@ export function ChatMessagesView({
   formatTimestamp,
   setReplyingTo,
   markMessageAsRead,
+  markReceiptAsSeen,
   onMarkEphemeralViewed,
   onDeleteEphemeralMessage,
 }: ChatMessagesViewProps) {
@@ -89,6 +92,14 @@ export function ChatMessagesView({
       markMessageAsRead(msg);
     });
   }, [messages, slotId, markMessageAsRead]);
+
+  // Mark that I've seen my read receipts (second checkmark)
+  useEffect(() => {
+    if (!slotId) return;
+    messages.forEach((msg) => {
+      markReceiptAsSeen(msg);
+    });
+  }, [messages, slotId, markReceiptAsSeen]);
 
   const handleSwipeStart = useCallback(
     (e: React.TouchEvent<HTMLDivElement>, msg: Message, isMine: boolean) => {
@@ -206,11 +217,17 @@ export function ChatMessagesView({
                   e.stopPropagation();
                   setReplyingTo(msg);
                 }}
-                className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-white/10 ${
-                  isMine ? "-left-7" : "-right-7"
+                className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 w-7 h-7 rounded-full hover:bg-white/10 ${
+                  isMine ? "-left-8" : "-right-8"
                 }`}
               >
-                <span className={`text-xs text-neutral-400`}>
+                <span
+                  className="text-xs text-neutral-400"
+                  style={{
+                    transform: isMine ? "scaleX(-1)" : "none",
+                    display: "inline-block",
+                  }}
+                >
                   <ReplyIcon size={14} />
                 </span>
               </button>
@@ -218,11 +235,15 @@ export function ChatMessagesView({
               {/* Reply preview if this is a reply */}
               {msg.replyToText && (
                 <div
-                  className={`mb-2 rounded-lg px-2 py-1 text-[11px] ${
+                  className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] border-l-4 ${
                     isMine
-                      ? "bg-black/10 border-l-2 border-black/40"
-                      : "bg-white/5 border-l-2 border-white/40"
+                      ? "bg-black/10 border-black/40"
+                      : "bg-white/5 border-white/20"
                   }`}
+                  style={{
+                    boxShadow:
+                      "inset 0 2px 3px rgba(0, 0, 0, 0.3), inset 0 -2px 3px rgba(0, 0, 0, 0.2), inset -2px 0 3px rgba(0, 0, 0, 0.2)",
+                  }}
                 >
                   <p className="font-semibold opacity-80">
                     {msg.replyToSender}
@@ -245,9 +266,11 @@ export function ChatMessagesView({
                 </p>
               )}
               {msg.imageUrl && (
-                <img
+                <Image
                   src={msg.imageUrl}
                   alt="Uploaded"
+                  width={500} // Adjust width as needed
+                  height={320} // Adjust height as needed
                   className="mt-2 w-full rounded-xl border border-white/10"
                 />
               )}
@@ -336,10 +359,12 @@ export function ChatMessagesView({
                   >
                     {timestamp}
                   </span>
-                  {/* Read receipt checkmark - only shows when other person has seen it */}
+                  {/* Read receipt checkmarks */}
                   {isMine && msg.readBy?.[slotId === "1" ? "2" : "1"] && (
                     <span className={`text-[9px] ${themeColors.accent}`}>
                       ✓
+                      {/* Second checkmark - shows when they've seen that you saw it */}
+                      {msg.seenReceiptBy?.[slotId === "1" ? "2" : "1"] && "✓"}
                     </span>
                   )}
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { onValue, ref, set } from "firebase/database";
+import { onValue, ref, set, onDisconnect } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { ROOM_PATH, COMBO_STORAGE_KEY } from "../constants";
 import { deriveKeyFromCombo, decryptMessage } from "../crypto";
@@ -19,6 +19,8 @@ export function useChatFirebase(
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [chatTheme, setChatTheme] = useState<ChatTheme>("emerald");
   const [tttState, setTttState] = useState<TttState | null>(null);
+  const [presence, setPresence] = useState<{ "1"?: boolean; "2"?: boolean }>({});
+  const [indicatorColors, setIndicatorColors] = useState<{ "1"?: string; "2"?: string }>({});
 
   const encryptionKeyRef = useRef<CryptoKey | null>(null);
 
@@ -71,6 +73,55 @@ export function useChatFirebase(
     };
   }, [isUnlocked]);
 
+  // Subscribe to presence
+  useEffect(() => {
+    if (!isUnlocked) return;
+
+    const presenceRef = ref(rtdb, `${ROOM_PATH}/presence`);
+    const unsub = onValue(presenceRef, (snap) => {
+      const val = (snap.val() || {}) as { "1"?: boolean; "2"?: boolean };
+      setPresence(val);
+    });
+
+    return () => unsub();
+  }, [isUnlocked]);
+
+  // Subscribe to indicator colors
+  useEffect(() => {
+    if (!isUnlocked) return;
+
+    const colorsRef = ref(rtdb, `${ROOM_PATH}/indicatorColors`);
+    const unsub = onValue(colorsRef, (snap) => {
+      const val = (snap.val() || {}) as { "1"?: string; "2"?: string };
+      setIndicatorColors(val);
+    });
+
+    return () => unsub();
+  }, [isUnlocked]);
+
+  // Set up presence for this user
+  useEffect(() => {
+    if (!isUnlocked || !slotId) return;
+
+    const myPresenceRef = ref(rtdb, `${ROOM_PATH}/presence/${slotId}`);
+    const connectedRef = ref(rtdb, ".info/connected");
+
+    const unsub = onValue(connectedRef, (snap) => {
+      if (snap.val() === true) {
+        // Set up onDisconnect to clear presence when user leaves
+        onDisconnect(myPresenceRef).set(false);
+        // Set presence to true
+        set(myPresenceRef, true);
+      }
+    });
+
+    return () => {
+      unsub();
+      // Clear presence when component unmounts
+      set(myPresenceRef, false);
+    };
+  }, [isUnlocked, slotId]);
+
   // Subscribe to typing indicator (needs slotId)
   useEffect(() => {
     if (!isUnlocked || !slotId) {
@@ -96,7 +147,21 @@ export function useChatFirebase(
     const themeRef = ref(rtdb, `${ROOM_PATH}/theme`);
     const unsub = onValue(themeRef, (snap) => {
       const val = snap.val() as string | null;
-      if (val && ["emerald", "blue", "purple", "rose"].includes(val)) {
+      if (
+        val &&
+        [
+          "red",
+          "orange",
+          "yellow",
+          "green",
+          "emerald",
+          "cyan",
+          "blue",
+          "purple",
+          "pink",
+          "rose",
+        ].includes(val)
+      ) {
         setChatTheme(val as ChatTheme);
       }
     });
@@ -181,28 +246,36 @@ export function useChatFirebase(
               const decryptedText = await decryptMessage(msg.text, key);
               return { ...msg, decryptedText };
             } catch {
-              return {
-                ...msg,
-                decryptedText: msg.text,
-                decryptionFailed: true,
-              };
+              return { ...msg, decryptedText: msg.text };
             }
+          } else {
+            return { ...msg, decryptedText: msg.text };
           }
-          return msg;
-        }),
+        })
       );
       setMessages(decrypted);
     }
     decryptAll();
-  }, [rawMessages, encryptionKey]);
+  }, [rawMessages, encryptionKeyRef]);
 
-  const handleThemeChange = useCallback(async (newTheme: ChatTheme) => {
-    try {
-      await set(ref(rtdb, `${ROOM_PATH}/theme`), newTheme);
-    } catch {
-      // ignore
-    }
-  }, []);
+  const handleThemeChange = useCallback(
+    (theme: ChatTheme) => {
+      if (!isUnlocked) return;
+      const themeRef = ref(rtdb, `${ROOM_PATH}/theme`);
+      set(themeRef, theme);
+      setChatTheme(theme);
+    },
+    [isUnlocked]
+  );
+
+  const handleIndicatorColorChange = useCallback(
+    (color: string) => {
+      if (!isUnlocked || !slotId) return;
+      const colorRef = ref(rtdb, `${ROOM_PATH}/indicatorColors/${slotId}`);
+      set(colorRef, color);
+    },
+    [isUnlocked, slotId]
+  );
 
   return {
     slots,
@@ -212,6 +285,9 @@ export function useChatFirebase(
     isOtherTyping,
     chatTheme,
     tttState,
+    presence,
+    indicatorColors,
     handleThemeChange,
+    handleIndicatorColorChange,
   };
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
+import { ChatTheme, ThemeColors } from "../types";
 
 type ImageConfirmModalProps = {
   pendingMediaUrl: string;
@@ -8,6 +10,7 @@ type ImageConfirmModalProps = {
   isSending: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  themeColors: ThemeColors;
 };
 
 export function ImageConfirmModal({
@@ -16,6 +19,7 @@ export function ImageConfirmModal({
   isSending,
   onConfirm,
   onCancel,
+  themeColors,
 }: ImageConfirmModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -34,9 +38,11 @@ export function ImageConfirmModal({
               className="max-h-[320px] w-full object-contain"
             />
           ) : (
-            <img
+            <Image
               src={pendingMediaUrl}
               alt="Preview"
+              width={500} // Adjust width as needed
+              height={320} // Adjust height as needed
               className="max-h-[320px] w-full object-contain"
             />
           )}
@@ -51,7 +57,7 @@ export function ImageConfirmModal({
           <button
             onClick={onConfirm}
             disabled={isSending}
-            className="flex-1 rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`flex-1 rounded-2xl  px-4 py-3 text-sm font-semibold  transition hover:opacity-80-300 disabled:cursor-not-allowed disabled:opacity-60 ${themeColors.btn} ${themeColors.text}`}
           >
             {isSending ? "Sending..." : `Send ${isVideo ? "Video" : "Image"}`}
           </button>

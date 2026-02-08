@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { RING_COLORS, THEME_COLORS } from "../constants";
 import type { Slots, TttState, ThemeColors } from "../types";
 import { WordSearchGame } from "./WordSearchGame";
+import { ColorWheelPicker } from "./ColorWheelPicker";
 
 // Calculate the winning line position and rotation
 function WinningLineOverlay({
@@ -71,6 +72,8 @@ type RoomSpotsViewProps = {
   combo: [number, number, number, number] | null;
   onEditPasskey: () => void;
   themeColors: ThemeColors;
+  indicatorColor?: string;
+  onIndicatorColorChange: (color: string) => void;
 };
 
 export function RoomSpotsView({
@@ -90,11 +93,36 @@ export function RoomSpotsView({
   combo,
   onEditPasskey,
   themeColors,
+  indicatorColor,
+  onIndicatorColorChange,
 }: RoomSpotsViewProps) {
   const [leaveConfirmText, setLeaveConfirmText] = useState("");
   const [activeGame, setActiveGame] = useState<"ttt" | "wordsearch">("ttt");
+  const [showIndicatorColorPicker, setShowIndicatorColorPicker] =
+    useState(false);
+  const indicatorPickerRef = useRef<HTMLDivElement>(null);
+  const indicatorButtonRef = useRef<HTMLButtonElement>(null);
   const LEAVE_CONFIRMATION = "yesireallywanttoactuallyleavefrfr";
   const canLeave = leaveConfirmText === LEAVE_CONFIRMATION;
+
+  // Close indicator color picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        showIndicatorColorPicker &&
+        indicatorPickerRef.current &&
+        !indicatorPickerRef.current.contains(target) &&
+        indicatorButtonRef.current &&
+        !indicatorButtonRef.current.contains(target)
+      ) {
+        setShowIndicatorColorPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showIndicatorColorPicker]);
 
   return (
     <div className="flex-1 overflow-y-auto p-4">
@@ -154,9 +182,44 @@ export function RoomSpotsView({
         </div>
 
         {slotId ? (
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200 text-center">
-            You are in spot {slotId} as{" "}
-            <span className="font-semibold">{screenName}</span>
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200">
+            <div className="flex items-center justify-between">
+              <span>
+                You are in spot {slotId} as{" "}
+                <span className="font-semibold">{screenName}</span>
+              </span>
+              <div className="relative">
+                <button
+                  ref={indicatorButtonRef}
+                  type="button"
+                  onClick={() =>
+                    setShowIndicatorColorPicker(!showIndicatorColorPicker)
+                  }
+                  className="w-6 h-6 rounded-full border-2 border-white/30 transition-all hover:scale-110"
+                  style={{
+                    backgroundColor:
+                      indicatorColor ||
+                      (slotId === "1" ? "#ff3d3f" : "#9d3dff"),
+                  }}
+                  title="Change your tap/swipe indicator color"
+                />
+                {showIndicatorColorPicker && (
+                  <div
+                    ref={indicatorPickerRef}
+                    className="absolute right-0 top-8 bg-white/5 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl z-[200] min-w-[200px]"
+                  >
+                    <ColorWheelPicker
+                      currentColor={
+                        indicatorColor ||
+                        (slotId === "1" ? "#ff3d3f" : "#9d3dff")
+                      }
+                      onColorChange={onIndicatorColorChange}
+                      onClose={() => setShowIndicatorColorPicker(false)}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">

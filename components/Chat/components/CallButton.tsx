@@ -43,7 +43,7 @@ export function CallButton({
     >
       {/* Phone icon */}
       <svg
-        className="h-4 w-4"
+        className="h-5 w-5"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"

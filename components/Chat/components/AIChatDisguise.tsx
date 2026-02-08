@@ -43,7 +43,7 @@ export function AIChatDisguise({
                 Powered by Groq • Ask me anything
               </p>
             </div>
-            <div className="flex-1 space-y-4 overflow-y-auto px-3 sm:px-6 py-6">
+            <div className="flex-1 space-y-4 overflow-y-auto max-h-[60vh] px-3 sm:px-6 py-6">
               {aiMessages.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
                   Start a conversation. Ask about my skills, projects, or how I

@@ -5,17 +5,34 @@ import { ref, onValue, set, remove, push } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { ROOM_PATH } from "../constants";
 
-// Rainbow colors in order
+// Massive rainbow palette grid - organized by hue with light to dark shades
 export const DRAWING_COLORS = [
-  "#ef4444", // red
-  "#f97316", // orange
-  "#eab308", // yellow
-  "#22c55e", // green
-  "#06b6d4", // cyan
-  "#3b82f6", // blue
-  "#8b5cf6", // violet
-  "#ec4899", // pink
+  // Row 1: Lightest shades
+  "#fecaca", "#fed7aa", "#fef08a", "#bbf7d0", "#a7f3d0", "#a5f3fc", "#bfdbfe", "#c4b5fd", "#ddd6fe", "#fbcfe8", "#fecdd3",
+  // Row 2: Light shades
+  "#fca5a5", "#fdba74", "#fde047", "#86efac", "#6ee7b7", "#67e8f9", "#93c5fd", "#a78bfa", "#c4b5fd", "#f9a8d4", "#fda4af",
+  // Row 3: Medium-light
+  "#f87171", "#fb923c", "#facc15", "#4ade80", "#34d399", "#22d3ee", "#60a5fa", "#818cf8", "#a78bfa", "#f472b6", "#fb7185",
+  // Row 4: Vivid/Standard
+  "#ef4444", "#f97316", "#eab308", "#22c55e", "#10b981", "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899", "#f43f5e",
+  // Row 5: Medium-dark
+  "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#059669", "#0891b2", "#2563eb", "#4f46e5", "#7c3aed", "#db2777", "#e11d48",
+  // Row 6: Dark shades
+  "#b91c1c", "#c2410c", "#a16207", "#15803d", "#047857", "#0e7490", "#1d4ed8", "#4338ca", "#6d28d9", "#be185d", "#be123c",
+  // Row 7: Darkest shades
+  "#991b1b", "#9a3412", "#854d0e", "#166534", "#065f46", "#155e75", "#1e40af", "#3730a3", "#5b21b6", "#9d174d", "#9f1239",
+  // Row 8: Extra colors - neons & special
+  "#ff0000", "#ff6600", "#ffff00", "#00ff00", "#00ffcc", "#00ffff", "#0099ff", "#0000ff", "#9900ff", "#ff00ff", "#ff0066",
+  // Row 9: Grayscale
+  "#ffffff", "#f5f5f5", "#e5e5e5", "#d4d4d4", "#a3a3a3", "#737373", "#525252", "#404040", "#262626", "#171717", "#000000",
 ];
+
+// Neon colors that get special glow effects
+export const NEON_COLORS = [
+  "#ff0000", "#ff6600", "#ffff00", "#00ff00", "#00ffcc", "#00ffff", "#0099ff", "#0000ff", "#9900ff", "#ff00ff", "#ff0066",
+];
+
+export const isNeonColor = (color: string) => NEON_COLORS.includes(color.toLowerCase());
 
 export type DrawingPoint = {
   x: number; // percentage 0-100

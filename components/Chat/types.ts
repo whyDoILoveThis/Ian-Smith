@@ -31,6 +31,7 @@ export type Message = {
   replyToSender?: string;
   replyToText?: string;
   readBy?: { "1"?: boolean; "2"?: boolean };
+  seenReceiptBy?: { "1"?: boolean; "2"?: boolean };
   // Ephemeral video fields
   isEphemeral?: boolean;
   viewedBy?: { "1"?: boolean; "2"?: boolean };
@@ -68,7 +69,17 @@ export type CallState = {
   startedAt: number | null;
 };
 
-export type ChatTheme = "emerald" | "blue" | "purple" | "rose";
+export type ChatTheme =
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "emerald"
+  | "cyan"
+  | "blue"
+  | "purple"
+  | "pink"
+  | "rose";
 
 export type ThemeColors = {
   bg: string;

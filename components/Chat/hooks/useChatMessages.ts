@@ -20,6 +20,7 @@ export function useChatMessages(
 
   const typingTimeoutRef = useRef<number | null>(null);
   const markedAsReadRef = useRef<Set<string>>(new Set());
+  const markedReceiptAsSeenRef = useRef<Set<string>>(new Set());
 
   const setTypingState = useCallback(
     async (isTyping: boolean) => {
@@ -180,6 +181,28 @@ export function useChatMessages(
     [slotId],
   );
 
+  // Mark that I've seen my read receipt (so they know I saw that they saw it)
+  const markReceiptAsSeen = useCallback(
+    (msg: Message) => {
+      if (!slotId) return;
+      const otherSlot = slotId === "1" ? "2" : "1";
+      // Only for my messages that the other person has read
+      if (
+        msg.slotId === slotId &&
+        msg.readBy?.[otherSlot] &&
+        !markedReceiptAsSeenRef.current.has(msg.id)
+      ) {
+        markedReceiptAsSeenRef.current.add(msg.id);
+        const seenRef = ref(
+          rtdb,
+          `${ROOM_PATH}/messages/${msg.id}/seenReceiptBy/${slotId}`,
+        );
+        set(seenRef, true).catch(() => {});
+      }
+    },
+    [slotId],
+  );
+
   const handleTypingChange = useCallback(
     (value: string) => {
       setMessageText(value);
@@ -284,6 +307,7 @@ export function useChatMessages(
     handleConfirmImage,
     handleCancelImage,
     markMessageAsRead,
+    markReceiptAsSeen,
     handleTypingChange,
     handleSendEphemeralVideo,
     markEphemeralViewed,
