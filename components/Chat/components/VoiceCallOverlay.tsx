@@ -55,7 +55,10 @@ export function VoiceCallOverlay({
   const isConnecting = callStatus === "connecting";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl"
+      style={{ touchAction: "manipulation" }}
+    >
       {/* Animated background gradient */}
       <div
         className={`absolute inset-0 opacity-30 transition-opacity duration-1000 ${
@@ -67,6 +70,34 @@ export function VoiceCallOverlay({
           } 0%, transparent 70%)`,
         }}
       />
+
+      {/* Close / minimize overlay button — top-right corner */}
+      {onMinimize && (
+        <button
+          type="button"
+          onClick={onMinimize}
+          className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 backdrop-blur-sm transition-all hover:bg-white/20 hover:text-white active:scale-90"
+          style={{
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
+          }}
+          aria-label="Minimize call"
+        >
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      )}
 
       <div className="relative flex flex-col items-center gap-8 px-6 py-10">
         {/* Avatar with audio level indicator */}
@@ -142,6 +173,10 @@ export function VoiceCallOverlay({
                   onEnd();
                 }}
                 className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-rose-600 shadow-2xl shadow-red-500/50 transition-all duration-200 hover:scale-110 active:scale-95"
+                style={{
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                }}
               >
                 <svg
                   className="h-9 w-9 text-white"
@@ -172,6 +207,10 @@ export function VoiceCallOverlay({
                   onAnswer();
                 }}
                 className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 shadow-2xl shadow-emerald-500/50 transition-all duration-200 hover:scale-110 active:scale-95"
+                style={{
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                }}
               >
                 <svg
                   className="h-9 w-9 text-white"

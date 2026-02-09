@@ -82,6 +82,17 @@ export default function AIContentSugestions() {
   // Voice Call
   const voiceCall = useVoiceCall(slotId, roomPath);
 
+  // Auto-expand call overlay when a call starts or an incoming call rings
+  useEffect(() => {
+    if (
+      voiceCall.callStatus === "ringing" ||
+      voiceCall.callStatus === "calling" ||
+      voiceCall.callStatus === "connecting"
+    ) {
+      setIsCallExpanded(true);
+    }
+  }, [voiceCall.callStatus]);
+
   // Touch Indicators
   const touchIndicators = useTouchIndicators(slotId, roomPath);
 
@@ -254,12 +265,10 @@ export default function AIContentSugestions() {
   }
 
   // Main chat UI
-  // Show call overlay when: ringing, calling, connecting, or (connected AND expanded)
-  const showCallOverlay =
-    voiceCall.callStatus === "ringing" ||
-    voiceCall.callStatus === "calling" ||
-    voiceCall.callStatus === "connecting" ||
-    (voiceCall.callStatus === "connected" && isCallExpanded);
+  // Show call overlay when expanded (any active call state)
+  const hasActiveCall =
+    voiceCall.callStatus !== "idle" && voiceCall.callStatus !== "ended";
+  const showCallOverlay = hasActiveCall && isCallExpanded;
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-black">
@@ -337,7 +346,7 @@ export default function AIContentSugestions() {
       />
 
       {/* Active Call Banner (when minimized) */}
-      {!isCallExpanded && voiceCall.callStatus === "connected" && (
+      {!isCallExpanded && hasActiveCall && (
         <ActiveCallBanner
           callStatus={voiceCall.callStatus}
           callDuration={voiceCall.callDuration}

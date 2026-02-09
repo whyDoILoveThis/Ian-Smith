@@ -26,25 +26,61 @@ export function ActiveCallBanner({
   onEndCall,
   onExpand,
 }: ActiveCallBannerProps) {
-  if (callStatus !== "connected") return null;
+  if (callStatus === "idle" || callStatus === "ended") return null;
+
+  const isRinging = callStatus === "ringing";
+  const isCalling = callStatus === "calling";
+  const isConnecting = callStatus === "connecting";
+  const isConnected = callStatus === "connected";
+
+  const statusText = isRinging
+    ? "Incoming call…"
+    : isCalling
+      ? "Calling…"
+      : isConnecting
+        ? "Connecting…"
+        : "Call in progress";
+
+  // Colour tokens – use full class names so Tailwind can detect them
+  const wrapperCls = isRinging
+    ? "from-amber-500/20 via-amber-500/10 to-amber-500/20 border-amber-500/30 hover:bg-amber-500/25"
+    : isConnected
+      ? "from-emerald-500/20 via-emerald-500/10 to-emerald-500/20 border-emerald-500/30 hover:bg-emerald-500/25"
+      : "from-indigo-500/20 via-indigo-500/10 to-indigo-500/20 border-indigo-500/30 hover:bg-indigo-500/25";
+
+  const dotCls = isRinging
+    ? "bg-amber"
+    : isConnected
+      ? "bg-emerald"
+      : "bg-indigo";
+  const textCls = isRinging
+    ? "text-amber-400"
+    : isConnected
+      ? "text-emerald-400"
+      : "text-indigo-400";
 
   return (
     <div
       onClick={onExpand}
-      className="flex-shrink-0 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-500/20 via-emerald-500/10 to-emerald-500/20 border-b border-emerald-500/30 px-3 py-2 cursor-pointer hover:bg-emerald-500/25 transition-colors"
+      className={`flex-shrink-0 flex items-center justify-between gap-3 bg-gradient-to-r ${wrapperCls} border-b px-3 py-2 cursor-pointer transition-colors`}
+      style={{ touchAction: "manipulation" }}
     >
       {/* Left: Status */}
       <div className="flex items-center gap-2">
         <span className="relative flex h-2.5 w-2.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+          <span
+            className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isRinging ? "bg-amber-400" : isConnected ? "bg-emerald-400" : "bg-indigo-400"} opacity-75`}
+          />
+          <span
+            className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isRinging ? "bg-amber-500" : isConnected ? "bg-emerald-500" : "bg-indigo-500"}`}
+          />
         </span>
-        <span className="text-xs font-medium text-emerald-400">
-          Call in progress
-        </span>
-        <span className="text-xs text-emerald-300/70">
-          {formatDuration(callDuration)}
-        </span>
+        <span className={`text-xs font-medium ${textCls}`}>{statusText}</span>
+        {isConnected && (
+          <span className="text-xs text-emerald-300/70">
+            {formatDuration(callDuration)}
+          </span>
+        )}
       </div>
 
       {/* Right: Controls */}

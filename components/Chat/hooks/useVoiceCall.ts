@@ -1,17 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { onValue, push, ref, remove, set, onChildAdded } from "firebase/database";
+import {
+  onValue,
+  push,
+  ref,
+  remove,
+  set,
+  onChildAdded,
+} from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import type { CallStatus, CallSignal } from "../types";
 
-// Free STUN servers - TURN would need a paid service for production
+// ICE servers – multiple STUN endpoints for reliability.
+// For calls across strict mobile-carrier NATs you may need a TURN server.
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
@@ -30,7 +41,45 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
+  // Queue ICE candidates that arrive before remote description is set
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  // Track which Firebase signal keys we already processed (onChildAdded replays)
+  const processedSignalsRef = useRef<Set<string>>(new Set());
+  // Use a ref for callStatus so listeners always see the latest value
+  const callStatusRef = useRef<CallStatus>("idle");
+
   const otherSlotId = slotId === "1" ? "2" : "1";
+
+  // Keep callStatusRef in sync
+  useEffect(() => {
+    callStatusRef.current = callStatus;
+  }, [callStatus]);
+
+  // ── helpers ──────────────────────────────────────────────────────────
+
+  // "Warm up" the audio element so mobile browsers allow playback later.
+  // Must be called inside a real user-gesture handler (click / touchend).
+  const warmUpAudio = useCallback(() => {
+    const audio = remoteAudioRef.current;
+    if (!audio) return;
+    // A play() during a user gesture "unlocks" the element on iOS / Android
+    audio.play().catch(() => {});
+    audio.pause();
+  }, []);
+
+  // Flush any ICE candidates that were queued before remote description
+  const flushPendingCandidates = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc || !pc.remoteDescription) return;
+    const pending = pendingCandidatesRef.current.splice(0);
+    for (const c of pending) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(c));
+      } catch (e) {
+        console.warn("[VoiceCall] Failed to add queued ICE candidate:", e);
+      }
+    }
+  }, []);
 
   // Clean up WebRTC resources
   const cleanup = useCallback(() => {
@@ -41,26 +90,35 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
+      analyserRef.current = null;
     }
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
     if (durationIntervalRef.current) {
       window.clearInterval(durationIntervalRef.current);
       durationIntervalRef.current = null;
     }
+    pendingCandidatesRef.current = [];
     callStartTimeRef.current = null;
     setCallDuration(0);
     setRemoteAudioLevel(0);
   }, []);
 
-  // Create peer connection with handlers
+  // ── Peer connection factory ──────────────────────────────────────────
+
   const createPeerConnection = useCallback(() => {
+    // If one already exists, return it (don't create duplicates)
+    if (peerConnectionRef.current) {
+      const state = peerConnectionRef.current.signalingState;
+      if (state !== "closed") return peerConnectionRef.current;
+    }
+
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
     pc.onicecandidate = (event) => {
@@ -76,49 +134,79 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      console.log("[VoiceCall] ICE state:", pc.iceConnectionState);
+      // Recover from temporary disconnects via ICE restart
+      if (pc.iceConnectionState === "failed") {
+        console.log("[VoiceCall] ICE failed – attempting restart");
+        pc.restartIce();
+      }
+    };
+
     pc.ontrack = (event) => {
       const [remoteStream] = event.streams;
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.play().catch(() => {});
+      if (!remoteAudioRef.current) return;
 
-        // Set up audio level monitoring
-        try {
-          audioContextRef.current = new AudioContext();
-          const source = audioContextRef.current.createMediaStreamSource(remoteStream);
-          analyserRef.current = audioContextRef.current.createAnalyser();
-          analyserRef.current.fftSize = 256;
-          source.connect(analyserRef.current);
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current
+        .play()
+        .catch((e) =>
+          console.warn("[VoiceCall] audio.play() blocked:", e.message),
+        );
 
-          const updateLevel = () => {
-            if (!analyserRef.current) return;
-            const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-            analyserRef.current.getByteFrequencyData(dataArray);
-            const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-            setRemoteAudioLevel(Math.min(100, average * 1.5));
-            animationFrameRef.current = requestAnimationFrame(updateLevel);
-          };
-          updateLevel();
-        } catch {
-          // Audio context not supported
-        }
+      // Set up audio level monitoring for the visual indicator
+      try {
+        const AC =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AC) return;
+        const ctx = new AC();
+        audioContextRef.current = ctx;
+        // Resume context (required on iOS Safari after user gesture)
+        if (ctx.state === "suspended") ctx.resume().catch(() => {});
+        const source = ctx.createMediaStreamSource(remoteStream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        analyserRef.current = analyser;
+        source.connect(analyser);
+
+        const updateLevel = () => {
+          if (!analyserRef.current) return;
+          const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+          analyserRef.current.getByteFrequencyData(data);
+          const avg = data.reduce((a, b) => a + b, 0) / data.length;
+          setRemoteAudioLevel(Math.min(100, avg * 1.5));
+          animationFrameRef.current = requestAnimationFrame(updateLevel);
+        };
+        updateLevel();
+      } catch {
+        /* audio analyser not supported – call still works */
       }
     };
 
     pc.onconnectionstatechange = () => {
+      console.log("[VoiceCall] connection state:", pc.connectionState);
       if (pc.connectionState === "connected") {
         setCallStatus("connected");
         callStartTimeRef.current = Date.now();
         durationIntervalRef.current = window.setInterval(() => {
           if (callStartTimeRef.current) {
-            setCallDuration(Math.floor((Date.now() - callStartTimeRef.current) / 1000));
+            setCallDuration(
+              Math.floor((Date.now() - callStartTimeRef.current) / 1000),
+            );
           }
         }, 1000);
-      } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
-        // Clean up on disconnect/failure - don't call endCall to avoid circular dep
+      } else if (
+        pc.connectionState === "disconnected" ||
+        pc.connectionState === "failed"
+      ) {
         cleanup();
         setCallStatus("idle");
         setCallerId(null);
+        // Also remove Firebase state so the other side sees the call ended
+        remove(ref(rtdb, `${roomPath}/callState`)).catch(() => {});
+        remove(ref(rtdb, `${roomPath}/callSignals`)).catch(() => {});
       }
     };
 
@@ -126,16 +214,30 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     return pc;
   }, [slotId, otherSlotId, cleanup, roomPath]);
 
-  // Start an outgoing call
+  // ── Start an outgoing call ───────────────────────────────────────────
+
   const startCall = useCallback(async () => {
-    if (!slotId || callStatus !== "idle") return;
+    if (!slotId || callStatusRef.current !== "idle") return;
 
     try {
       setCallStatus("calling");
       setCallerId(slotId);
 
+      // Warm-up audio so remote playback is unlocked (user-gesture context)
+      warmUpAudio();
+
+      // Clear any stale signals / state
+      processedSignalsRef.current.clear();
+      await remove(ref(rtdb, `${roomPath}/callSignals`)).catch(() => {});
+
       // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       localStreamRef.current = stream;
 
       const pc = createPeerConnection();
@@ -154,38 +256,59 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
         timestamp: { ".sv": "timestamp" },
       } as CallSignal);
 
-      // Set call state in Firebase
+      // Set call state in Firebase so the other party sees "ringing"
       await set(ref(rtdb, `${roomPath}/callState`), {
         status: "calling",
         callerId: slotId,
         startedAt: { ".sv": "timestamp" },
       });
     } catch (err) {
-      console.error("Failed to start call:", err);
+      console.error("[VoiceCall] Failed to start call:", err);
       cleanup();
       setCallStatus("idle");
       setCallerId(null);
     }
-  }, [slotId, callStatus, otherSlotId, createPeerConnection, cleanup, roomPath]);
+  }, [slotId, otherSlotId, createPeerConnection, cleanup, warmUpAudio, roomPath]);
 
-  // Answer an incoming call
+  // ── Answer an incoming call ──────────────────────────────────────────
+
   const answerCall = useCallback(async () => {
-    if (!slotId || callStatus !== "ringing") return;
+    if (!slotId || callStatusRef.current !== "ringing") return;
 
     try {
       setCallStatus("connecting");
 
+      // Warm-up audio so remote playback is unlocked (user-gesture context)
+      warmUpAudio();
+
       // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       localStreamRef.current = stream;
 
-      const pc = createPeerConnection();
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      // *** KEY FIX: reuse the PeerConnection that was created when the
+      // offer signal arrived (it already has remoteDescription set). ***
+      let pc = peerConnectionRef.current;
+      if (!pc || pc.signalingState === "closed") {
+        console.warn(
+          "[VoiceCall] No existing PC with offer – creating fresh one",
+        );
+        pc = createPeerConnection();
+      }
 
-      // The offer should already be set as remote description from the signal listener
+      // Add our audio tracks to the existing PC
+      stream.getTracks().forEach((track) => pc!.addTrack(track, stream));
+
+      // Create answer (remote description was set by signal handler)
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
+      // Send the answer signal to the caller
       const signalRef = ref(rtdb, `${roomPath}/callSignals`);
       await push(signalRef, {
         from: slotId,
@@ -197,14 +320,15 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
 
       await set(ref(rtdb, `${roomPath}/callState/status`), "connected");
     } catch (err) {
-      console.error("Failed to answer call:", err);
+      console.error("[VoiceCall] Failed to answer call:", err);
       cleanup();
       setCallStatus("idle");
       setCallerId(null);
     }
-  }, [slotId, callStatus, otherSlotId, createPeerConnection, cleanup, roomPath]);
+  }, [slotId, otherSlotId, createPeerConnection, cleanup, warmUpAudio, roomPath]);
 
-  // End/decline call
+  // ── End / decline call ───────────────────────────────────────────────
+
   const endCall = useCallback(async () => {
     if (!slotId) return;
 
@@ -226,9 +350,11 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     cleanup();
     setCallStatus("idle");
     setCallerId(null);
+    processedSignalsRef.current.clear();
   }, [slotId, otherSlotId, cleanup, roomPath]);
 
-  // Toggle mute
+  // ── Toggle mute ──────────────────────────────────────────────────────
+
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
@@ -239,17 +365,18 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     }
   }, []);
 
-  // Listen for call state changes
+  // ── Listen for call state (presence of an active call in Firebase) ──
+
   useEffect(() => {
     if (!slotId) return;
 
     const callStateRef = ref(rtdb, `${roomPath}/callState`);
     const unsubscribe = onValue(callStateRef, (snapshot) => {
       const state = snapshot.val();
-      
+
       if (!state) {
         // Call ended by other party
-        if (callStatus !== "idle") {
+        if (callStatusRef.current !== "idle") {
           cleanup();
           setCallStatus("idle");
           setCallerId(null);
@@ -257,72 +384,110 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
         return;
       }
 
-      // Incoming call
-      if (state.status === "calling" && state.callerId !== slotId && callStatus === "idle") {
+      // Incoming call – only transition to ringing from idle
+      if (
+        state.status === "calling" &&
+        state.callerId !== slotId &&
+        callStatusRef.current === "idle"
+      ) {
         setCallStatus("ringing");
         setCallerId(state.callerId);
       }
     });
 
     return () => unsubscribe();
-  }, [slotId, callStatus, cleanup, roomPath]);
+    // NOTE: we deliberately use callStatusRef instead of callStatus so this
+    // effect does NOT re-subscribe every time callStatus changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotId, cleanup, roomPath]);
 
-  // Listen for signaling messages
+  // ── Listen for WebRTC signaling messages ─────────────────────────────
+
   useEffect(() => {
     if (!slotId) return;
 
     const signalsRef = ref(rtdb, `${roomPath}/callSignals`);
-    const unsubscribe = onChildAdded(signalsRef, async (snapshot) => {
-      const signal = snapshot.val() as CallSignal;
-      
-      // Only process signals meant for us
-      if (signal.to !== slotId) return;
 
-      const pc = peerConnectionRef.current;
+    const unsubscribe = onChildAdded(signalsRef, async (snapshot) => {
+      const key = snapshot.key;
+      // Deduplicate: onChildAdded replays all existing children on re-subscribe
+      if (!key || processedSignalsRef.current.has(key)) return;
+      processedSignalsRef.current.add(key);
+
+      const signal = snapshot.val() as CallSignal;
+
+      // Only process signals addressed to us
+      if (signal.to !== slotId) return;
 
       try {
         switch (signal.type) {
-          case "offer":
-            if (!pc) {
-              // Create peer connection for incoming call
-              const newPc = createPeerConnection();
-              await newPc.setRemoteDescription({ type: "offer", sdp: signal.sdp });
-            } else {
-              await pc.setRemoteDescription({ type: "offer", sdp: signal.sdp });
-            }
+          case "offer": {
+            // Create (or reuse) a peer connection and store the remote offer
+            const pc = createPeerConnection();
+            await pc.setRemoteDescription({
+              type: "offer",
+              sdp: signal.sdp,
+            });
+            // Flush any ICE candidates that arrived before the offer
+            await flushPendingCandidates();
             break;
+          }
 
-          case "answer":
+          case "answer": {
+            const pc = peerConnectionRef.current;
             if (pc && pc.signalingState === "have-local-offer") {
-              await pc.setRemoteDescription({ type: "answer", sdp: signal.sdp });
+              await pc.setRemoteDescription({
+                type: "answer",
+                sdp: signal.sdp,
+              });
+              // Flush any ICE candidates that arrived before the answer
+              await flushPendingCandidates();
             }
             break;
+          }
 
-          case "candidate":
-            if (pc && signal.candidate) {
-              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          case "candidate": {
+            if (!signal.candidate) break;
+            const pc = peerConnectionRef.current;
+            // If we have a PC with remote description, add immediately;
+            // otherwise queue it for later.
+            if (pc && pc.remoteDescription) {
+              try {
+                await pc.addIceCandidate(
+                  new RTCIceCandidate(signal.candidate),
+                );
+              } catch (e) {
+                console.warn("[VoiceCall] addIceCandidate failed:", e);
+              }
+            } else {
+              pendingCandidatesRef.current.push(signal.candidate);
             }
             break;
+          }
 
-          case "hangup":
+          case "hangup": {
             cleanup();
             setCallStatus("idle");
             setCallerId(null);
             break;
+          }
         }
       } catch (err) {
-        console.error("Signal handling error:", err);
+        console.error("[VoiceCall] Signal handling error:", err);
       }
     });
 
     return () => unsubscribe();
-  }, [slotId, createPeerConnection, cleanup, roomPath]);
+  }, [slotId, createPeerConnection, cleanup, flushPendingCandidates, roomPath]);
 
-  // Create audio element for remote stream
+  // ── Create audio element (once) for remote stream playback ───────────
+
   useEffect(() => {
     const audio = document.createElement("audio");
     audio.autoplay = true;
     audio.setAttribute("playsinline", "true");
+    // Allow audio to play when phone is on silent (iOS)
+    audio.setAttribute("x-webkit-airplay", "allow");
     remoteAudioRef.current = audio;
 
     return () => {
@@ -331,7 +496,8 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     };
   }, []);
 
-  // Cleanup on unmount
+  // ── Cleanup on unmount ───────────────────────────────────────────────
+
   useEffect(() => {
     return () => {
       cleanup();
