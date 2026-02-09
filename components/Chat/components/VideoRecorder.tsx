@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
 type VideoRecorderProps = {
   onClose: () => void;
-  onSend: (videoBlob: Blob) => void;
+  onSend: (videoBlob: Blob, caption: string) => void;
   isSending: boolean;
 };
 
@@ -148,6 +148,7 @@ export function VideoRecorder({
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [caption, setCaption] = useState("");
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -463,9 +464,9 @@ export function VideoRecorder({
 
   const handleSend = useCallback(() => {
     if (recordedBlob) {
-      onSend(recordedBlob);
+      onSend(recordedBlob, caption);
     }
-  }, [recordedBlob, onSend]);
+  }, [recordedBlob, onSend, caption]);
 
   const handleClose = useCallback(() => {
     if (streamRef.current) {
@@ -728,6 +729,22 @@ export function VideoRecorder({
               </>
             )}
           </div>
+
+          {/* Caption input - visible when reviewing recorded video */}
+          {recordedBlob && (
+            <div className="absolute bottom-24 left-4 right-4">
+              <input
+                type="text"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !isSending) handleSend();
+                }}
+                placeholder="Add a message..."
+                className="w-full rounded-xl border border-white/10 bg-black/60 backdrop-blur-sm px-3 py-2.5 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/20"
+              />
+            </div>
+          )}
 
           {/* Ephemeral video notice */}
           <div className="absolute top-6 left-6 flex flex-col gap-2">

@@ -59,7 +59,13 @@ export function useChatMessages(
       if (replyingTo) {
         msgData.replyToId = replyingTo.id;
         msgData.replyToSender = replyingTo.sender;
-        msgData.replyToText = replyingTo.decryptedText?.slice(0, 100) || "";
+        msgData.replyToText = replyingTo.decryptedText?.slice(0, 100)
+          || (replyingTo.imageUrl ? "📷 Image" : "")
+          || (replyingTo.drawingData?.length ? "🎨 Drawing" : "")
+          || (replyingTo.videoUrl ? "📹 Video" : "");
+        if (replyingTo.imageUrl) {
+          msgData.replyToImageUrl = replyingTo.imageUrl;
+        }
       }
 
       const msgRef = ref(rtdb, `${roomPath}/messages`);
@@ -108,6 +114,7 @@ export function useChatMessages(
       setPendingImageFile: (file: File | null) => void,
       setPendingImageUrl: (url: string | null) => void,
       setIsImageConfirmOpen: (open: boolean) => void,
+      caption?: string,
     ) => {
       if (!pendingImageFile || !slotId || !screenName.trim()) return;
       setIsSending(true);
@@ -122,6 +129,10 @@ export function useChatMessages(
           sender: screenName.trim(),
           createdAt: { ".sv": "timestamp" },
         };
+
+        if (caption?.trim() && encryptionKey) {
+          msgData.text = await encryptMessage(caption.trim(), encryptionKey);
+        }
         
         if (isVideo) {
           msgData.videoUrl = upload.url;
@@ -145,7 +156,7 @@ export function useChatMessages(
       setPendingImageUrl(null);
       setIsImageConfirmOpen(false);
     },
-    [screenName, slotId, roomPath],
+    [screenName, slotId, roomPath, encryptionKey],
   );
 
   const handleCancelImage = useCallback(
@@ -221,7 +232,7 @@ export function useChatMessages(
 
   // Handle sending ephemeral video (recorded in-app)
   const handleSendEphemeralVideo = useCallback(
-    async (videoBlob: Blob) => {
+    async (videoBlob: Blob, caption?: string) => {
       if (!slotId || !screenName.trim()) return;
       setIsSending(true);
 
@@ -243,6 +254,10 @@ export function useChatMessages(
           createdAt: { ".sv": "timestamp" },
         };
 
+        if (caption?.trim() && encryptionKey) {
+          msgData.text = await encryptMessage(caption.trim(), encryptionKey);
+        }
+
         await push(msgRef, msgData);
       } catch {
         throw new Error("Ephemeral video failed to send.");
@@ -250,12 +265,12 @@ export function useChatMessages(
         setIsSending(false);
       }
     },
-    [screenName, slotId, roomPath],
+    [screenName, slotId, roomPath, encryptionKey],
   );
 
   // Handle sending a recorded drawing
   const handleSendDrawing = useCallback(
-    async (strokes: RecordedDrawingStroke[], duration: number) => {
+    async (strokes: RecordedDrawingStroke[], duration: number, caption?: string) => {
       if (!slotId || !screenName.trim() || strokes.length === 0) return;
       setIsSending(true);
 
@@ -269,6 +284,10 @@ export function useChatMessages(
           createdAt: { ".sv": "timestamp" },
         };
 
+        if (caption?.trim() && encryptionKey) {
+          msgData.text = await encryptMessage(caption.trim(), encryptionKey);
+        }
+
         await push(msgRef, msgData);
       } catch {
         throw new Error("Drawing failed to send.");
@@ -276,7 +295,7 @@ export function useChatMessages(
         setIsSending(false);
       }
     },
-    [screenName, slotId, roomPath],
+    [screenName, slotId, roomPath, encryptionKey],
   );
 
   // Mark ephemeral video as viewed by current user
@@ -317,6 +336,36 @@ export function useChatMessages(
         console.log(`✅ Deleted ephemeral message from Firebase: ${messageId}`);
       } catch (err) {
         console.error("Failed to delete ephemeral message:", err);
+      }
+    },
+    [slotId, roomPath],
+  );
+
+  // Delete any message (only call for own messages)
+  const deleteMessage = useCallback(
+    async (messageId: string, imageFileId?: string, videoFileId?: string) => {
+      if (!slotId) return;
+      try {
+        // Clean up Appwrite files if present
+        if (imageFileId) {
+          try {
+            await appwrImgDelete(imageFileId);
+          } catch (err) {
+            console.error("Failed to delete image from Appwrite:", err);
+          }
+        }
+        if (videoFileId) {
+          try {
+            await appwrImgDelete(videoFileId);
+          } catch (err) {
+            console.error("Failed to delete video from Appwrite:", err);
+          }
+        }
+
+        const messageRef = ref(rtdb, `${roomPath}/messages/${messageId}`);
+        await remove(messageRef);
+      } catch (err) {
+        console.error("Failed to delete message:", err);
       }
     },
     [slotId, roomPath],
@@ -363,6 +412,7 @@ export function useChatMessages(
     handleSendDrawing,
     markEphemeralViewed,
     deleteEphemeralMessage,
+    deleteMessage,
     toggleReaction,
   };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type { RecordedDrawingStroke, ThemeColors } from "../types";
 import { DrawingPlayer } from "./DrawingPlayer";
 
@@ -9,7 +9,7 @@ type DrawingRecordPreviewProps = {
   duration: number;
   themeColors: ThemeColors;
   isSending: boolean;
-  onConfirm: () => void;
+  onConfirm: (caption: string) => void;
   onCancel: () => void;
 };
 
@@ -22,6 +22,7 @@ export function DrawingRecordPreview({
   onCancel,
 }: DrawingRecordPreviewProps) {
   const durationSec = (duration / 1000).toFixed(1);
+  const [caption, setCaption] = useState("");
 
   return (
     <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -44,7 +45,18 @@ export function DrawingRecordPreview({
           />
         </div>
 
-        <div className="mt-5 flex gap-3">
+        <input
+          type="text"
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !isSending) onConfirm(caption);
+          }}
+          placeholder="Add a message..."
+          className="mt-3 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/20"
+        />
+
+        <div className="mt-4 flex gap-3">
           <button
             type="button"
             onClick={onCancel}
@@ -55,7 +67,7 @@ export function DrawingRecordPreview({
           </button>
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={() => onConfirm(caption)}
             disabled={isSending || strokes.length === 0}
             className={`flex-1 rounded-2xl py-3 text-sm font-semibold transition disabled:opacity-50 ${themeColors.bg} ${themeColors.text}`}
           >

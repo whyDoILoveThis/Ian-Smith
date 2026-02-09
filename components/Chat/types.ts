@@ -30,6 +30,7 @@ export type Message = {
   replyToId?: string;
   replyToSender?: string;
   replyToText?: string;
+  replyToImageUrl?: string;
   readBy?: { "1"?: boolean; "2"?: boolean };
   seenReceiptBy?: { "1"?: boolean; "2"?: boolean };
   // Ephemeral video fields

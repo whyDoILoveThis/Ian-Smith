@@ -35,6 +35,13 @@ export function ChatInputArea({
       {/* Reply preview bar */}
       {replyingTo && (
         <div className="mb-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-2 py-1.5 text-sm">
+          {replyingTo.imageUrl && (
+            <img
+              src={replyingTo.imageUrl}
+              alt="Reply"
+              className="w-10 h-10 rounded object-cover border border-white/10 flex-shrink-0"
+            />
+          )}
           <div className={`flex-1 border-l-2 border-${chatTheme}-400 pl-2`}>
             <p className={`text-[10px] text-${chatTheme}-400 font-semibold`}>
               Replying to {replyingTo.sender}
@@ -42,6 +49,7 @@ export function ChatInputArea({
             <p className="text-[10px] text-neutral-400 truncate">
               {replyingTo.decryptedText?.slice(0, 40) ||
                 (replyingTo.imageUrl ? "📷 Image" : "") ||
+                (replyingTo.drawingData?.length ? "🎨 Drawing" : "") ||
                 (replyingTo.videoUrl ? "📹 Video" : "")}
             </p>
           </div>

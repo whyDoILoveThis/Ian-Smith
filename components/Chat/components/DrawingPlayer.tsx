@@ -152,7 +152,7 @@ export function DrawingPlayer({
   const hasFinished = !isPlaying && currentTime >= duration && currentTime > 0;
 
   const containerClass = fullscreen
-    ? "fixed inset-0 z-[150] bg-black/90 flex items-center justify-center"
+    ? "fixed inset-0 z-[150] flex items-center justify-center pointer-events-none"
     : `relative bg-black/60 rounded-xl overflow-hidden ${className}`;
 
   return (
@@ -215,7 +215,7 @@ export function DrawingPlayer({
             e.stopPropagation();
             startPlayback();
           }}
-          className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/20 transition-colors z-10"
+          className={`absolute inset-0 flex items-center justify-center ${fullscreen ? "bg-transparent" : "bg-black/30 hover:bg-black/20"} transition-colors z-10 ${fullscreen ? "pointer-events-auto" : ""}`}
         >
           <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
             {hasFinished ? (

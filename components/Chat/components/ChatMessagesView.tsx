@@ -17,8 +17,6 @@ type ChatMessagesViewProps = {
   messages: Message[];
   slotId: "1" | "2" | null;
   themeColors: ThemeColors;
-  visibleMessageCount: number;
-  setVisibleMessageCount: React.Dispatch<React.SetStateAction<number>>;
   isOtherTyping: boolean;
   formatTimestamp: (createdAt?: number | object) => string;
   setReplyingTo: (msg: Message | null) => void;
@@ -26,6 +24,11 @@ type ChatMessagesViewProps = {
   markReceiptAsSeen: (msg: Message) => void;
   onMarkEphemeralViewed: (messageId: string) => void;
   onDeleteEphemeralMessage: (messageId: string, videoFileId?: string) => void;
+  onDeleteMessage: (
+    messageId: string,
+    imageFileId?: string,
+    videoFileId?: string,
+  ) => void;
   onReact: (messageId: string, emoji: string) => void;
 };
 
@@ -33,8 +36,6 @@ export function ChatMessagesView({
   messages,
   slotId,
   themeColors,
-  visibleMessageCount,
-  setVisibleMessageCount,
   isOtherTyping,
   formatTimestamp,
   setReplyingTo,
@@ -42,10 +43,54 @@ export function ChatMessagesView({
   markReceiptAsSeen,
   onMarkEphemeralViewed,
   onDeleteEphemeralMessage,
+  onDeleteMessage,
   onReact,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const [messageOffset, setMessageOffset] = useState(0);
+
+  // Compute the visible window slice
+  const windowEnd = messages.length - messageOffset;
+  const windowStart = Math.max(0, windowEnd - MESSAGES_PER_PAGE);
+  const visibleMessages = messages.slice(windowStart, windowEnd);
+  const hasOlder = windowStart > 0;
+  const hasNewer = messageOffset > 0;
+
+  const scrollToMessage = useCallback(
+    (messageId: string) => {
+      const el = scrollContainerRef.current?.querySelector(
+        `[data-msg-id="${messageId}"]`,
+      ) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightedMsgId(messageId);
+        setTimeout(() => setHighlightedMsgId(null), 1500);
+      } else {
+        // Message might be outside the visible window — find its index and jump there
+        const idx = messages.findIndex((m) => m.id === messageId);
+        if (idx !== -1) {
+          const newOffset = Math.max(
+            0,
+            messages.length - idx - MESSAGES_PER_PAGE,
+          );
+          setMessageOffset(newOffset);
+          setTimeout(() => {
+            const retryEl = scrollContainerRef.current?.querySelector(
+              `[data-msg-id="${messageId}"]`,
+            ) as HTMLElement | null;
+            if (retryEl) {
+              retryEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              setHighlightedMsgId(messageId);
+              setTimeout(() => setHighlightedMsgId(null), 1500);
+            }
+          }, 100);
+        }
+      }
+    },
+    [messages],
+  );
 
   // Ephemeral video state
   const [activeEphemeralVideo, setActiveEphemeralVideo] = useState<{
@@ -53,14 +98,19 @@ export function ChatMessagesView({
     videoUrl: string;
     sender: string;
     videoFileId?: string;
+    isMine: boolean;
   } | null>(null);
   const [poofingMessageIds, setPoofingMessageIds] = useState<Set<string>>(
     new Set(),
   );
+  const [activeDrawing, setActiveDrawing] = useState<{
+    strokes: import("../types").RecordedDrawingStroke[];
+    duration: number;
+  } | null>(null);
 
-  // Handle ephemeral video close - trigger poof animation then delete
+  // Handle ephemeral video close - only trigger disappear for recipient, not sender
   const handleEphemeralVideoClose = useCallback(() => {
-    if (activeEphemeralVideo && slotId) {
+    if (activeEphemeralVideo && slotId && !activeEphemeralVideo.isMine) {
       const { messageId, videoFileId } = activeEphemeralVideo;
       // Mark as viewed first
       onMarkEphemeralViewed(messageId);
@@ -107,6 +157,35 @@ export function ChatMessagesView({
       markReceiptAsSeen(msg);
     });
   }, [messages, slotId, markReceiptAsSeen]);
+
+  // Long-press delete state
+  const [longPressedMsgId, setLongPressedMsgId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLongPressStart = useCallback((msgId: string, isMine: boolean) => {
+    if (!isMine) return;
+    longPressTimerRef.current = setTimeout(() => {
+      setLongPressedMsgId((prev) => (prev === msgId ? null : msgId));
+    }, 500);
+  }, []);
+
+  const handleLongPressEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  // Dismiss delete button when tapping elsewhere
+  const handleContainerClick = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      // Only dismiss if clicking on the scroll container itself, not on a message
+      if (e.target === e.currentTarget) {
+        setLongPressedMsgId(null);
+      }
+    },
+    [],
+  );
 
   const handleSwipeStart = useCallback(
     (e: React.TouchEvent<HTMLDivElement>, msg: Message, isMine: boolean) => {
@@ -168,6 +247,7 @@ export function ChatMessagesView({
     <div
       ref={scrollContainerRef}
       className="flex-1 overflow-y-auto overscroll-contain px-2 py-3 space-y-2"
+      onClick={handleContainerClick}
     >
       {messages.length === 0 && (
         <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
@@ -176,22 +256,18 @@ export function ChatMessagesView({
       )}
 
       {/* Load older messages button */}
-      {messages.length > visibleMessageCount && (
+      {hasOlder && (
         <button
           type="button"
-          onClick={() =>
-            setVisibleMessageCount((prev) => prev + MESSAGES_PER_PAGE)
-          }
+          onClick={() => setMessageOffset((prev) => prev + MESSAGES_PER_PAGE)}
           className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white transition-colors"
         >
-          ↑ Load{" "}
-          {Math.min(MESSAGES_PER_PAGE, messages.length - visibleMessageCount)}{" "}
-          older messages
+          ↑ Load {Math.min(MESSAGES_PER_PAGE, windowStart)} older messages
         </button>
       )}
 
-      {/* Only render last N messages for performance */}
-      {messages.slice(-visibleMessageCount).map((msg) => {
+      {/* Only render the current window of messages */}
+      {visibleMessages.map((msg) => {
         const isMine = slotId === msg.slotId;
         const timestamp = formatTimestamp(msg.createdAt);
         const isPoofing = poofingMessageIds.has(msg.id);
@@ -199,7 +275,10 @@ export function ChatMessagesView({
         return (
           <div
             key={msg.id}
-            className={`group flex ${isMine ? "justify-end" : "justify-start"} relative`}
+            data-msg-id={msg.id}
+            className={`group flex ${isMine ? "justify-end" : "justify-start"} relative transition-colors duration-700 rounded-2xl ${
+              highlightedMsgId === msg.id ? "bg-white/10" : ""
+            }`}
           >
             {/* Cloud Poof Animation overlay */}
             {isPoofing && (
@@ -218,8 +297,45 @@ export function ChatMessagesView({
                     ? `${themeColors.bg} ${themeColors.text} rounded-br-none`
                     : "bg-white/10 text-white rounded-bl-none"
                 }`}
-                onTouchStart={(e) => handleSwipeStart(e, msg, isMine)}
+                onTouchStart={(e) => {
+                  handleSwipeStart(e, msg, isMine);
+                  handleLongPressStart(msg.id, isMine);
+                }}
+                onTouchEnd={handleLongPressEnd}
+                onTouchMove={handleLongPressEnd}
+                onMouseDown={() => handleLongPressStart(msg.id, isMine)}
+                onMouseUp={handleLongPressEnd}
+                onMouseLeave={handleLongPressEnd}
               >
+                {/* Delete button (long-press) */}
+                {isMine && longPressedMsgId === msg.id && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteMessage(msg.id, msg.imageFileId, msg.videoFileId);
+                      setLongPressedMsgId(null);
+                    }}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 ${
+                      isMine ? "-left-10" : "-right-10"
+                    } w-8 h-8 flex items-center justify-center rounded-full bg-red-500/90 hover:bg-red-600 shadow-lg transition-all animate-in fade-in zoom-in duration-200`}
+                  >
+                    <svg
+                      className="w-4 h-4 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                )}
+
                 {/* Reply button on hover (desktop) */}
                 <button
                   type="button"
@@ -252,9 +368,14 @@ export function ChatMessagesView({
                 />
 
                 {/* Reply preview if this is a reply */}
-                {msg.replyToText && (
-                  <div
-                    className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] border-l-4 ${
+                {(msg.replyToText || msg.replyToImageUrl) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (msg.replyToId) scrollToMessage(msg.replyToId);
+                    }}
+                    className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] border-l-4 text-left w-full cursor-pointer active:opacity-70 transition-opacity ${
                       isMine
                         ? "bg-black/10 border-black/40"
                         : "bg-white/5 border-white/20"
@@ -267,10 +388,19 @@ export function ChatMessagesView({
                     <p className="font-semibold opacity-80">
                       {msg.replyToSender}
                     </p>
-                    <p className="truncate opacity-60 max-w-[200px]">
-                      {msg.replyToText}
-                    </p>
-                  </div>
+                    {msg.replyToImageUrl && (
+                      <img
+                        src={msg.replyToImageUrl}
+                        alt="Reply"
+                        className="mt-1 mb-1 w-12 h-12 rounded object-cover border border-white/10"
+                      />
+                    )}
+                    {msg.replyToText && (
+                      <p className="truncate opacity-60 max-w-[200px]">
+                        {msg.replyToText}
+                      </p>
+                    )}
+                  </button>
                 )}
 
                 <p className="text-[11px] uppercase tracking-wide opacity-70">
@@ -293,16 +423,62 @@ export function ChatMessagesView({
                     className="mt-2 w-full rounded-xl border border-white/10"
                   />
                 )}
-                {/* Drawing message */}
+                {/* Drawing message - tap to play fullscreen */}
                 {msg.drawingData && msg.drawingData.length > 0 && (
-                  <div className="mt-2 w-full rounded-xl border border-white/10 overflow-hidden aspect-video">
-                    <DrawingPlayer
-                      strokes={msg.drawingData}
-                      duration={msg.drawingDuration || 3000}
-                      showPlayButton
-                      className="w-full h-full"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveDrawing({
+                        strokes: msg.drawingData!,
+                        duration: msg.drawingDuration || 3000,
+                      });
+                    }}
+                    className="mt-2 w-full rounded-xl border border-white/10 overflow-hidden aspect-video relative bg-black/60 group/draw"
+                  >
+                    {/* Static thumbnail showing all strokes */}
+                    <svg
+                      className="w-full h-full absolute inset-0"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                    >
+                      {msg.drawingData.map((s, idx) => {
+                        if (s.points.length < 2) return null;
+                        let path = `M ${s.points[0].x} ${s.points[0].y}`;
+                        for (let i = 1; i < s.points.length - 1; i++) {
+                          const curr = s.points[i];
+                          const next = s.points[i + 1];
+                          path += ` Q ${curr.x} ${curr.y} ${(curr.x + next.x) / 2} ${(curr.y + next.y) / 2}`;
+                        }
+                        const last = s.points[s.points.length - 1];
+                        path += ` L ${last.x} ${last.y}`;
+                        return (
+                          <path
+                            key={idx}
+                            d={path}
+                            stroke={s.color}
+                            strokeWidth="0.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            fill="none"
+                            opacity={0.7}
+                          />
+                        );
+                      })}
+                    </svg>
+                    {/* Play icon */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/draw:bg-black/10 transition-colors">
+                      <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                        <svg
+                          className="w-5 h-5 text-white ml-0.5"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
+                    </div>
+                  </button>
                 )}
                 {msg.videoUrl && !msg.isEphemeral && (
                   <video
@@ -314,7 +490,7 @@ export function ChatMessagesView({
                 {/* Ephemeral video - show icon button instead of inline video */}
                 {msg.videoUrl &&
                   msg.isEphemeral &&
-                  !msg.disappearedFor?.[slotId ?? "1"] && (
+                  (isMine || !msg.disappearedFor?.[slotId ?? "1"]) && (
                     <button
                       type="button"
                       onClick={() =>
@@ -323,6 +499,7 @@ export function ChatMessagesView({
                           videoUrl: msg.videoUrl!,
                           sender: msg.sender,
                           videoFileId: msg.videoFileId,
+                          isMine,
                         })
                       }
                       className="mt-2 w-full flex items-center justify-center gap-2 py-6 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-600/20 hover:from-amber-500/30 hover:to-orange-600/30 transition-all duration-300 group"
@@ -344,14 +521,17 @@ export function ChatMessagesView({
                           Ephemeral Video
                         </span>
                         <span className="text-amber-400/60 text-[10px]">
-                          Tap to view • Disappears after watching
+                          {isMine
+                            ? "Tap to view • Disappears when they watch"
+                            : "Tap to view • Disappears after watching"}
                         </span>
                       </div>
                     </button>
                   )}
-                {/* Ephemeral video that has been viewed - show placeholder */}
+                {/* Ephemeral video that has been viewed - show placeholder (only for recipient) */}
                 {msg.videoUrl &&
                   msg.isEphemeral &&
+                  !isMine &&
                   msg.disappearedFor?.[slotId ?? "1"] && (
                     <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
                       <svg
@@ -418,6 +598,17 @@ export function ChatMessagesView({
         );
       })}
 
+      {/* Jump to newest messages button */}
+      {hasNewer && (
+        <button
+          type="button"
+          onClick={() => setMessageOffset(0)}
+          className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white transition-colors"
+        >
+          ↓ Back to newest messages
+        </button>
+      )}
+
       {isOtherTyping && (
         <div className="flex justify-start">
           <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
@@ -451,6 +642,39 @@ export function ChatMessagesView({
           onClose={handleEphemeralVideoClose}
           onViewed={() => {}}
         />
+      )}
+
+      {/* Fullscreen Drawing Playback Overlay */}
+      {activeDrawing && (
+        <div className="fixed inset-0 z-[200] pointer-events-none">
+          <DrawingPlayer
+            strokes={activeDrawing.strokes}
+            duration={activeDrawing.duration}
+            autoPlay
+            showPlayButton
+            fullscreen
+            onComplete={() => {}}
+          />
+          <button
+            type="button"
+            onClick={() => setActiveDrawing(null)}
+            className="pointer-events-auto absolute top-5 right-5 z-[201] w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center transition-colors"
+          >
+            <svg
+              className="w-5 h-5 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
       )}
     </div>
   );

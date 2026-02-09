@@ -1,12 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  COMBO_STORAGE_KEY,
-  MESSAGES_PER_PAGE,
-  THEME_COLORS,
-  comboToRoomPath,
-} from "./constants";
+import { COMBO_STORAGE_KEY, THEME_COLORS, comboToRoomPath } from "./constants";
 import {
   useChatFirebase,
   useChatSession,
@@ -44,8 +39,6 @@ export default function AIContentSugestions() {
     null,
   );
   const [activeTab, setActiveTab] = useState<"chat" | "room">("chat");
-  const [visibleMessageCount, setVisibleMessageCount] =
-    useState(MESSAGES_PER_PAGE);
   const [isCallExpanded, setIsCallExpanded] = useState(true);
   const [isVideoRecorderOpen, setIsVideoRecorderOpen] = useState(false);
 
@@ -150,19 +143,23 @@ export default function AIContentSugestions() {
     [chatMessages, session],
   );
 
-  const handleConfirmImageWrapper = useCallback(async () => {
-    try {
-      await chatMessages.handleConfirmImage(
-        session.pendingImageFile,
-        session.pendingImageUrl,
-        session.setPendingImageFile,
-        session.setPendingImageUrl,
-        session.setIsImageConfirmOpen,
-      );
-    } catch (err) {
-      session.setError("Image failed to send.");
-    }
-  }, [chatMessages, session]);
+  const handleConfirmImageWrapper = useCallback(
+    async (caption: string) => {
+      try {
+        await chatMessages.handleConfirmImage(
+          session.pendingImageFile,
+          session.pendingImageUrl,
+          session.setPendingImageFile,
+          session.setPendingImageUrl,
+          session.setIsImageConfirmOpen,
+          caption,
+        );
+      } catch (err) {
+        session.setError("Image failed to send.");
+      }
+    },
+    [chatMessages, session],
+  );
 
   const handleCancelImageWrapper = useCallback(() => {
     chatMessages.handleCancelImage(
@@ -183,9 +180,9 @@ export default function AIContentSugestions() {
 
   // Ephemeral video send handler
   const handleSendEphemeralVideoWrapper = useCallback(
-    async (videoBlob: Blob) => {
+    async (videoBlob: Blob, caption: string) => {
       try {
-        await chatMessages.handleSendEphemeralVideo(videoBlob);
+        await chatMessages.handleSendEphemeralVideo(videoBlob, caption);
         setIsVideoRecorderOpen(false);
       } catch {
         session.setError("Ephemeral video failed to send.");
@@ -206,18 +203,22 @@ export default function AIContentSugestions() {
     }
   }, [drawingRecorder]);
 
-  const handleConfirmDrawing = useCallback(async () => {
-    if (!pendingDrawing) return;
-    try {
-      await chatMessages.handleSendDrawing(
-        pendingDrawing.strokes,
-        pendingDrawing.duration,
-      );
-      setPendingDrawing(null);
-    } catch {
-      session.setError("Drawing failed to send.");
-    }
-  }, [pendingDrawing, chatMessages, session]);
+  const handleConfirmDrawing = useCallback(
+    async (caption: string) => {
+      if (!pendingDrawing) return;
+      try {
+        await chatMessages.handleSendDrawing(
+          pendingDrawing.strokes,
+          pendingDrawing.duration,
+          caption,
+        );
+        setPendingDrawing(null);
+      } catch {
+        session.setError("Drawing failed to send.");
+      }
+    },
+    [pendingDrawing, chatMessages, session],
+  );
 
   const handleCancelDrawing = useCallback(() => {
     setPendingDrawing(null);
@@ -383,8 +384,6 @@ export default function AIContentSugestions() {
               messages={firebaseWithSlot.messages}
               slotId={slotId}
               themeColors={themeColors}
-              visibleMessageCount={visibleMessageCount}
-              setVisibleMessageCount={setVisibleMessageCount}
               isOtherTyping={firebaseWithSlot.isOtherTyping}
               formatTimestamp={formatTimestamp}
               setReplyingTo={chatMessages.setReplyingTo}
@@ -392,6 +391,7 @@ export default function AIContentSugestions() {
               markReceiptAsSeen={chatMessages.markReceiptAsSeen}
               onMarkEphemeralViewed={chatMessages.markEphemeralViewed}
               onDeleteEphemeralMessage={chatMessages.deleteEphemeralMessage}
+              onDeleteMessage={chatMessages.deleteMessage}
               onReact={chatMessages.toggleReaction}
             />
             <ChatInputArea
