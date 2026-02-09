@@ -19,6 +19,9 @@ type ChatHeaderProps = {
   onStartCall: () => void;
   selectedDrawingColor: string | null;
   onSelectDrawingColor: (color: string | null) => void;
+  isRecordingDrawing: boolean;
+  onStartRecording: () => void;
+  onStopRecording: () => void;
 };
 
 export function ChatHeader({
@@ -32,6 +35,9 @@ export function ChatHeader({
   onStartCall,
   selectedDrawingColor,
   onSelectDrawingColor,
+  isRecordingDrawing,
+  onStartRecording,
+  onStopRecording,
 }: ChatHeaderProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
@@ -139,7 +145,21 @@ export function ChatHeader({
             onStartCall={onStartCall}
           />
           {/* Pencil Button */}
-          <div className="relative">
+          <div className="relative flex items-center gap-1">
+            {/* Recording indicator - dark grey circle with pulsing red dot */}
+            {isRecordingDrawing && (
+              <button
+                type="button"
+                onClick={onStopRecording}
+                className="h-6 w-6 rounded-full bg-neutral-700 flex items-center justify-center hover:bg-neutral-600 transition-colors"
+                title="Stop recording"
+              >
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                </span>
+              </button>
+            )}
             <button
               ref={pencilButtonRef}
               type="button"
@@ -188,6 +208,21 @@ export function ChatHeader({
                     );
                   })}
                 </div>
+                {/* Record Drawing button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onStartRecording();
+                    setShowColorPicker(false);
+                  }}
+                  disabled={!selectedDrawingColor || isRecordingDrawing}
+                  className="mt-2 w-full py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center gap-2 transition-colors text-red-300 text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                  </span>
+                  Record Drawing
+                </button>
                 {/* Deselect button */}
                 <button
                   type="button"

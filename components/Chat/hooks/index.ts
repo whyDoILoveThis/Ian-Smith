@@ -7,3 +7,4 @@ export { useVoiceCall } from "./useVoiceCall";
 export { useWordSearch } from "./useWordSearch";
 export { useTouchIndicators } from "./useTouchIndicators";
 export { useDrawing } from "./useDrawing";
+export { useDrawingRecorder } from "./useDrawingRecorder";

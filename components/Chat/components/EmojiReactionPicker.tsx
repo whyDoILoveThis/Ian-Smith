@@ -270,30 +270,37 @@ export function EmojiReactionPicker({
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerBtnRef = useRef<HTMLButtonElement>(null);
   const quickBarRef = useRef<HTMLDivElement>(null);
   const fullPickerRef = useRef<HTMLDivElement>(null);
 
-  // Clamp a popup so it doesn't overflow the viewport
+  // Nudge a popup element so it stays fully inside the viewport
   const clampToViewport = useCallback((el: HTMLDivElement | null) => {
     if (!el) return;
-    // Reset any prior inline adjustments
-    el.style.left = "";
-    el.style.right = "";
-    el.style.removeProperty("left");
-    el.style.removeProperty("right");
-
+    // Reset prior shifts
+    el.style.transform = "";
     const rect = el.getBoundingClientRect();
     const pad = 8;
+    // Find the chat header's bottom edge so we don't overlap it
+    const header = document.querySelector(".safe-area-inset-top");
+    const topBound = header ? header.getBoundingClientRect().bottom + pad : pad;
+    let shiftX = 0;
+    let shiftY = 0;
+    // Horizontal clamping
     if (rect.left < pad) {
-      el.style.left = `${pad - rect.left}px`;
-      el.style.right = "auto";
+      shiftX = pad - rect.left;
     } else if (rect.right > window.innerWidth - pad) {
-      el.style.right = `${rect.right - (window.innerWidth - pad)}px`;
-      el.style.left = "auto";
+      shiftX = window.innerWidth - pad - rect.right;
+    }
+    // Vertical clamping — keep below the header
+    if (rect.top < topBound) {
+      shiftY = topBound - rect.top;
+    }
+    if (shiftX !== 0 || shiftY !== 0) {
+      el.style.transform = `translate(${shiftX}px, ${shiftY}px)`;
     }
   }, []);
 
-  // Re-clamp whenever the quick bar or full picker opens
   useLayoutEffect(() => {
     if (showQuickBar && !showFullPicker) {
       clampToViewport(quickBarRef.current);
@@ -361,6 +368,7 @@ export function EmojiReactionPicker({
     <div ref={containerRef} className="absolute inset-0 pointer-events-none">
       {/* Smiley trigger button - inside bottom corner */}
       <button
+        ref={triggerBtnRef}
         type="button"
         onClick={handleTriggerClick}
         className={`pointer-events-auto absolute bottom-1.5 opacity-0 group-hover:opacity-100 transition-all duration-150 w-5 h-5 flex items-center justify-center rounded-full hover:bg-white/10 text-neutral-400/50 hover:text-neutral-300 hover:scale-110 ${
@@ -413,7 +421,7 @@ export function EmojiReactionPicker({
                 e.stopPropagation();
                 handleEmojiClick(emoji);
               }}
-              className={`w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 hover:scale-125 transition-all duration-150 text-base ${
+              className={`emoji w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 hover:scale-125 transition-all duration-150 text-base ${
                 hasReacted(emoji) ? "bg-white/15 scale-110" : ""
               }`}
             >
@@ -490,7 +498,7 @@ export function EmojiReactionPicker({
                         e.stopPropagation();
                         handleEmojiClick(emoji);
                       }}
-                      className={`w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 hover:scale-110 transition-all text-base ${
+                      className={`emoji w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 hover:scale-110 transition-all text-base ${
                         hasReacted(emoji) ? "bg-white/15" : ""
                       }`}
                     >
@@ -530,7 +538,7 @@ export function EmojiReactionsDisplay({
   if (reactionEntries.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
+    <div className="flex flex-wrap gap-1 mt-1 max-w-[85vw] sm:max-w-[75vw] min-w-0">
       {reactionEntries.map(({ emoji, count, iReacted }) => (
         <button
           key={emoji}
@@ -545,7 +553,7 @@ export function EmojiReactionsDisplay({
               : "bg-white/8 border border-white/10 text-neutral-300 hover:bg-white/15"
           }`}
         >
-          <span className="text-sm leading-none">{emoji}</span>
+          <span className="emoji text-sm leading-none">{emoji}</span>
           {count > 1 && (
             <span className="text-[10px] leading-none opacity-80">{count}</span>
           )}

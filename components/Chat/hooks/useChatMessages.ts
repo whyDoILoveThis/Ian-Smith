@@ -5,7 +5,7 @@ import { push, ref, set, update, remove } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { appwrImgUp, appwrImgDelete } from "@/appwrite/appwrStorage";
 import { encryptMessage } from "../crypto";
-import type { Message } from "../types";
+import type { Message, RecordedDrawingStroke } from "../types";
 
 export function useChatMessages(
   slotId: "1" | "2" | null,
@@ -253,6 +253,32 @@ export function useChatMessages(
     [screenName, slotId, roomPath],
   );
 
+  // Handle sending a recorded drawing
+  const handleSendDrawing = useCallback(
+    async (strokes: RecordedDrawingStroke[], duration: number) => {
+      if (!slotId || !screenName.trim() || strokes.length === 0) return;
+      setIsSending(true);
+
+      try {
+        const msgRef = ref(rtdb, `${roomPath}/messages`);
+        const msgData: Record<string, unknown> = {
+          slotId,
+          sender: screenName.trim(),
+          drawingData: strokes,
+          drawingDuration: duration,
+          createdAt: { ".sv": "timestamp" },
+        };
+
+        await push(msgRef, msgData);
+      } catch {
+        throw new Error("Drawing failed to send.");
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [screenName, slotId, roomPath],
+  );
+
   // Mark ephemeral video as viewed by current user
   const markEphemeralViewed = useCallback(
     async (messageId: string) => {
@@ -334,6 +360,7 @@ export function useChatMessages(
     markReceiptAsSeen,
     handleTypingChange,
     handleSendEphemeralVideo,
+    handleSendDrawing,
     markEphemeralViewed,
     deleteEphemeralMessage,
     toggleReaction,

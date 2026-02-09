@@ -16,3 +16,7 @@ export { TouchIndicatorsOverlay } from "./TouchIndicatorsOverlay";
 export { DrawingOverlay } from "./DrawingOverlay";
 export { ColorWheelPicker } from "./ColorWheelPicker";
 export { EmojiReactionPicker, EmojiReactionsDisplay } from "./EmojiReactionPicker";
+export { PhotoGalleryOverlay } from "./PhotoGalleryOverlay";
+export { DrawingPlayer } from "./DrawingPlayer";
+export { DrawingRecordPreview } from "./DrawingRecordPreview";
+export { DrawingGalleryOverlay } from "./DrawingGalleryOverlay";

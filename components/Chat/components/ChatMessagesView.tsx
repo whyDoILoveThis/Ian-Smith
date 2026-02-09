@@ -11,6 +11,7 @@ import {
 } from "./EmojiReactionPicker";
 import Image from "next/image";
 import ReplyIcon from "@/components/sub/ReplyIcon";
+import { DrawingPlayer } from "./DrawingPlayer";
 
 type ChatMessagesViewProps = {
   messages: Message[];
@@ -292,6 +293,17 @@ export function ChatMessagesView({
                     className="mt-2 w-full rounded-xl border border-white/10"
                   />
                 )}
+                {/* Drawing message */}
+                {msg.drawingData && msg.drawingData.length > 0 && (
+                  <div className="mt-2 w-full rounded-xl border border-white/10 overflow-hidden aspect-video">
+                    <DrawingPlayer
+                      strokes={msg.drawingData}
+                      duration={msg.drawingDuration || 3000}
+                      showPlayButton
+                      className="w-full h-full"
+                    />
+                  </div>
+                )}
                 {msg.videoUrl && !msg.isEphemeral && (
                   <video
                     src={msg.videoUrl}
@@ -391,7 +403,7 @@ export function ChatMessagesView({
               {/* Emoji reactions display below bubble */}
               {msg.reactions && (
                 <div
-                  className={`${isMine ? "flex justify-end" : "flex justify-start"}`}
+                  className={`w-full ${isMine ? "flex justify-end" : "flex justify-start"}`}
                 >
                   <EmojiReactionsDisplay
                     reactions={msg.reactions}

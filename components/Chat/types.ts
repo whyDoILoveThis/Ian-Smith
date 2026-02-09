@@ -38,6 +38,19 @@ export type Message = {
   disappearedFor?: { "1"?: boolean; "2"?: boolean };
   // Reactions
   reactions?: Record<string, { "1"?: boolean; "2"?: boolean }>;
+  // Drawing message fields
+  drawingData?: RecordedDrawingStroke[];
+  drawingDuration?: number;
+};
+
+// A single stroke in a recorded drawing
+export type RecordedDrawingStroke = {
+  points: { x: number; y: number }[];
+  color: string;
+  /** ms offset from recording start when stroke began */
+  startTime: number;
+  /** ms offset from recording start when stroke ended */
+  endTime: number;
 };
 
 export type TttState = {

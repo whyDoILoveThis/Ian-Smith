@@ -2,9 +2,11 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { RING_COLORS, THEME_COLORS } from "../constants";
-import type { Slots, TttState, ThemeColors } from "../types";
+import type { Message, Slots, TttState, ThemeColors } from "../types";
 import { WordSearchGame } from "./WordSearchGame";
 import { ColorWheelPicker } from "./ColorWheelPicker";
+import { PhotoGalleryOverlay } from "./PhotoGalleryOverlay";
+import { DrawingGalleryOverlay } from "./DrawingGalleryOverlay";
 
 // Calculate the winning line position and rotation
 function WinningLineOverlay({
@@ -75,6 +77,7 @@ type RoomSpotsViewProps = {
   indicatorColor?: string;
   onIndicatorColorChange: (color: string) => void;
   roomPath: string;
+  messages: Message[];
 };
 
 export function RoomSpotsView({
@@ -97,9 +100,16 @@ export function RoomSpotsView({
   indicatorColor,
   onIndicatorColorChange,
   roomPath,
+  messages,
 }: RoomSpotsViewProps) {
   const [leaveConfirmText, setLeaveConfirmText] = useState("");
   const [activeGame, setActiveGame] = useState<"ttt" | "wordsearch">("ttt");
+  const [showPhotoGallery, setShowPhotoGallery] = useState(false);
+  const [showDrawingGallery, setShowDrawingGallery] = useState(false);
+  const photoCount = messages.filter((m) => m.imageUrl).length;
+  const drawingCount = messages.filter(
+    (m) => m.drawingData && m.drawingData.length > 0,
+  ).length;
   const [showIndicatorColorPicker, setShowIndicatorColorPicker] =
     useState(false);
   const indicatorPickerRef = useRef<HTMLDivElement>(null);
@@ -150,6 +160,64 @@ export function RoomSpotsView({
               ✎
             </button>
           </div>
+        )}
+
+        {/* Photo Gallery Button */}
+        {slotId && (
+          <button
+            type="button"
+            onClick={() => setShowPhotoGallery(true)}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white hover:bg-white/5 transition-colors"
+          >
+            <svg
+              className="w-4 h-4 text-neutral-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <span>Photos</span>
+            {photoCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-white/10 text-[10px] text-neutral-300 font-medium">
+                {photoCount}
+              </span>
+            )}
+          </button>
+        )}
+
+        {/* Drawing Gallery Button */}
+        {slotId && (
+          <button
+            type="button"
+            onClick={() => setShowDrawingGallery(true)}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white hover:bg-white/5 transition-colors"
+          >
+            <svg
+              className="w-4 h-4 text-neutral-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+              />
+            </svg>
+            <span>Drawings</span>
+            {drawingCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-white/10 text-[10px] text-neutral-300 font-medium">
+                {drawingCount}
+              </span>
+            )}
+          </button>
         )}
 
         <h2 className="text-lg font-semibold text-white text-center">
@@ -436,6 +504,24 @@ export function RoomSpotsView({
           )}
         </div>
       </div>
+
+      {/* Photo Gallery Overlay */}
+      {showPhotoGallery && (
+        <PhotoGalleryOverlay
+          messages={messages}
+          themeColors={themeColors}
+          onClose={() => setShowPhotoGallery(false)}
+        />
+      )}
+
+      {/* Drawing Gallery Overlay */}
+      {showDrawingGallery && (
+        <DrawingGalleryOverlay
+          messages={messages}
+          themeColors={themeColors}
+          onClose={() => setShowDrawingGallery(false)}
+        />
+      )}
     </div>
   );
 }

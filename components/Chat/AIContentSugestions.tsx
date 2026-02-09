@@ -16,6 +16,7 @@ import {
   useVoiceCall,
   useTouchIndicators,
   useDrawing,
+  useDrawingRecorder,
 } from "./hooks";
 import {
   LockBoxScreen,
@@ -30,7 +31,9 @@ import {
   VideoRecorder,
   TouchIndicatorsOverlay,
   DrawingOverlay,
+  DrawingRecordPreview,
 } from "./components";
+import type { RecordedDrawingStroke } from "./types";
 
 export default function AIContentSugestions() {
   // Core state for app flow
@@ -91,6 +94,13 @@ export default function AIContentSugestions() {
 
   // Drawing
   const drawing = useDrawing(slotId, roomPath);
+
+  // Drawing recorder
+  const drawingRecorder = useDrawingRecorder();
+  const [pendingDrawing, setPendingDrawing] = useState<{
+    strokes: RecordedDrawingStroke[];
+    duration: number;
+  } | null>(null);
 
   // Check if other person is online (uses real-time presence)
   const otherPersonOnline = useMemo(() => {
@@ -184,6 +194,35 @@ export default function AIContentSugestions() {
     [chatMessages, session],
   );
 
+  // Drawing recording handlers
+  const handleStartRecording = useCallback(() => {
+    drawingRecorder.startRecording();
+  }, [drawingRecorder]);
+
+  const handleStopRecording = useCallback(() => {
+    const result = drawingRecorder.stopRecording();
+    if (result && result.strokes.length > 0) {
+      setPendingDrawing(result);
+    }
+  }, [drawingRecorder]);
+
+  const handleConfirmDrawing = useCallback(async () => {
+    if (!pendingDrawing) return;
+    try {
+      await chatMessages.handleSendDrawing(
+        pendingDrawing.strokes,
+        pendingDrawing.duration,
+      );
+      setPendingDrawing(null);
+    } catch {
+      session.setError("Drawing failed to send.");
+    }
+  }, [pendingDrawing, chatMessages, session]);
+
+  const handleCancelDrawing = useCallback(() => {
+    setPendingDrawing(null);
+  }, []);
+
   // LockBox screen
   if (showLockBox) {
     return (
@@ -255,6 +294,18 @@ export default function AIContentSugestions() {
         />
       )}
 
+      {/* Drawing Record Preview Modal */}
+      {pendingDrawing && (
+        <DrawingRecordPreview
+          strokes={pendingDrawing.strokes}
+          duration={pendingDrawing.duration}
+          themeColors={themeColors}
+          isSending={chatMessages.isSending}
+          onConfirm={handleConfirmDrawing}
+          onCancel={handleCancelDrawing}
+        />
+      )}
+
       {/* Video Recorder Modal */}
       {isVideoRecorderOpen && (
         <VideoRecorder
@@ -279,6 +330,9 @@ export default function AIContentSugestions() {
         }}
         selectedDrawingColor={drawing.selectedColor}
         onSelectDrawingColor={drawing.setSelectedColor}
+        isRecordingDrawing={drawingRecorder.isRecording}
+        onStartRecording={handleStartRecording}
+        onStopRecording={handleStopRecording}
       />
 
       {/* Active Call Banner (when minimized) */}
@@ -321,6 +375,7 @@ export default function AIContentSugestions() {
             }
             onIndicatorColorChange={firebaseWithSlot.handleIndicatorColorChange}
             roomPath={roomPath}
+            messages={firebaseWithSlot.messages}
           />
         ) : (
           <>
@@ -379,9 +434,24 @@ export default function AIContentSugestions() {
           <DrawingOverlay
             strokes={drawing.strokes}
             isDrawingMode={drawing.isDrawingMode}
-            onStartStroke={drawing.startStroke}
-            onAddPoint={drawing.addPoint}
-            onEndStroke={drawing.endStroke}
+            onStartStroke={(x, y) => {
+              drawing.startStroke(x, y);
+              if (drawingRecorder.isRecording && drawing.selectedColor) {
+                drawingRecorder.onStrokeStart(drawing.selectedColor);
+              }
+            }}
+            onAddPoint={(x, y) => {
+              drawing.addPoint(x, y);
+              if (drawingRecorder.isRecording) {
+                drawingRecorder.onStrokePoint(x, y);
+              }
+            }}
+            onEndStroke={() => {
+              drawing.endStroke();
+              if (drawingRecorder.isRecording) {
+                drawingRecorder.onStrokeEnd();
+              }
+            }}
             strokeDuration={drawing.STROKE_DURATION}
             fadeDuration={drawing.FADE_DURATION}
           />
