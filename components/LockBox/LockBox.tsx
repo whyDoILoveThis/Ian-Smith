@@ -76,6 +76,9 @@ export default function LockBox({ children, onUnlock }: LockBoxProps) {
   const [unlockAnimation, setUnlockAnimation] = useState(false);
   const [activeRing, setActiveRing] = useState<number | null>(null);
   const [isInertia, setIsInertia] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
   const startAngleRef = useRef(0);
   const startRotationRef = useRef(0);
   const lastAngleRef = useRef(0);
@@ -85,7 +88,7 @@ export default function LockBox({ children, onUnlock }: LockBoxProps) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const CENTER = 250;
-  const HIT_SLOP = 10;
+  const HIT_SLOP = 22; // Generous hit slop for mobile fingers
 
   useEffect(() => {
     rotationsRef.current = rotations;
@@ -100,6 +103,51 @@ export default function LockBox({ children, onUnlock }: LockBoxProps) {
       Math.round((360 - normalized) / DEGREES_PER_NUMBER) % NUMBERS_PER_RING;
     return number === 0 ? NUMBERS_PER_RING : number;
   }, []);
+
+  // Set a specific ring to display a given number at the top
+  const setRingToNumber = useCallback(
+    (ringIndex: number, targetNumber: number) => {
+      const clamped = Math.max(1, Math.min(NUMBERS_PER_RING, targetNumber));
+      const n = clamped === NUMBERS_PER_RING ? 0 : clamped;
+      const rotation = (360 - n * DEGREES_PER_NUMBER + 360) % 360;
+      setRotations((prev) => {
+        const updated = [...prev] as [number, number, number, number];
+        updated[ringIndex] = rotation;
+        return updated;
+      });
+    },
+    [],
+  );
+
+  // Fine-tune: increment/decrement a ring by 1
+  const adjustRing = useCallback(
+    (ringIndex: number, delta: number) => {
+      const current = getNumberAtTop(rotationsRef.current[ringIndex]);
+      let next = current + delta;
+      if (next > NUMBERS_PER_RING) next = 1;
+      if (next < 1) next = NUMBERS_PER_RING;
+      setRingToNumber(ringIndex, next);
+    },
+    [getNumberAtTop, setRingToNumber],
+  );
+
+  // Handle tapping a combo box to enter a number directly
+  const handleComboTap = useCallback((ringIndex: number) => {
+    setEditingIndex(ringIndex);
+    setEditValue("");
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  }, []);
+
+  // Commit the edited value
+  const commitEdit = useCallback(() => {
+    if (editingIndex === null) return;
+    const num = parseInt(editValue, 10);
+    if (!isNaN(num) && num >= 1 && num <= NUMBERS_PER_RING) {
+      setRingToNumber(editingIndex, num);
+    }
+    setEditingIndex(null);
+    setEditValue("");
+  }, [editingIndex, editValue, setRingToNumber]);
 
   const getCurrentCombo = useCallback(
     (rots: [number, number, number, number]) =>
@@ -235,9 +283,9 @@ export default function LockBox({ children, onUnlock }: LockBoxProps) {
       return;
     }
 
-    const friction = 0.9;
-    const minVelocity = 0.08;
-    const snapEaseThreshold = DEGREES_PER_NUMBER * 0.35;
+    const friction = 0.88;
+    const minVelocity = 0.06;
+    const snapEaseThreshold = DEGREES_PER_NUMBER * 0.5;
     setIsInertia(true);
     const animate = () => {
       setRotations((prev) => {
@@ -407,26 +455,84 @@ export default function LockBox({ children, onUnlock }: LockBoxProps) {
   return (
     <div className="flex items-center justify-center ">
       <div className="text-center">
-        {/* Current combination display */}
+        {/* Current combination display – tap to type, +/- to fine-tune */}
         <div className="flex justify-center gap-2 mb-6">
           {rotations.map((rot, i) => (
-            <div
-              key={i}
-              className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-xl sm:text-2xl font-bold border-2 transition-all duration-200"
-              style={{
-                backgroundColor: RING_CONFIGS[i].color.bg,
-                borderColor:
-                  activeRing === i
-                    ? RING_CONFIGS[i].color.main
-                    : "rgba(255,255,255,0.1)",
-                color: RING_CONFIGS[i].color.main,
-                boxShadow:
-                  activeRing === i
-                    ? `0 0 20px ${RING_CONFIGS[i].color.glow}`
-                    : "none",
-              }}
-            >
-              {getNumberAtTop(rot)}
+            <div key={i} className="flex flex-col items-center gap-1">
+              {/* Increment button */}
+              <button
+                type="button"
+                onClick={() => adjustRing(i, 1)}
+                className="w-10 h-6 sm:w-12 sm:h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-colors active:scale-95"
+                style={{
+                  color: RING_CONFIGS[i].color.main,
+                  backgroundColor: RING_CONFIGS[i].color.bg,
+                }}
+              >
+                ▲
+              </button>
+
+              {/* Number display / input */}
+              {editingIndex === i ? (
+                <input
+                  ref={editInputRef}
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min={1}
+                  max={NUMBERS_PER_RING}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitEdit();
+                    if (e.key === "Escape") {
+                      setEditingIndex(null);
+                      setEditValue("");
+                    }
+                  }}
+                  className="w-14 h-12 sm:w-16 sm:h-14 rounded-xl text-center text-xl sm:text-2xl font-bold border-2 bg-black/80 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{
+                    borderColor: RING_CONFIGS[i].color.main,
+                    color: RING_CONFIGS[i].color.main,
+                    boxShadow: `0 0 20px ${RING_CONFIGS[i].color.glow}`,
+                  }}
+                  placeholder="0"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleComboTap(i)}
+                  className="w-14 h-12 sm:w-16 sm:h-14 rounded-xl flex items-center justify-center text-xl sm:text-2xl font-bold border-2 transition-all duration-200 active:scale-95"
+                  style={{
+                    backgroundColor: RING_CONFIGS[i].color.bg,
+                    borderColor:
+                      activeRing === i
+                        ? RING_CONFIGS[i].color.main
+                        : "rgba(255,255,255,0.1)",
+                    color: RING_CONFIGS[i].color.main,
+                    boxShadow:
+                      activeRing === i
+                        ? `0 0 20px ${RING_CONFIGS[i].color.glow}`
+                        : "none",
+                  }}
+                >
+                  {getNumberAtTop(rot)}
+                </button>
+              )}
+
+              {/* Decrement button */}
+              <button
+                type="button"
+                onClick={() => adjustRing(i, -1)}
+                className="w-10 h-6 sm:w-12 sm:h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-colors active:scale-95"
+                style={{
+                  color: RING_CONFIGS[i].color.main,
+                  backgroundColor: RING_CONFIGS[i].color.bg,
+                }}
+              >
+                ▼
+              </button>
             </div>
           ))}
         </div>
@@ -529,7 +635,7 @@ export default function LockBox({ children, onUnlock }: LockBoxProps) {
 
         <div className="mt-6 space-y-2">
           <p className="text-neutral-500 text-xs sm:text-sm">
-            Drag any ring to rotate • Align numbers at the top arrow
+            Drag rings to rotate • Tap a number to type it • ▲▼ to fine-tune
           </p>
         </div>
       </div>

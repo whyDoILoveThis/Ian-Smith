@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 
-const QUICK_EMOJIS = ["❤️", "😂", "😮", "😢", "🔥", "👍", "🖕"];
+const QUICK_EMOJIS = ["❤️", "😂", "😮", "😢", "🔥", "👍", "🖕", "💩"];
 
 // Full emoji grid organized by category
 const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
@@ -116,6 +116,9 @@ const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
       "👿",
       "💀",
       "☠️",
+      "🙊",
+      "🙉",
+      "🙈",
     ],
   },
   {

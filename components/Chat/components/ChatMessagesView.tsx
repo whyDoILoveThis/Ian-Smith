@@ -30,6 +30,7 @@ type ChatMessagesViewProps = {
     videoFileId?: string,
   ) => void;
   onReact: (messageId: string, emoji: string) => void;
+  scrollToMessageId?: string | null;
 };
 
 export function ChatMessagesView({
@@ -45,6 +46,7 @@ export function ChatMessagesView({
   onDeleteEphemeralMessage,
   onDeleteMessage,
   onReact,
+  scrollToMessageId,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -91,6 +93,17 @@ export function ChatMessagesView({
     },
     [messages],
   );
+
+  // External scroll-to trigger from search
+  const lastScrollToIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (scrollToMessageId && scrollToMessageId !== lastScrollToIdRef.current) {
+      lastScrollToIdRef.current = scrollToMessageId;
+      // Format is "messageId:timestamp" to allow re-triggering the same message
+      const actualId = scrollToMessageId.split(":")[0];
+      scrollToMessage(actualId);
+    }
+  }, [scrollToMessageId, scrollToMessage]);
 
   // Ephemeral video state
   const [activeEphemeralVideo, setActiveEphemeralVideo] = useState<{

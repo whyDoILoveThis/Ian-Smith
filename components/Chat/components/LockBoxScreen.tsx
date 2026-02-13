@@ -21,7 +21,7 @@ export function LockBoxScreen({ onUnlock, onBack }: LockBoxScreenProps) {
             Back
           </button>
           <h1 className="text-3xl md:text-4xl font-bold text-white">
-            GPT-4o AI Passkey Generator v0.8
+            GPT-4o AI Passkey Generator <span className="text-sm">v0.8</span>
           </h1>
         </div>
 

@@ -21,6 +21,7 @@ export function useChatFirebase(
   const [chatTheme, setChatTheme] = useState<ChatTheme>("emerald");
   const [tttState, setTttState] = useState<TttState | null>(null);
   const [presence, setPresence] = useState<{ "1"?: boolean; "2"?: boolean }>({});
+  const [lastSeen, setLastSeen] = useState<{ "1"?: number; "2"?: number }>({});
   const [indicatorColors, setIndicatorColors] = useState<{ "1"?: string; "2"?: string }>({});
 
   const encryptionKeyRef = useRef<CryptoKey | null>(null);
@@ -87,6 +88,19 @@ export function useChatFirebase(
     return () => unsub();
   }, [isUnlocked, roomPath]);
 
+  // Subscribe to lastSeen timestamps
+  useEffect(() => {
+    if (!isUnlocked) return;
+
+    const lastSeenRef = ref(rtdb, `${roomPath}/lastSeen`);
+    const unsub = onValue(lastSeenRef, (snap) => {
+      const val = (snap.val() || {}) as { "1"?: number; "2"?: number };
+      setLastSeen(val);
+    });
+
+    return () => unsub();
+  }, [isUnlocked, roomPath]);
+
   // Subscribe to indicator colors
   useEffect(() => {
     if (!isUnlocked) return;
@@ -105,12 +119,14 @@ export function useChatFirebase(
     if (!isUnlocked || !slotId) return;
 
     const myPresenceRef = ref(rtdb, `${roomPath}/presence/${slotId}`);
+    const myLastSeenRef = ref(rtdb, `${roomPath}/lastSeen/${slotId}`);
     const connectedRef = ref(rtdb, ".info/connected");
 
     const unsub = onValue(connectedRef, (snap) => {
       if (snap.val() === true) {
-        // Set up onDisconnect to clear presence when user leaves
+        // Set up onDisconnect to clear presence and write lastSeen timestamp
         onDisconnect(myPresenceRef).set(false);
+        onDisconnect(myLastSeenRef).set({ ".sv": "timestamp" });
         // Set presence to true
         set(myPresenceRef, true);
       }
@@ -118,8 +134,9 @@ export function useChatFirebase(
 
     return () => {
       unsub();
-      // Clear presence when component unmounts
+      // Clear presence when component unmounts and write lastSeen
       set(myPresenceRef, false);
+      set(myLastSeenRef, Date.now());
     };
   }, [isUnlocked, slotId, roomPath]);
 
@@ -287,6 +304,7 @@ export function useChatFirebase(
     chatTheme,
     tttState,
     presence,
+    lastSeen,
     indicatorColors,
     handleThemeChange,
     handleIndicatorColorChange,

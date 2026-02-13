@@ -28,7 +28,8 @@ export function AIChatDisguise({
         <div className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold text-white">
             Ian
-            <span onClick={onOpenLockBox}>&apos;</span>s AI Assistant v0.9
+            <span onClick={onOpenLockBox}>&apos;</span>s AI Assistant{" "}
+            <span className="text-sm">v0.9</span>
           </h1>
           <p className="mt-2 text-neutral-400">
             Ask me anything about web development, my projects, or how I can

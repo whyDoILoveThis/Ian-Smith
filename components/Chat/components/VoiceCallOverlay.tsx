@@ -8,12 +8,14 @@ type VoiceCallOverlayProps = {
   callerId: "1" | "2" | null;
   callerName: string;
   isMuted: boolean;
+  isSpeaker: boolean;
   callDuration: number;
   remoteAudioLevel: number;
   themeColors: ThemeColors;
   onAnswer: () => void;
   onEnd: () => void;
   onToggleMute: () => void;
+  onToggleSpeaker: () => void;
   onMinimize?: () => void;
 };
 
@@ -28,12 +30,14 @@ export function VoiceCallOverlay({
   callerId,
   callerName,
   isMuted,
+  isSpeaker,
   callDuration,
   remoteAudioLevel,
   themeColors,
   onAnswer,
   onEnd,
   onToggleMute,
+  onToggleSpeaker,
   onMinimize,
 }: VoiceCallOverlayProps) {
   const [pulseScale, setPulseScale] = useState(1);
@@ -336,6 +340,52 @@ export function VoiceCallOverlay({
               </button>
               <span className="text-xs font-medium text-white/70">
                 {isMuted ? "Unmute" : "Mute"}
+              </span>
+            </div>
+
+            {/* Speaker / Handset toggle */}
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={onToggleSpeaker}
+                className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
+                  isSpeaker
+                    ? "bg-gradient-to-br from-blue-500 to-cyan-500 shadow-blue-500/30"
+                    : "bg-white/10 backdrop-blur-sm hover:bg-white/20"
+                }`}
+              >
+                {isSpeaker ? (
+                  <svg
+                    className="h-6 w-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="h-6 w-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                    />
+                  </svg>
+                )}
+              </button>
+              <span className="text-xs font-medium text-white/70">
+                {isSpeaker ? "Speaker" : "Handset"}
               </span>
             </div>
 

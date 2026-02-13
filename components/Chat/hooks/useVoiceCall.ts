@@ -29,6 +29,7 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
   const [callStatus, setCallStatus] = useState<CallStatus>("idle");
   const [callerId, setCallerId] = useState<"1" | "2" | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaker, setIsSpeaker] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
   const [remoteAudioLevel, setRemoteAudioLevel] = useState(0);
 
@@ -144,15 +145,25 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     };
 
     pc.ontrack = (event) => {
-      const [remoteStream] = event.streams;
+      // Use event.streams[0] if available, otherwise create a stream from the track
+      const remoteStream = event.streams?.[0] ?? new MediaStream([event.track]);
       if (!remoteAudioRef.current) return;
 
+      console.log("[VoiceCall] ontrack fired – stream tracks:", remoteStream.getTracks().length);
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current
-        .play()
-        .catch((e) =>
-          console.warn("[VoiceCall] audio.play() blocked:", e.message),
-        );
+      // Try to play immediately, then retry after a short delay for mobile
+      const tryPlay = () => {
+        remoteAudioRef.current
+          ?.play()
+          .catch((e) => {
+            console.warn("[VoiceCall] audio.play() blocked:", e.message);
+            // Retry after a short delay
+            setTimeout(() => {
+              remoteAudioRef.current?.play().catch(() => {});
+            }, 300);
+          });
+      };
+      tryPlay();
 
       // Set up audio level monitoring for the visual indicator
       try {
@@ -304,6 +315,17 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       // Add our audio tracks to the existing PC
       stream.getTracks().forEach((track) => pc!.addTrack(track, stream));
 
+      // Ensure all transceivers are set to sendrecv so our audio is in the answer SDP
+      pc.getTransceivers().forEach((t) => {
+        if (t.receiver.track?.kind === "audio" && t.direction !== "sendrecv") {
+          try {
+            t.direction = "sendrecv";
+          } catch {
+            /* some browsers don't allow this – addTrack should have handled it */
+          }
+        }
+      });
+
       // Create answer (remote description was set by signal handler)
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -363,6 +385,19 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
         setIsMuted(!audioTrack.enabled);
       }
     }
+  }, []);
+
+  // ── Toggle speaker / handset ─────────────────────────────────────────
+
+  const toggleSpeaker = useCallback(() => {
+    setIsSpeaker((prev) => {
+      const next = !prev;
+      if (remoteAudioRef.current) {
+        // Speaker = full volume, Handset = low volume for earpiece use
+        remoteAudioRef.current.volume = next ? 1.0 : 0.15;
+      }
+      return next;
+    });
   }, []);
 
   // ── Listen for call state (presence of an active call in Firebase) ──
@@ -488,6 +523,9 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     audio.setAttribute("playsinline", "true");
     // Allow audio to play when phone is on silent (iOS)
     audio.setAttribute("x-webkit-airplay", "allow");
+    // Append to DOM – some mobile browsers need the element in the DOM for playback
+    audio.style.display = "none";
+    document.body.appendChild(audio);
     remoteAudioRef.current = audio;
 
     return () => {
@@ -508,11 +546,13 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     callStatus,
     callerId,
     isMuted,
+    isSpeaker,
     callDuration,
     remoteAudioLevel,
     startCall,
     answerCall,
     endCall,
     toggleMute,
+    toggleSpeaker,
   };
 }

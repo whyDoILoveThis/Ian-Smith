@@ -8,6 +8,7 @@ export type AIMessage = {
 export type SlotState = {
   name: string;
   joinedAt: number | object;
+  passkey?: string;
 };
 
 export type Slots = {

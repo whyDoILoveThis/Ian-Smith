@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  get,
   onValue,
   ref,
   remove,
   runTransaction,
   set,
   serverTimestamp,
+  update,
 } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { appwrImgDelete } from "@/appwrite/appwrStorage";
-import { roomStorageKey } from "../constants";
+import { comboToRoomPath, roomStorageKey } from "../constants";
 import type { Slots, Message } from "../types";
 
 export function useChatSession(
@@ -41,7 +43,7 @@ export function useChatSession(
     rtdb as unknown as { app?: { options?: { databaseURL?: string } } }
   )?.app?.options?.databaseURL;
 
-  // Load session from localStorage on mount
+  // Load session from localStorage on mount / room change
   useEffect(() => {
     restoreAttemptedRef.current = false;
     setSlotId(null);
@@ -55,10 +57,16 @@ export function useChatSession(
         if (parsed?.slotId && parsed?.name) {
           setScreenName(parsed.name);
           setRestoreSession(parsed);
+        } else {
+          setScreenName("");
         }
       } catch {
         window.localStorage.removeItem(storageKey);
+        setScreenName("");
       }
+    } else {
+      // No saved session for this room – clear screen name so it's fresh
+      setScreenName("");
     }
   }, [storageKey]);
 
@@ -262,6 +270,131 @@ export function useChatSession(
     }
   }, [clearAllMessages, isLeaving, pendingImageUrl, slotId, storageKey, roomPath]);
 
+  // ── Set a passkey on a spot ─────────────────────────────────────────
+  const setSpotPasskey = useCallback(
+    async (targetSlot: "1" | "2", passkey: string) => {
+      try {
+        await update(ref(rtdb, `${roomPath}/slots/${targetSlot}`), {
+          passkey: passkey.trim(),
+        });
+      } catch {
+        setError("Failed to set passkey.");
+      }
+    },
+    [roomPath],
+  );
+
+  // ── Kick a user from a spot (verify passkey, clear slot only) ───────
+  const kickSpot = useCallback(
+    async (targetSlot: "1" | "2", enteredPasskey: string): Promise<boolean> => {
+      try {
+        const snap = await get(ref(rtdb, `${roomPath}/slots/${targetSlot}`));
+        const slotData = snap.val();
+        if (!slotData) {
+          setError("That spot is already empty.");
+          return false;
+        }
+        if (!slotData.passkey) {
+          setError("No passkey has been set for that spot.");
+          return false;
+        }
+        if (slotData.passkey !== enteredPasskey.trim()) {
+          setError("Incorrect passkey.");
+          return false;
+        }
+        // Clear the slot (keep messages, games, etc. untouched)
+        await remove(ref(rtdb, `${roomPath}/slots/${targetSlot}`));
+        // Clear typing indicator for kicked user
+        await set(ref(rtdb, `${roomPath}/typing/${targetSlot}`), false);
+        // Clear presence for kicked user
+        await set(ref(rtdb, `${roomPath}/presence/${targetSlot}`), false);
+        // If we just kicked ourselves, also clear local state
+        if (targetSlot === slotId) {
+          setSlotId(null);
+          setRestoreSession(null);
+          window.localStorage.removeItem(storageKey);
+        }
+        return true;
+      } catch {
+        setError("Failed to kick user.");
+        return false;
+      }
+    },
+    [roomPath, slotId, storageKey],
+  );
+
+  // ── Migrate all messages to another room ─────────────────────────────
+  const migrateConvo = useCallback(
+    async (destCombo: [number, number, number, number]): Promise<boolean> => {
+      try {
+        const destRoomPath = comboToRoomPath(destCombo);
+        if (destRoomPath === roomPath) {
+          setError("Destination room is the same as the current room.");
+          return false;
+        }
+
+        // Read all messages from current room
+        const snap = await get(ref(rtdb, `${roomPath}/messages`));
+        const messagesData = snap.val();
+        if (!messagesData || Object.keys(messagesData).length === 0) {
+          setError("No messages to migrate.");
+          return false;
+        }
+
+        // Check if destination already has messages and merge
+        const destSnap = await get(ref(rtdb, `${destRoomPath}/messages`));
+        const destMessages = destSnap.val() || {};
+
+        // Merge: write all source messages into destination
+        const merged = { ...destMessages, ...messagesData };
+        await set(ref(rtdb, `${destRoomPath}/messages`), merged);
+
+        // Remove messages from the source room
+        await remove(ref(rtdb, `${roomPath}/messages`));
+
+        return true;
+      } catch {
+        setError("Failed to migrate conversation.");
+        return false;
+      }
+    },
+    [roomPath],
+  );
+
+  // ── Claim a spot on a new device (multi-device same spot) ───────────
+  const claimSpot = useCallback(
+    async (targetSlot: "1" | "2", enteredPasskey: string): Promise<boolean> => {
+      try {
+        const snap = await get(ref(rtdb, `${roomPath}/slots/${targetSlot}`));
+        const slotData = snap.val();
+        if (!slotData) {
+          setError("That spot is empty — just join normally.");
+          return false;
+        }
+        if (!slotData.passkey) {
+          setError("No passkey has been set for that spot.");
+          return false;
+        }
+        if (slotData.passkey !== enteredPasskey.trim()) {
+          setError("Incorrect passkey.");
+          return false;
+        }
+        // Passkey matches — adopt this slot locally
+        setSlotId(targetSlot);
+        setScreenName(slotData.name || "");
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({ slotId: targetSlot, name: slotData.name || "" }),
+        );
+        return true;
+      } catch {
+        setError("Failed to claim spot.");
+        return false;
+      }
+    },
+    [roomPath, storageKey],
+  );
+
   // Save session on unmount
   useEffect(() => {
     return () => {
@@ -294,5 +427,9 @@ export function useChatSession(
     setPendingIsVideo,
     isImageConfirmOpen,
     setIsImageConfirmOpen,
+    setSpotPasskey,
+    kickSpot,
+    migrateConvo,
+    claimSpot,
   };
 }

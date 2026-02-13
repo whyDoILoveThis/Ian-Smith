@@ -1,8 +1,14 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { Pencil, X } from "lucide-react";
-import type { CallStatus, ChatTheme } from "../types";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
+import { Pencil, X, Search, ChevronUp, ChevronDown } from "lucide-react";
+import type { CallStatus, ChatTheme, Message, Slots } from "../types";
 import { CallButton } from "./CallButton";
 import { DRAWING_COLORS, NEON_COLORS } from "../hooks/useDrawing";
 import ColorFilterIcon from "@/components/sub/ColorFilterIcon";
@@ -16,12 +22,17 @@ type ChatHeaderProps = {
   slotId: "1" | "2" | null;
   callStatus: CallStatus;
   otherPersonOnline: boolean;
+  otherLastSeen: number | null;
   onStartCall: () => void;
   selectedDrawingColor: string | null;
   onSelectDrawingColor: (color: string | null) => void;
   isRecordingDrawing: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
+  // Search props
+  messages: Message[];
+  slots: Slots;
+  onScrollToMessage?: (messageId: string) => void;
 };
 
 export function ChatHeader({
@@ -32,12 +43,16 @@ export function ChatHeader({
   slotId,
   callStatus,
   otherPersonOnline,
+  otherLastSeen,
   onStartCall,
   selectedDrawingColor,
   onSelectDrawingColor,
   isRecordingDrawing,
   onStartRecording,
   onStopRecording,
+  messages,
+  slots,
+  onScrollToMessage,
 }: ChatHeaderProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
@@ -45,6 +60,99 @@ export function ChatHeader({
   const themePickerRef = useRef<HTMLDivElement>(null);
   const pencilButtonRef = useRef<HTMLButtonElement>(null);
   const themeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Search state
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [userFilter, setUserFilter] = useState<Set<"1" | "2">>(
+    new Set<"1" | "2">(["1", "2"]),
+  );
+  const [currentResultIndex, setCurrentResultIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchPanelRef = useRef<HTMLDivElement>(null);
+
+  // Get unique sender names from slots
+  const slot1Name = slots?.["1"]?.name || "User 1";
+  const slot2Name = slots?.["2"]?.name || "User 2";
+
+  // Search results
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase();
+    return messages.filter((msg) => {
+      // Filter by user
+      if (!userFilter.has(msg.slotId)) return false;
+      // Filter by text content
+      const text = msg.decryptedText?.toLowerCase() || "";
+      if (text.includes(query)) return true;
+      // Filter by date/time
+      if (typeof msg.createdAt === "number") {
+        const date = new Date(msg.createdAt);
+        if (!Number.isNaN(date.getTime())) {
+          // Match against multiple date formats so users can type naturally
+          const formats = [
+            date.toLocaleDateString([], { month: "short", day: "numeric" }), // "Feb 10"
+            date.toLocaleDateString([], { month: "long", day: "numeric" }), // "February 10"
+            date.toLocaleDateString([], {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }), // "Feb 10, 2026"
+            date.toLocaleDateString([], { month: "numeric", day: "numeric" }), // "2/10"
+            date.toLocaleDateString([], {
+              month: "numeric",
+              day: "numeric",
+              year: "numeric",
+            }), // "2/10/2026"
+            date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), // "10:30 AM"
+            date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), // "10:30 AM"
+          ].map((s) => s.toLowerCase());
+          if (formats.some((f) => f.includes(query))) return true;
+        }
+      }
+      return false;
+    });
+  }, [messages, searchQuery, userFilter]);
+
+  // Reset result index when results change
+  useEffect(() => {
+    setCurrentResultIndex(0);
+  }, [searchResults.length, searchQuery, userFilter]);
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (showSearch) {
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    } else {
+      setSearchQuery("");
+      setCurrentResultIndex(0);
+      setUserFilter(new Set<"1" | "2">(["1", "2"]));
+    }
+  }, [showSearch]);
+
+  // Navigate to current result
+  const navigateToResult = useCallback(
+    (index: number) => {
+      if (searchResults.length === 0) return;
+      const clamped = Math.max(0, Math.min(index, searchResults.length - 1));
+      setCurrentResultIndex(clamped);
+      onScrollToMessage?.(searchResults[clamped].id);
+    },
+    [searchResults, onScrollToMessage],
+  );
+
+  const toggleUserFilter = (slot: "1" | "2") => {
+    setUserFilter((prev) => {
+      const next = new Set<"1" | "2">(prev);
+      if (next.has(slot)) {
+        // Don't allow deselecting both
+        if (next.size > 1) next.delete(slot);
+      } else {
+        next.add(slot);
+      }
+      return next;
+    });
+  };
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -120,19 +228,38 @@ export function ChatHeader({
           <span className="text-sm font-semibold text-white flex items-center gap-1.5">
             {activeTab === "chat" ? (
               <span>
-                Chat <span className="text-[8px]">v1.4</span>
+                Chat <span className="text-[8px]">v1.5</span>
               </span>
             ) : (
               <span>
-                Room <span className="text-[8px]">v1.5</span>
+                Room <span className="text-[8px]">v1.6</span>
               </span>
             )}
-            {otherPersonOnline && (
+            {otherPersonOnline ? (
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
               </span>
-            )}
+            ) : otherLastSeen ? (
+              <span className="text-[9px] font-normal text-neutral-500 ml-0.5">
+                last seen{" "}
+                {(() => {
+                  const now = Date.now();
+                  const diff = now - otherLastSeen;
+                  const mins = Math.floor(diff / 60000);
+                  const hours = Math.floor(diff / 3600000);
+                  const days = Math.floor(diff / 86400000);
+                  if (mins < 1) return "just now";
+                  if (mins < 60) return `${mins}m ago`;
+                  if (hours < 24) return `${hours}h ago`;
+                  if (days < 7) return `${days}d ago`;
+                  return new Date(otherLastSeen).toLocaleDateString([], {
+                    month: "short",
+                    day: "numeric",
+                  });
+                })()}
+              </span>
+            ) : null}
           </span>
         </div>
 
@@ -235,6 +362,20 @@ export function ChatHeader({
               </div>
             )}
           </div>
+          {/* Search Button */}
+          <button
+            type="button"
+            onClick={() => setShowSearch((v) => !v)}
+            className={`h-7 w-7 rounded-full flex items-center justify-center transition-all active:ring-2 ring-white/20 ${
+              showSearch
+                ? "bg-white/20 ring-2 ring-offset-1 ring-offset-black/60 ring-white/40"
+                : "hover:bg-white/10"
+            }`}
+            style={{ color: "white" }}
+            title="Search messages"
+          >
+            <Search className="w-5 h-5" />
+          </button>
           {/* Theme Switcher Dropdown */}
           <div className="relative">
             <button
@@ -314,6 +455,107 @@ export function ChatHeader({
           </div>
         </div>
       </div>
+
+      {/* Search Panel */}
+      {showSearch && (
+        <div
+          ref={searchPanelRef}
+          className="mt-2 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200"
+        >
+          {/* Search input + navigation */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (e.shiftKey) {
+                      navigateToResult(currentResultIndex - 1);
+                    } else {
+                      navigateToResult(currentResultIndex + 1);
+                    }
+                  } else if (e.key === "Escape") {
+                    setShowSearch(false);
+                  }
+                }}
+                placeholder="Search messages..."
+                className="w-full pl-8 pr-3 py-1.5 text-sm bg-white/10 border border-white/10 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 focus:bg-white/15 transition-colors"
+              />
+            </div>
+            {/* Result count + nav arrows */}
+            {searchQuery.trim() && (
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-neutral-400 whitespace-nowrap min-w-[3rem] text-center">
+                  {searchResults.length === 0
+                    ? "0/0"
+                    : `${currentResultIndex + 1}/${searchResults.length}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigateToResult(currentResultIndex - 1)}
+                  disabled={
+                    searchResults.length === 0 || currentResultIndex === 0
+                  }
+                  className="h-6 w-6 rounded flex items-center justify-center text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigateToResult(currentResultIndex + 1)}
+                  disabled={
+                    searchResults.length === 0 ||
+                    currentResultIndex >= searchResults.length - 1
+                  }
+                  className="h-6 w-6 rounded flex items-center justify-center text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowSearch(false)}
+              className="h-6 w-6 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* User filter pills */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-neutral-500 uppercase tracking-wider">
+              Filter:
+            </span>
+            <button
+              type="button"
+              onClick={() => toggleUserFilter("1")}
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all border ${
+                userFilter.has("1")
+                  ? "bg-white/15 border-white/30 text-white"
+                  : "bg-transparent border-white/10 text-neutral-500"
+              }`}
+            >
+              {slot1Name}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleUserFilter("2")}
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all border ${
+                userFilter.has("2")
+                  ? "bg-white/15 border-white/30 text-white"
+                  : "bg-transparent border-white/10 text-neutral-500"
+              }`}
+            >
+              {slot2Name}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

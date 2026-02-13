@@ -1,7 +1,15 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { COMBO_STORAGE_KEY, THEME_COLORS, comboToRoomPath } from "./constants";
+
+const DISGUISE_TIMEOUT_KEY = "twoWayChatDisguiseTimeout";
 import {
   useChatFirebase,
   useChatSession,
@@ -41,6 +49,93 @@ export default function AIContentSugestions() {
   const [activeTab, setActiveTab] = useState<"chat" | "room">("chat");
   const [isCallExpanded, setIsCallExpanded] = useState(true);
   const [isVideoRecorderOpen, setIsVideoRecorderOpen] = useState(false);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(
+    null,
+  );
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  // Disguise timeout (minutes, 0 = always show disguise / never auto-return)
+  const [disguiseTimeout, setDisguiseTimeout] = useState<number>(0);
+  const disguiseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load disguise timeout from localStorage on mount
+  useEffect(() => {
+    const stored = window.localStorage.getItem(DISGUISE_TIMEOUT_KEY);
+    if (stored) setDisguiseTimeout(Number(stored) || 0);
+  }, []);
+
+  // Save disguise timeout to localStorage
+  const handleSetDisguiseTimeout = useCallback((minutes: number) => {
+    setDisguiseTimeout(minutes);
+    window.localStorage.setItem(DISGUISE_TIMEOUT_KEY, String(minutes));
+    // When switching to a timeout, record the entry time now
+    if (minutes > 0) {
+      window.localStorage.setItem(
+        DISGUISE_TIMEOUT_KEY + "_entered",
+        String(Date.now()),
+      );
+    } else {
+      window.localStorage.removeItem(DISGUISE_TIMEOUT_KEY + "_entered");
+    }
+  }, []);
+
+  // Auto-skip disguise on mount when timeout is active and hasn't expired
+  useEffect(() => {
+    const storedTimeout = Number(
+      window.localStorage.getItem(DISGUISE_TIMEOUT_KEY) || 0,
+    );
+    const enteredAt = Number(
+      window.localStorage.getItem(DISGUISE_TIMEOUT_KEY + "_entered") || 0,
+    );
+    const storedCombo = window.localStorage.getItem(COMBO_STORAGE_KEY);
+    if (storedTimeout > 0 && enteredAt > 0 && storedCombo) {
+      const elapsed = Date.now() - enteredAt;
+      const timeoutMs = storedTimeout * 60 * 1000;
+      if (elapsed < timeoutMs) {
+        // Skip disguise — go straight to the room
+        try {
+          const parsed = JSON.parse(storedCombo);
+          if (Array.isArray(parsed) && parsed.length === 4) {
+            setCombo(parsed as [number, number, number, number]);
+            setIsUnlocked(true);
+            setShowRealChat(true);
+          }
+        } catch {
+          /* ignore parse error */
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Record entry time when showRealChat becomes true while timeout is active
+  useEffect(() => {
+    if (showRealChat && disguiseTimeout > 0) {
+      window.localStorage.setItem(
+        DISGUISE_TIMEOUT_KEY + "_entered",
+        String(Date.now()),
+      );
+    }
+  }, [showRealChat, disguiseTimeout]);
+
+  // Auto-hide chat after timeout (go back to disguise)
+  useEffect(() => {
+    if (disguiseTimerRef.current) {
+      clearTimeout(disguiseTimerRef.current);
+      disguiseTimerRef.current = null;
+    }
+    if (showRealChat && disguiseTimeout > 0) {
+      disguiseTimerRef.current = setTimeout(
+        () => {
+          setShowRealChat(false);
+        },
+        disguiseTimeout * 60 * 1000,
+      );
+    }
+    return () => {
+      if (disguiseTimerRef.current) clearTimeout(disguiseTimerRef.current);
+    };
+  }, [showRealChat, disguiseTimeout]);
 
   // Store combo locally (user-entered)
   useEffect(() => {
@@ -93,6 +188,63 @@ export default function AIContentSugestions() {
     }
   }, [voiceCall.callStatus]);
 
+  // ── Message notifications ──────────────────────────────────────────
+  const prevMessageCountRef = React.useRef(0);
+
+  useEffect(() => {
+    if (!notificationsEnabled || !slotId) {
+      prevMessageCountRef.current = firebaseWithSlot.messages.length;
+      return;
+    }
+    const msgs = firebaseWithSlot.messages;
+    const prevCount = prevMessageCountRef.current;
+    if (msgs.length > prevCount && prevCount > 0) {
+      // Find new messages from the other user
+      const newMsgs = msgs.slice(prevCount);
+      for (const msg of newMsgs) {
+        if (msg.slotId !== slotId) {
+          const body =
+            msg.decryptedText ||
+            (msg.imageUrl
+              ? "Sent a photo"
+              : msg.drawingData
+                ? "Sent a drawing"
+                : msg.videoUrl
+                  ? "Sent a video"
+                  : "New message");
+          if (Notification.permission === "granted") {
+            try {
+              new Notification(msg.sender || "New message", {
+                body,
+                tag: msg.id,
+                icon: "/favicon.ico",
+              });
+            } catch {
+              /* notifications not supported in this context */
+            }
+          }
+        }
+      }
+    }
+    prevMessageCountRef.current = msgs.length;
+  }, [firebaseWithSlot.messages, notificationsEnabled, slotId]);
+
+  const handleToggleNotifications = useCallback(async () => {
+    if (!notificationsEnabled) {
+      // Turning on — request permission if needed
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission === "default") {
+        const result = await Notification.requestPermission();
+        if (result !== "granted") return;
+      } else if (Notification.permission === "denied") {
+        return; // can't enable, browser blocked it
+      }
+      setNotificationsEnabled(true);
+    } else {
+      setNotificationsEnabled(false);
+    }
+  }, [notificationsEnabled]);
+
   // Touch Indicators
   const touchIndicators = useTouchIndicators(slotId, roomPath);
 
@@ -112,6 +264,13 @@ export default function AIContentSugestions() {
     const otherSlot = slotId === "1" ? "2" : "1";
     return !!firebaseWithSlot.presence?.[otherSlot];
   }, [slotId, firebaseWithSlot.presence]);
+
+  // Last seen timestamp for the other person
+  const otherLastSeen = useMemo(() => {
+    if (!slotId) return null;
+    const otherSlot = slotId === "1" ? "2" : "1";
+    return firebaseWithSlot.lastSeen?.[otherSlot] ?? null;
+  }, [slotId, firebaseWithSlot.lastSeen]);
 
   // Get caller name for overlay
   const callerName = useMemo(() => {
@@ -279,6 +438,7 @@ export default function AIContentSugestions() {
           callerId={voiceCall.callerId}
           callerName={callerName}
           isMuted={voiceCall.isMuted}
+          isSpeaker={voiceCall.isSpeaker}
           callDuration={voiceCall.callDuration}
           remoteAudioLevel={voiceCall.remoteAudioLevel}
           themeColors={themeColors}
@@ -288,6 +448,7 @@ export default function AIContentSugestions() {
           }}
           onEnd={voiceCall.endCall}
           onToggleMute={voiceCall.toggleMute}
+          onToggleSpeaker={voiceCall.toggleSpeaker}
           onMinimize={() => setIsCallExpanded(false)}
         />
       )}
@@ -334,6 +495,7 @@ export default function AIContentSugestions() {
         slotId={slotId}
         callStatus={voiceCall.callStatus}
         otherPersonOnline={otherPersonOnline}
+        otherLastSeen={otherLastSeen}
         onStartCall={() => {
           voiceCall.startCall();
           setIsCallExpanded(true);
@@ -343,6 +505,9 @@ export default function AIContentSugestions() {
         isRecordingDrawing={drawingRecorder.isRecording}
         onStartRecording={handleStartRecording}
         onStopRecording={handleStopRecording}
+        messages={firebaseWithSlot.messages}
+        slots={slots}
+        onScrollToMessage={(id) => setScrollToMessageId(id + ":" + Date.now())}
       />
 
       {/* Active Call Banner (when minimized) */}
@@ -375,10 +540,16 @@ export default function AIContentSugestions() {
             handleTttMove={ticTacToe.handleTttMove}
             handleTttReset={ticTacToe.handleTttReset}
             combo={combo}
-            onEditPasskey={() => {
-              setShowLockBox(true);
-              setShowRealChat(false);
-            }}
+            onEditPasskey={
+              disguiseTimeout === 0
+                ? () => {
+                    setShowLockBox(true);
+                    setShowRealChat(false);
+                  }
+                : undefined
+            }
+            disguiseTimeout={disguiseTimeout}
+            onSetDisguiseTimeout={handleSetDisguiseTimeout}
             themeColors={themeColors}
             indicatorColor={
               slotId ? firebaseWithSlot.indicatorColors?.[slotId] : undefined
@@ -386,6 +557,12 @@ export default function AIContentSugestions() {
             onIndicatorColorChange={firebaseWithSlot.handleIndicatorColorChange}
             roomPath={roomPath}
             messages={firebaseWithSlot.messages}
+            notificationsEnabled={notificationsEnabled}
+            onToggleNotifications={handleToggleNotifications}
+            onSetSpotPasskey={session.setSpotPasskey}
+            onKickSpot={session.kickSpot}
+            onClaimSpot={session.claimSpot}
+            onMigrateConvo={session.migrateConvo}
           />
         ) : (
           <>
@@ -402,6 +579,7 @@ export default function AIContentSugestions() {
               onDeleteEphemeralMessage={chatMessages.deleteEphemeralMessage}
               onDeleteMessage={chatMessages.deleteMessage}
               onReact={chatMessages.toggleReaction}
+              scrollToMessageId={scrollToMessageId}
             />
             <ChatInputArea
               slotId={slotId}
