@@ -14,12 +14,14 @@ import {
 import { rtdb } from "@/lib/firebaseConfig";
 import { appwrImgDelete } from "@/appwrite/appwrStorage";
 import { comboToRoomPath, roomStorageKey } from "../constants";
+import { deriveKeyFromCombo, decryptMessage, encryptMessage } from "../crypto";
 import type { Slots, Message } from "../types";
 
 export function useChatSession(
   isUnlocked: boolean,
   slots: Slots,
   roomPath: string,
+  combo: [number, number, number, number] | null = null,
 ) {
   const [screenName, setScreenName] = useState("");
   const [slotId, setSlotId] = useState<"1" | "2" | null>(null);
@@ -341,12 +343,33 @@ export function useChatSession(
           return false;
         }
 
+        // Re-encrypt messages: decrypt with source key, encrypt with dest key
+        const sourceKey = combo ? await deriveKeyFromCombo(combo) : null;
+        const destKey = await deriveKeyFromCombo(destCombo);
+
+        const reEncryptedMessages: Record<string, unknown> = {};
+        for (const [msgId, msgVal] of Object.entries(messagesData)) {
+          const msg = msgVal as Record<string, unknown>;
+          if (msg.text && typeof msg.text === "string" && sourceKey && destKey) {
+            try {
+              const plaintext = await decryptMessage(msg.text as string, sourceKey);
+              const newCiphertext = await encryptMessage(plaintext, destKey);
+              reEncryptedMessages[msgId] = { ...msg, text: newCiphertext };
+            } catch {
+              // If decryption fails (e.g. already plain text), keep as-is
+              reEncryptedMessages[msgId] = msg;
+            }
+          } else {
+            reEncryptedMessages[msgId] = msg;
+          }
+        }
+
         // Check if destination already has messages and merge
         const destSnap = await get(ref(rtdb, `${destRoomPath}/messages`));
         const destMessages = destSnap.val() || {};
 
         // Merge: write all source messages into destination
-        const merged = { ...destMessages, ...messagesData };
+        const merged = { ...destMessages, ...reEncryptedMessages };
         await set(ref(rtdb, `${destRoomPath}/messages`), merged);
 
         // Remove messages from the source room
@@ -358,7 +381,7 @@ export function useChatSession(
         return false;
       }
     },
-    [roomPath],
+    [roomPath, combo],
   );
 
   // ── Claim a spot on a new device (multi-device same spot) ───────────

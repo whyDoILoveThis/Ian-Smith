@@ -274,7 +274,10 @@ export function useChatFirebase(
       setMessages(decrypted);
     }
     decryptAll();
-  }, [rawMessages, encryptionKeyRef]);
+    // encryptionKey (state) is included so decryptAll re-runs once the
+    // async key derivation completes — encryptionKeyRef alone is a stable
+    // ref and would never retrigger this effect.
+  }, [rawMessages, encryptionKey, encryptionKeyRef]);
 
   const handleThemeChange = useCallback(
     (theme: ChatTheme) => {

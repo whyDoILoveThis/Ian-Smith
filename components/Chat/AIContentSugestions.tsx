@@ -156,7 +156,7 @@ export default function AIContentSugestions() {
     chatFirebase;
 
   // Session management (join/leave)
-  const session = useChatSession(isUnlocked, slots, roomPath);
+  const session = useChatSession(isUnlocked, slots, roomPath, combo);
   const { slotId, screenName } = session;
 
   // Re-initialize firebase with slotId for typing indicator
