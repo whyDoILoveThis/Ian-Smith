@@ -20,6 +20,7 @@ import {
   useTouchIndicators,
   useDrawing,
   useDrawingRecorder,
+  useSlots,
 } from "./hooks";
 import {
   LockBoxScreen,
@@ -150,24 +151,23 @@ export default function AIContentSugestions() {
   // Compute the room path from the combo
   const roomPath = useMemo(() => comboToRoomPath(combo), [combo]);
 
-  // Firebase subscriptions
-  const chatFirebase = useChatFirebase(isUnlocked, combo, null, roomPath); // We'll update slotId after session hook
-  const { slots, messages, encryptionKey, chatTheme, handleThemeChange } =
-    chatFirebase;
+  // Lightweight slots subscription (no messages / decryption)
+  const slots = useSlots(isUnlocked, roomPath);
 
-  // Session management (join/leave)
+  // Session management (join/leave) — only needs slots
   const session = useChatSession(isUnlocked, slots, roomPath, combo);
   const { slotId, screenName } = session;
 
-  // Re-initialize firebase with slotId for typing indicator
+  // Single Firebase hook — includes messages, decryption, typing, presence, etc.
   const firebaseWithSlot = useChatFirebase(isUnlocked, combo, slotId, roomPath);
+  const { encryptionKey, chatTheme, handleThemeChange } = firebaseWithSlot;
 
   // Message handling
   const chatMessages = useChatMessages(
     slotId,
     screenName,
     encryptionKey,
-    messages,
+    firebaseWithSlot.messages,
     roomPath,
   );
 
@@ -189,44 +189,100 @@ export default function AIContentSugestions() {
   }, [voiceCall.callStatus]);
 
   // ── Message notifications ──────────────────────────────────────────
-  const prevMessageCountRef = React.useRef(0);
+  const seenMessageIdsRef = React.useRef<Set<string>>(new Set());
+  const notifInitializedRef = React.useRef(false);
 
   useEffect(() => {
+    const msgs = firebaseWithSlot.messages;
+
+    // First run or notifications off: just seed the seen set so we don't
+    // blast the user with old messages when they turn notifications on.
     if (!notificationsEnabled || !slotId) {
-      prevMessageCountRef.current = firebaseWithSlot.messages.length;
+      seenMessageIdsRef.current = new Set(msgs.map((m) => m.id));
+      notifInitializedRef.current = false;
       return;
     }
-    const msgs = firebaseWithSlot.messages;
-    const prevCount = prevMessageCountRef.current;
-    if (msgs.length > prevCount && prevCount > 0) {
-      // Find new messages from the other user
-      const newMsgs = msgs.slice(prevCount);
-      for (const msg of newMsgs) {
-        if (msg.slotId !== slotId) {
-          const body =
-            msg.decryptedText ||
-            (msg.imageUrl
-              ? "Sent a photo"
-              : msg.drawingData
-                ? "Sent a drawing"
-                : msg.videoUrl
-                  ? "Sent a video"
-                  : "New message");
-          if (Notification.permission === "granted") {
-            try {
-              new Notification(msg.sender || "New message", {
-                body,
-                tag: msg.id,
-                icon: "/favicon.ico",
-              });
-            } catch {
-              /* notifications not supported in this context */
-            }
+
+    // If we just turned notifications on, seed the set and mark as
+    // initialized so that only FUTURE messages trigger a notification.
+    if (!notifInitializedRef.current) {
+      seenMessageIdsRef.current = new Set(msgs.map((m) => m.id));
+      notifInitializedRef.current = true;
+      return;
+    }
+
+    const seen = seenMessageIdsRef.current;
+
+    for (const msg of msgs) {
+      if (seen.has(msg.id)) continue; // already processed
+      seen.add(msg.id);
+
+      // Only notify for messages from the OTHER user
+      if (msg.slotId === slotId) continue;
+
+      const body =
+        msg.decryptedText ||
+        (msg.imageUrl
+          ? "Sent a photo"
+          : msg.drawingData
+            ? "Sent a drawing"
+            : msg.videoUrl
+              ? "Sent a video"
+              : "New message");
+
+      // 1. Play an audio notification beep (works everywhere)
+      try {
+        const audioCtx = new (
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext
+        )();
+        const oscillator = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        oscillator.connect(gain);
+        gain.connect(audioCtx.destination);
+        oscillator.frequency.value = 880;
+        oscillator.type = "sine";
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(
+          0.001,
+          audioCtx.currentTime + 0.3,
+        );
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.3);
+      } catch {
+        /* audio not available */
+      }
+
+      // 2. Browser / ServiceWorker notification (for when tab is in background)
+      if (
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
+        const title = msg.sender || "New message";
+        const options = { body, tag: msg.id, icon: "/favicon.ico" };
+
+        // Try ServiceWorker notification first (works on mobile)
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.ready
+            .then((reg) => reg.showNotification(title, options))
+            .catch(() => {
+              // Fallback to classic Notification constructor
+              try {
+                new Notification(title, options);
+              } catch {
+                /* */
+              }
+            });
+        } else {
+          try {
+            new Notification(title, options);
+          } catch {
+            /* */
           }
         }
       }
     }
-    prevMessageCountRef.current = msgs.length;
   }, [firebaseWithSlot.messages, notificationsEnabled, slotId]);
 
   const handleToggleNotifications = useCallback(async () => {

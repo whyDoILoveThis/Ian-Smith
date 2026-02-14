@@ -8,3 +8,4 @@ export { useWordSearch } from "./useWordSearch";
 export { useTouchIndicators } from "./useTouchIndicators";
 export { useDrawing } from "./useDrawing";
 export { useDrawingRecorder } from "./useDrawingRecorder";
+export { useSlots } from "./useSlots";

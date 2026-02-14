@@ -7,6 +7,10 @@ import { COMBO_STORAGE_KEY } from "../constants";
 import { deriveKeyFromCombo, decryptMessage } from "../crypto";
 import type { Slots, Message, TttState, ChatTheme } from "../types";
 
+// Module-level decryption cache: encrypted text → decrypted text
+// Shared across all hook instances so work is never duplicated.
+const decryptionCache = new Map<string, string>();
+
 export function useChatFirebase(
   isUnlocked: boolean,
   combo: [number, number, number, number] | null,
@@ -246,35 +250,106 @@ export function useChatFirebase(
     return () => unsub();
   }, [isUnlocked, roomPath]);
 
-  // Decrypt messages when raw messages or encryption key changes
+  // Decrypt messages incrementally — only decrypt messages we haven't seen before.
+  // A module-level cache (decryptionCache) stores encrypted→decrypted mappings
+  // so even across re-renders / hook instances, the same ciphertext is never
+  // decrypted twice via the expensive crypto.subtle.decrypt call.
+  const prevDecryptedRef = useRef<Map<string, Message>>(new Map());
+
   useEffect(() => {
-    async function decryptAll() {
+    let cancelled = false;
+
+    async function decryptIncremental() {
       const key = encryptionKeyRef.current;
+      const prev = prevDecryptedRef.current;
+
+      // Fast path: no key — just pass through raw text
       if (!key) {
-        setMessages(
-          rawMessages.map((msg) => ({ ...msg, decryptedText: msg.text })),
-        );
+        const result = rawMessages.map((msg) => ({
+          ...msg,
+          decryptedText: msg.text,
+        }));
+        if (!cancelled) setMessages(result);
         return;
       }
 
-      const decrypted = await Promise.all(
-        rawMessages.map(async (msg) => {
-          if (msg.text) {
-            try {
-              const decryptedText = await decryptMessage(msg.text, key);
-              return { ...msg, decryptedText };
-            } catch {
-              return { ...msg, decryptedText: msg.text };
-            }
-          } else {
-            return { ...msg, decryptedText: msg.text };
+      // Build result, reusing previously decrypted messages where possible
+      const needsDecryption: { index: number; msg: Message }[] = [];
+      const result: Message[] = new Array(rawMessages.length);
+
+      for (let i = 0; i < rawMessages.length; i++) {
+        const msg = rawMessages[i];
+
+        // If the message hasn't changed (same id + same text), reuse previous
+        const cached = prev.get(msg.id);
+        if (cached && cached.text === msg.text) {
+          // Merge updated non-text fields (readBy, reactions, etc.) but keep decryptedText
+          result[i] = { ...msg, decryptedText: cached.decryptedText };
+          continue;
+        }
+
+        // If we've already decrypted this exact ciphertext before, use the cache
+        if (msg.text && decryptionCache.has(msg.text)) {
+          result[i] = { ...msg, decryptedText: decryptionCache.get(msg.text)! };
+          continue;
+        }
+
+        // Needs actual decryption
+        if (msg.text) {
+          needsDecryption.push({ index: i, msg });
+        } else {
+          result[i] = { ...msg, decryptedText: msg.text };
+        }
+      }
+
+      // Decrypt only the new messages, in parallel batches to avoid blocking
+      if (needsDecryption.length > 0) {
+        const BATCH_SIZE = 50;
+        for (let b = 0; b < needsDecryption.length; b += BATCH_SIZE) {
+          const batch = needsDecryption.slice(b, b + BATCH_SIZE);
+          const decryptedBatch = await Promise.all(
+            batch.map(async ({ msg }) => {
+              try {
+                const decryptedText = await decryptMessage(msg.text!, key);
+                // Cache it for future use
+                decryptionCache.set(msg.text!, decryptedText);
+                return decryptedText;
+              } catch {
+                return msg.text!;
+              }
+            }),
+          );
+          for (let j = 0; j < batch.length; j++) {
+            result[batch[j].index] = {
+              ...batch[j].msg,
+              decryptedText: decryptedBatch[j],
+            };
           }
-        })
-      );
-      setMessages(decrypted);
+
+          // Yield to the main thread between batches so the UI stays responsive
+          if (b + BATCH_SIZE < needsDecryption.length) {
+            await new Promise((r) => setTimeout(r, 0));
+          }
+        }
+      }
+
+      if (cancelled) return;
+
+      // Update the prev map for next run
+      const newPrev = new Map<string, Message>();
+      for (const msg of result) {
+        newPrev.set(msg.id, msg);
+      }
+      prevDecryptedRef.current = newPrev;
+
+      setMessages(result);
     }
-    decryptAll();
-    // encryptionKey (state) is included so decryptAll re-runs once the
+
+    decryptIncremental();
+    return () => {
+      cancelled = true;
+    };
+    // encryptionKey (state) is included so this re-runs once the
     // async key derivation completes — encryptionKeyRef alone is a stable
     // ref and would never retrigger this effect.
   }, [rawMessages, encryptionKey, encryptionKeyRef]);
