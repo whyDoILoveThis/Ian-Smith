@@ -36,7 +36,9 @@ import {
   TouchIndicatorsOverlay,
   DrawingOverlay,
   DrawingRecordPreview,
+  ErrorToast,
 } from "./components";
+import type { Toast } from "./components";
 import type { RecordedDrawingStroke } from "./types";
 
 export default function AIContentSugestions() {
@@ -54,6 +56,22 @@ export default function AIContentSugestions() {
     null,
   );
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  // ── Toast notifications for errors/success ─────────────────────────
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdCounter = useRef(0);
+
+  const showToast = useCallback(
+    (message: string, type: Toast["type"] = "error") => {
+      const id = String(++toastIdCounter.current);
+      setToasts((prev) => [...prev, { id, message, type }]);
+    },
+    [],
+  );
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   // Disguise timeout (minutes, 0 = always show disguise / never auto-return)
   const [disguiseTimeout, setDisguiseTimeout] = useState<number>(0);
@@ -119,6 +137,32 @@ export default function AIContentSugestions() {
     }
   }, [showRealChat, disguiseTimeout]);
 
+  // ── Panic close: press "p" to instantly hide chat back to AI disguise ──
+  useEffect(() => {
+    const handlePanicKey = (e: KeyboardEvent) => {
+      // Don't trigger when typing in an input, textarea, or contenteditable
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        (e.target as HTMLElement)?.isContentEditable
+      )
+        return;
+
+      if (e.key === "p" || e.key === "P") {
+        // Reset disguise timeout to 0 ("always") so it doesn't auto-skip back
+        if (disguiseTimeout > 0) {
+          handleSetDisguiseTimeout(0);
+        }
+        // Go back to AI disguise
+        setShowRealChat(false);
+      }
+    };
+
+    window.addEventListener("keydown", handlePanicKey);
+    return () => window.removeEventListener("keydown", handlePanicKey);
+  }, [disguiseTimeout, handleSetDisguiseTimeout]);
+
   // Auto-hide chat after timeout (go back to disguise)
   useEffect(() => {
     if (disguiseTimerRef.current) {
@@ -162,6 +206,13 @@ export default function AIContentSugestions() {
   const firebaseWithSlot = useChatFirebase(isUnlocked, combo, slotId, roomPath);
   const { encryptionKey, chatTheme, handleThemeChange } = firebaseWithSlot;
 
+  // Surface Firebase connection errors as toasts
+  useEffect(() => {
+    if (firebaseWithSlot.connectionError) {
+      showToast(firebaseWithSlot.connectionError);
+    }
+  }, [firebaseWithSlot.connectionError, showToast]);
+
   // Message handling
   const chatMessages = useChatMessages(
     slotId,
@@ -170,6 +221,22 @@ export default function AIContentSugestions() {
     firebaseWithSlot.messages,
     roomPath,
   );
+
+  // Surface message send errors as toasts
+  useEffect(() => {
+    if (chatMessages.sendError) {
+      showToast(chatMessages.sendError);
+      chatMessages.setSendError(null);
+    }
+  }, [chatMessages.sendError, showToast, chatMessages]);
+
+  // Surface session errors as toasts
+  useEffect(() => {
+    if (session.error) {
+      showToast(session.error);
+      session.setError(null);
+    }
+  }, [session.error, showToast, session]);
 
   // Tic Tac Toe
   const ticTacToe = useTicTacToe(slotId, roomPath);
@@ -380,11 +447,11 @@ export default function AIContentSugestions() {
           session.setIsImageConfirmOpen,
           caption,
         );
-      } catch (err) {
-        session.setError("Image failed to send.");
+      } catch {
+        showToast("Image failed to send.");
       }
     },
-    [chatMessages, session],
+    [chatMessages, session, showToast],
   );
 
   const handleCancelImageWrapper = useCallback(() => {
@@ -400,9 +467,9 @@ export default function AIContentSugestions() {
     try {
       await chatMessages.handleSendMessage();
     } catch {
-      session.setError("Message failed to send.");
+      showToast("Message failed to send.");
     }
-  }, [chatMessages, session]);
+  }, [chatMessages, showToast]);
 
   // Ephemeral video send handler
   const handleSendEphemeralVideoWrapper = useCallback(
@@ -411,10 +478,10 @@ export default function AIContentSugestions() {
         await chatMessages.handleSendEphemeralVideo(videoBlob, caption);
         setIsVideoRecorderOpen(false);
       } catch {
-        session.setError("Ephemeral video failed to send.");
+        showToast("Ephemeral video failed to send.");
       }
     },
-    [chatMessages, session],
+    [chatMessages, showToast],
   );
 
   // Drawing recording handlers
@@ -440,10 +507,10 @@ export default function AIContentSugestions() {
         );
         setPendingDrawing(null);
       } catch {
-        session.setError("Drawing failed to send.");
+        showToast("Drawing failed to send.");
       }
     },
-    [pendingDrawing, chatMessages, session],
+    [pendingDrawing, chatMessages, showToast],
   );
 
   const handleCancelDrawing = useCallback(() => {
@@ -487,6 +554,35 @@ export default function AIContentSugestions() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-black">
+      {/* Error / success toast notifications */}
+      <ErrorToast toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Loading overlay while Firebase initializes */}
+      {firebaseWithSlot.isLoading && (
+        <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+          <svg
+            className="h-8 w-8 animate-spin text-white/70"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          <p className="mt-3 text-sm text-white/60">Connecting to room...</p>
+        </div>
+      )}
+
       {/* Voice Call Overlay */}
       {showCallOverlay && (
         <VoiceCallOverlay
@@ -589,7 +685,7 @@ export default function AIContentSugestions() {
             availability={session.availability}
             isJoining={session.isJoining}
             isLeaving={session.isLeaving}
-            error={session.error}
+            error={null}
             handleJoin={session.handleJoin}
             handleLeave={session.handleLeave}
             tttState={firebaseWithSlot.tttState}
@@ -636,6 +732,9 @@ export default function AIContentSugestions() {
               onDeleteMessage={chatMessages.deleteMessage}
               onReact={chatMessages.toggleReaction}
               scrollToMessageId={scrollToMessageId}
+              hasMoreOnServer={firebaseWithSlot.hasMoreOnServer}
+              loadOlderFromServer={firebaseWithSlot.loadOlderFromServer}
+              isLoadingOlder={firebaseWithSlot.isLoadingOlder}
             />
             <ChatInputArea
               slotId={slotId}

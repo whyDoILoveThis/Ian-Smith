@@ -325,9 +325,14 @@ export function useChatSession(
     [roomPath, slotId, storageKey],
   );
 
-  // ── Migrate all messages to another room ─────────────────────────────
+  // ── Migrate all messages to another room (chunk-based) ───────────────
+  const MIGRATE_CHUNK_SIZE = 50;
+
   const migrateConvo = useCallback(
-    async (destCombo: [number, number, number, number]): Promise<boolean> => {
+    async (
+      destCombo: [number, number, number, number],
+      onProgress?: (migrated: number, total: number) => void,
+    ): Promise<boolean> => {
       try {
         const destRoomPath = comboToRoomPath(destCombo);
         if (destRoomPath === roomPath) {
@@ -343,41 +348,54 @@ export function useChatSession(
           return false;
         }
 
-        // Re-encrypt messages: decrypt with source key, encrypt with dest key
         const sourceKey = combo ? await deriveKeyFromCombo(combo) : null;
         const destKey = await deriveKeyFromCombo(destCombo);
 
-        const reEncryptedMessages: Record<string, unknown> = {};
-        for (const [msgId, msgVal] of Object.entries(messagesData)) {
-          const msg = msgVal as Record<string, unknown>;
-          if (msg.text && typeof msg.text === "string" && sourceKey && destKey) {
-            try {
-              const plaintext = await decryptMessage(msg.text as string, sourceKey);
-              const newCiphertext = await encryptMessage(plaintext, destKey);
-              reEncryptedMessages[msgId] = { ...msg, text: newCiphertext };
-            } catch {
-              // If decryption fails (e.g. already plain text), keep as-is
-              reEncryptedMessages[msgId] = msg;
+        const entries = Object.entries(messagesData);
+        const total = entries.length;
+        let migrated = 0;
+        onProgress?.(0, total);
+
+        // Process in chunks
+        for (let i = 0; i < total; i += MIGRATE_CHUNK_SIZE) {
+          const chunk = entries.slice(i, i + MIGRATE_CHUNK_SIZE);
+
+          // Re-encrypt this chunk
+          const chunkData: Record<string, unknown> = {};
+          const chunkIds: string[] = [];
+          for (const [msgId, msgVal] of chunk) {
+            const msg = msgVal as Record<string, unknown>;
+            chunkIds.push(msgId);
+            if (msg.text && typeof msg.text === "string" && sourceKey && destKey) {
+              try {
+                const plaintext = await decryptMessage(msg.text as string, sourceKey);
+                const newCiphertext = await encryptMessage(plaintext, destKey);
+                chunkData[msgId] = { ...msg, text: newCiphertext };
+              } catch {
+                chunkData[msgId] = msg;
+              }
+            } else {
+              chunkData[msgId] = msg;
             }
-          } else {
-            reEncryptedMessages[msgId] = msg;
           }
+
+          // Write chunk to destination
+          await update(ref(rtdb, `${destRoomPath}/messages`), chunkData);
+
+          // Delete chunk from source
+          const deleteUpdates: Record<string, null> = {};
+          for (const id of chunkIds) {
+            deleteUpdates[`${roomPath}/messages/${id}`] = null;
+          }
+          await update(ref(rtdb), deleteUpdates);
+
+          migrated += chunk.length;
+          onProgress?.(migrated, total);
         }
-
-        // Check if destination already has messages and merge
-        const destSnap = await get(ref(rtdb, `${destRoomPath}/messages`));
-        const destMessages = destSnap.val() || {};
-
-        // Merge: write all source messages into destination
-        const merged = { ...destMessages, ...reEncryptedMessages };
-        await set(ref(rtdb, `${destRoomPath}/messages`), merged);
-
-        // Remove messages from the source room
-        await remove(ref(rtdb, `${roomPath}/messages`));
 
         return true;
       } catch {
-        setError("Failed to migrate conversation.");
+        setError("Migration failed — some messages may have already been moved.");
         return false;
       }
     },

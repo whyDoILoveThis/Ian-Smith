@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { onValue, ref, set, onDisconnect } from "firebase/database";
+import {
+  onValue,
+  ref,
+  set,
+  get,
+  onDisconnect,
+  query,
+  orderByKey,
+  limitToLast,
+  endBefore,
+} from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { COMBO_STORAGE_KEY } from "../constants";
 import { deriveKeyFromCombo, decryptMessage } from "../crypto";
@@ -10,6 +20,10 @@ import type { Slots, Message, TttState, ChatTheme } from "../types";
 // Module-level decryption cache: encrypted text → decrypted text
 // Shared across all hook instances so work is never duplicated.
 const decryptionCache = new Map<string, string>();
+
+// How many messages to keep in the real-time Firebase listener.
+// Only the latest SERVER_PAGE messages travel over the wire on connect.
+const SERVER_PAGE = 200;
 
 export function useChatFirebase(
   isUnlocked: boolean,
@@ -27,8 +41,18 @@ export function useChatFirebase(
   const [presence, setPresence] = useState<{ "1"?: boolean; "2"?: boolean }>({});
   const [lastSeen, setLastSeen] = useState<{ "1"?: number; "2"?: number }>({});
   const [indicatorColors, setIndicatorColors] = useState<{ "1"?: string; "2"?: string }>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [hasMoreOnServer, setHasMoreOnServer] = useState(true);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
   const encryptionKeyRef = useRef<CryptoKey | null>(null);
+
+  // Older messages loaded on-demand via get() — keyed by message ID
+  const olderMsgsRef = useRef<Map<string, Message>>(new Map());
+
+  // Structural digest — tracks message IDs + text to detect metadata-only updates
+  const prevDigestRef = useRef("");
 
   // Derive encryption key from combo
   useEffect(() => {
@@ -37,6 +61,9 @@ export function useChatFirebase(
       encryptionKeyRef.current = null;
       setMessages([]);
       setRawMessages([]);
+      olderMsgsRef.current.clear();
+      setHasMoreOnServer(true);
+      prevDigestRef.current = "";
       return;
     }
 
@@ -54,23 +81,88 @@ export function useChatFirebase(
   useEffect(() => {
     if (!isUnlocked) return;
 
+    setIsLoading(true);
+    setConnectionError(null);
+    let slotsLoaded = false;
+    let messagesLoaded = false;
+    const checkLoaded = () => {
+      if (slotsLoaded && messagesLoaded) setIsLoading(false);
+    };
+
     const slotsRef = ref(rtdb, `${roomPath}/slots`);
     const unsubSlots = onValue(slotsRef, (snap) => {
       const val = (snap.val() || {}) as Slots;
       setSlots(val);
+      slotsLoaded = true;
+      checkLoaded();
+    }, (err) => {
+      setConnectionError(`Failed to load room: ${err.message}`);
+      setIsLoading(false);
     });
 
+    // --- Server-side pagination ---
+    // Only subscribe to the latest SERVER_PAGE messages over the wire.
+    // Older messages are fetched on-demand via loadOlderFromServer().
     const messagesRef = ref(rtdb, `${roomPath}/messages`);
-    const unsubMessages = onValue(messagesRef, (snap) => {
+    const liveTailQuery = query(messagesRef, orderByKey(), limitToLast(SERVER_PAGE));
+    const unsubMessages = onValue(liveTailQuery, (snap) => {
       const val = (snap.val() || {}) as Record<string, Omit<Message, "id">>;
-      const msgs = Object.entries(val)
-        .map(([id, data]) => ({ id, ...data }))
-        .sort((a, b) => {
-          const aTime = typeof a.createdAt === "number" ? a.createdAt : 0;
-          const bTime = typeof b.createdAt === "number" ? b.createdAt : 0;
-          return aTime - bTime;
-        });
+      const liveMsgs = Object.entries(val)
+        .map(([id, data]) => ({ id, ...data }));
+
+      // If the live tail returned fewer than SERVER_PAGE, there are no older messages
+      if (liveMsgs.length < SERVER_PAGE) {
+        setHasMoreOnServer(false);
+      }
+
+      // Merge with on-demand older pages (older pages keyed by ID in ref)
+      const merged = new Map<string, Message>();
+      olderMsgsRef.current.forEach((msg, id) => merged.set(id, msg));
+      for (const msg of liveMsgs) merged.set(msg.id, msg); // live overrides stale
+
+      const msgs = Array.from(merged.values()).sort((a, b) => {
+        const aTime = typeof a.createdAt === "number" ? a.createdAt : 0;
+        const bTime = typeof b.createdAt === "number" ? b.createdAt : 0;
+        return aTime - bTime;
+      });
+
+      // Build a lightweight digest of message IDs + text lengths.
+      // When only metadata changes (readBy, reactions, seenReceiptBy),
+      // the digest stays the same and we can skip the full decrypt pipeline.
+      const digest =
+        msgs.length +
+        ":" +
+        msgs.map((m) => m.id + ":" + (m.text?.length ?? 0)).join(",");
+
+      if (digest === prevDigestRef.current && msgs.length > 0) {
+        // Metadata-only update — merge directly into decrypted messages
+        const freshMap = new Map(msgs.map((m) => [m.id, m]));
+        setMessages((prev) =>
+          prev.map((existing) => {
+            const fresh = freshMap.get(existing.id);
+            if (!fresh) return existing;
+            return {
+              ...existing,
+              readBy: fresh.readBy,
+              seenReceiptBy: fresh.seenReceiptBy,
+              reactions: fresh.reactions,
+              viewedBy: fresh.viewedBy,
+              disappearedFor: fresh.disappearedFor,
+            };
+          }),
+        );
+        messagesLoaded = true;
+        checkLoaded();
+        return;
+      }
+
+      prevDigestRef.current = digest;
       setRawMessages(msgs);
+      messagesLoaded = true;
+      checkLoaded();
+    }, (err) => {
+      setConnectionError(`Failed to load messages: ${err.message}`);
+      setIsLoading(false);
     });
 
     return () => {
@@ -262,6 +354,7 @@ export function useChatFirebase(
     async function decryptIncremental() {
       const key = encryptionKeyRef.current;
       const prev = prevDecryptedRef.current;
+      const isInitialLoad = prev.size === 0 && rawMessages.length > 0;
 
       // Fast path: no key — just pass through raw text
       if (!key) {
@@ -302,34 +395,57 @@ export function useChatFirebase(
         }
       }
 
-      // Decrypt only the new messages, in parallel batches to avoid blocking
-      if (needsDecryption.length > 0) {
-        const BATCH_SIZE = 50;
-        for (let b = 0; b < needsDecryption.length; b += BATCH_SIZE) {
-          const batch = needsDecryption.slice(b, b + BATCH_SIZE);
-          const decryptedBatch = await Promise.all(
-            batch.map(async ({ msg }) => {
-              try {
-                const decryptedText = await decryptMessage(msg.text!, key);
-                // Cache it for future use
-                decryptionCache.set(msg.text!, decryptedText);
-                return decryptedText;
-              } catch {
-                return msg.text!;
-              }
-            }),
-          );
-          for (let j = 0; j < batch.length; j++) {
-            result[batch[j].index] = {
-              ...batch[j].msg,
-              decryptedText: decryptedBatch[j],
-            };
-          }
+      // Nothing to decrypt — publish immediately
+      if (needsDecryption.length === 0) {
+        if (!cancelled) {
+          const newPrev = new Map<string, Message>();
+          for (const msg of result) newPrev.set(msg.id, msg);
+          prevDecryptedRef.current = newPrev;
+          setMessages(result);
+        }
+        return;
+      }
 
-          // Yield to the main thread between batches so the UI stays responsive
-          if (b + BATCH_SIZE < needsDecryption.length) {
-            await new Promise((r) => setTimeout(r, 0));
+      // For initial load: process newest messages first (user sees those)
+      // and push progressive partial renders so the UI isn't frozen.
+      const BATCH_SIZE = 200;
+      const processingOrder = isInitialLoad
+        ? [...needsDecryption].reverse()
+        : needsDecryption;
+
+      for (let b = 0; b < processingOrder.length; b += BATCH_SIZE) {
+        if (cancelled) return;
+        const batch = processingOrder.slice(b, b + BATCH_SIZE);
+        const decryptedBatch = await Promise.all(
+          batch.map(async ({ msg }) => {
+            try {
+              const decryptedText = await decryptMessage(msg.text!, key);
+              decryptionCache.set(msg.text!, decryptedText);
+              return decryptedText;
+            } catch {
+              return msg.text!;
+            }
+          }),
+        );
+        for (let j = 0; j < batch.length; j++) {
+          result[batch[j].index] = {
+            ...batch[j].msg,
+            decryptedText: decryptedBatch[j],
+          };
+        }
+
+        // During initial load with many messages, push partial updates
+        // so the user sees newest messages while older ones decrypt.
+        if (isInitialLoad && b + BATCH_SIZE < processingOrder.length) {
+          if (!cancelled) {
+            const partial = result.map(
+              (m, idx) =>
+                m ?? { ...rawMessages[idx], decryptedText: "\u2026" },
+            );
+            setMessages(partial);
           }
+          // Yield to the main thread
+          await new Promise((r) => setTimeout(r, 0));
         }
       }
 
@@ -353,6 +469,63 @@ export function useChatFirebase(
     // async key derivation completes — encryptionKeyRef alone is a stable
     // ref and would never retrigger this effect.
   }, [rawMessages, encryptionKey, encryptionKeyRef]);
+
+  // Load older messages on-demand via a one-shot get().
+  // Uses orderByKey + endBefore (push keys are chronological).
+  const loadOlderFromServer = useCallback(async () => {
+    if (!isUnlocked || isLoadingOlder || !hasMoreOnServer) return;
+
+    // Find the oldest message key we currently hold
+    const allIds = [
+      ...Array.from(olderMsgsRef.current.keys()),
+      ...rawMessages.map((m) => m.id),
+    ].sort();
+    const oldestKey = allIds[0];
+    if (!oldestKey) return;
+
+    setIsLoadingOlder(true);
+    try {
+      const messagesRef = ref(rtdb, `${roomPath}/messages`);
+      const olderQuery = query(
+        messagesRef,
+        orderByKey(),
+        endBefore(oldestKey),
+        limitToLast(SERVER_PAGE),
+      );
+      const snap = await get(olderQuery);
+      const val = (snap.val() || {}) as Record<string, Omit<Message, "id">>;
+      const fetched = Object.entries(val).map(([id, data]) => ({ id, ...data }));
+
+      if (fetched.length < SERVER_PAGE) {
+        setHasMoreOnServer(false);
+      }
+
+      if (fetched.length > 0) {
+        // Add to the older-messages ref
+        for (const msg of fetched) {
+          olderMsgsRef.current.set(msg.id, msg);
+        }
+
+        // Re-merge everything and push through the pipeline
+        const merged = new Map<string, Message>();
+        olderMsgsRef.current.forEach((msg, id) => merged.set(id, msg));
+        for (const msg of rawMessages) merged.set(msg.id, msg);
+
+        const sorted = Array.from(merged.values()).sort((a, b) => {
+          const aTime = typeof a.createdAt === "number" ? a.createdAt : 0;
+          const bTime = typeof b.createdAt === "number" ? b.createdAt : 0;
+          return aTime - bTime;
+        });
+
+        prevDigestRef.current = ""; // force full pipeline on next merge
+        setRawMessages(sorted);
+      }
+    } catch (err) {
+      console.error("Failed to load older messages:", err);
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [isUnlocked, isLoadingOlder, hasMoreOnServer, rawMessages, roomPath]);
 
   const handleThemeChange = useCallback(
     (theme: ChatTheme) => {
@@ -384,6 +557,11 @@ export function useChatFirebase(
     presence,
     lastSeen,
     indicatorColors,
+    isLoading,
+    connectionError,
+    hasMoreOnServer,
+    isLoadingOlder,
+    loadOlderFromServer,
     handleThemeChange,
     handleIndicatorColorChange,
   };

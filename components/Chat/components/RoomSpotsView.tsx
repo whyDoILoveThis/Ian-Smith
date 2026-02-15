@@ -87,6 +87,7 @@ type RoomSpotsViewProps = {
   onClaimSpot: (slot: "1" | "2", passkey: string) => Promise<boolean>;
   onMigrateConvo: (
     destCombo: [number, number, number, number],
+    onProgress?: (migrated: number, total: number) => void,
   ) => Promise<boolean>;
 };
 
@@ -151,6 +152,10 @@ export function RoomSpotsView({
   >(["", "", "", ""]);
   const [migrateBusy, setMigrateBusy] = useState(false);
   const [migrateSuccess, setMigrateSuccess] = useState<string | null>(null);
+  const [migrateProgress, setMigrateProgress] = useState<{
+    migrated: number;
+    total: number;
+  } | null>(null);
 
   // Custom disguise timeout input
   const [showCustomTimeout, setShowCustomTimeout] = useState(false);
@@ -532,11 +537,34 @@ export function RoomSpotsView({
               disabled={availability.isFull || isJoining}
               className="w-full rounded-2xl bg-emerald-400/90 px-4 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {availability.isFull
-                ? "Room Full"
-                : isJoining
-                  ? "Joining..."
-                  : "Join Chat"}
+              {availability.isFull ? (
+                "Room Full"
+              ) : isJoining ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg
+                    className="h-4 w-4 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  Joining...
+                </span>
+              ) : (
+                "Join Chat"
+              )}
             </button>
           </div>
         )}
@@ -752,7 +780,32 @@ export function RoomSpotsView({
                   : "border-neutral-700 bg-neutral-800/50 text-neutral-500 cursor-not-allowed"
               } disabled:opacity-50`}
             >
-              {isLeaving ? "Leaving..." : "Leave & Clear Room"}
+              {isLeaving ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg
+                    className="h-4 w-4 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  Leaving...
+                </span>
+              ) : (
+                "Leave & Clear Room"
+              )}
             </button>
           </div>
         )}
@@ -1017,13 +1070,36 @@ export function RoomSpotsView({
                       : "bg-sky-500/80 text-white hover:bg-sky-500"
                 }`}
               >
-                {passkeyBusy
-                  ? "..."
-                  : passkeyModal.mode === "set"
-                    ? "Save"
-                    : passkeyModal.mode === "kick"
-                      ? "Kick"
-                      : "Claim"}
+                {passkeyBusy ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <svg
+                      className="h-3.5 w-3.5 animate-spin"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Working...
+                  </span>
+                ) : passkeyModal.mode === "set" ? (
+                  "Save"
+                ) : passkeyModal.mode === "kick" ? (
+                  "Kick"
+                ) : (
+                  "Claim"
+                )}
               </button>
             </div>
           </div>
@@ -1064,6 +1140,21 @@ export function RoomSpotsView({
                 />
               ))}
             </div>
+            {migrateProgress && (
+              <div className="space-y-1">
+                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.round((migrateProgress.migrated / migrateProgress.total) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-neutral-400 text-center">
+                  {migrateProgress.migrated} / {migrateProgress.total} messages
+                </p>
+              </div>
+            )}
             {migrateSuccess && (
               <p className="text-xs text-emerald-400 text-center">
                 {migrateSuccess}
@@ -1092,16 +1183,51 @@ export function RoomSpotsView({
                     number,
                   ];
                   setMigrateBusy(true);
-                  const ok = await onMigrateConvo(destCombo);
+                  setMigrateProgress(null);
+                  const ok = await onMigrateConvo(
+                    destCombo,
+                    (migrated, total) =>
+                      setMigrateProgress({ migrated, total }),
+                  );
                   if (ok) {
                     setMigrateSuccess("Messages migrated!");
-                    setTimeout(() => setShowMigrateModal(false), 1000);
+                    setTimeout(() => {
+                      setShowMigrateModal(false);
+                      setMigrateProgress(null);
+                    }, 1000);
+                  } else {
+                    setMigrateProgress(null);
                   }
                   setMigrateBusy(false);
                 }}
                 className="flex-1 rounded-xl bg-emerald-500/80 px-3 py-2 text-xs font-semibold text-black hover:bg-emerald-500 transition-colors disabled:opacity-50"
               >
-                {migrateBusy ? "Migrating..." : "Migrate"}
+                {migrateBusy ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <svg
+                      className="h-3.5 w-3.5 animate-spin"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Migrating...
+                  </span>
+                ) : (
+                  "Migrate"
+                )}
               </button>
             </div>
           </div>

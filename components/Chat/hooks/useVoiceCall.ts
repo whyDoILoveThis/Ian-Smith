@@ -65,7 +65,12 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     if (!audio) return;
     // A play() during a user gesture "unlocks" the element on iOS / Android
     audio.play().catch(() => {});
-    audio.pause();
+    // Only pause if no srcObject is set yet (pure warm-up scenario).
+    // If srcObject is already attached (e.g. ontrack already fired for the
+    // callee), pausing here would silence the remote stream permanently.
+    if (!audio.srcObject) {
+      audio.pause();
+    }
   }, []);
 
   // Flush any ICE candidates that were queued before remote description
@@ -341,6 +346,12 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       } as CallSignal);
 
       await set(ref(rtdb, `${roomPath}/callState/status`), "connected");
+
+      // Ensure remote audio is playing – warmUpAudio may have paused it, or
+      // the earlier tryPlay() inside ontrack may have been blocked by the
+      // browser for lack of a user gesture.  We are still inside the
+      // user-gesture call-stack here so play() is allowed.
+      remoteAudioRef.current?.play().catch(() => {});
     } catch (err) {
       console.error("[VoiceCall] Failed to answer call:", err);
       cleanup();

@@ -20,3 +20,5 @@ export { PhotoGalleryOverlay } from "./PhotoGalleryOverlay";
 export { DrawingPlayer } from "./DrawingPlayer";
 export { DrawingRecordPreview } from "./DrawingRecordPreview";
 export { DrawingGalleryOverlay } from "./DrawingGalleryOverlay";
+export { ErrorToast } from "./ErrorToast";
+export type { Toast } from "./ErrorToast";

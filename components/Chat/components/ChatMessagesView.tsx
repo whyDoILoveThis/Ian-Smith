@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { MESSAGES_PER_PAGE } from "../constants";
 import type { Message, ThemeColors } from "../types";
 import { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
@@ -31,6 +37,12 @@ type ChatMessagesViewProps = {
   ) => void;
   onReact: (messageId: string, emoji: string) => void;
   scrollToMessageId?: string | null;
+  /** Are there older messages on the server that haven't been fetched yet? */
+  hasMoreOnServer?: boolean;
+  /** Fetch the next page of older messages from Firebase */
+  loadOlderFromServer?: () => Promise<void>;
+  /** Is a server-side page currently being fetched? */
+  isLoadingOlder?: boolean;
 };
 
 export function ChatMessagesView({
@@ -47,18 +59,84 @@ export function ChatMessagesView({
   onDeleteMessage,
   onReact,
   scrollToMessageId,
+  hasMoreOnServer = false,
+  loadOlderFromServer,
+  isLoadingOlder = false,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
-  const [messageOffset, setMessageOffset] = useState(0);
+  const isNearBottomRef = useRef(true);
+  const isLoadingRef = useRef(false);
+  const anchorRef = useRef<{ msgId: string; offsetFromTop: number } | null>(
+    null,
+  );
 
-  // Compute the visible window slice
-  const windowEnd = messages.length - messageOffset;
-  const windowStart = Math.max(0, windowEnd - MESSAGES_PER_PAGE);
+  // Window position: index of the first visible message
+  const [winStart, setWinStart] = useState(
+    Math.max(0, messages.length - MESSAGES_PER_PAGE),
+  );
+
+  // Track previous message count AND first message ID to distinguish
+  // "new messages at end" from "older messages prepended from server".
+  const prevMsgLenRef = useRef(messages.length);
+  const prevFirstIdRef = useRef<string | null>(
+    messages.length > 0 ? messages[0].id : null,
+  );
+
+  useEffect(() => {
+    const grew = messages.length > prevMsgLenRef.current;
+    const newFirstId = messages.length > 0 ? messages[0].id : null;
+    const firstIdChanged = newFirstId !== prevFirstIdRef.current;
+
+    if (grew && firstIdChanged && prevFirstIdRef.current) {
+      // Older messages were prepended (server-loaded page) — shift winStart
+      // so the user keeps seeing the same messages.
+      const shift = messages.length - prevMsgLenRef.current;
+      setWinStart((prev) => prev + shift);
+    } else if (grew && isNearBottomRef.current) {
+      // New messages at the end and user is near bottom — pin to newest
+      setWinStart(Math.max(0, messages.length - MESSAGES_PER_PAGE));
+    }
+
+    prevMsgLenRef.current = messages.length;
+    prevFirstIdRef.current = newFirstId;
+  }, [messages]);
+
+  // How many messages to shift when loading older / newer (half-page keeps overlap)
+  const LOAD_CHUNK = Math.floor(MESSAGES_PER_PAGE / 2);
+
+  // Compute the visible 50-message slice
+  const windowStart = Math.max(
+    0,
+    Math.min(winStart, messages.length - MESSAGES_PER_PAGE),
+  );
+  const windowEnd = Math.min(messages.length, windowStart + MESSAGES_PER_PAGE);
   const visibleMessages = messages.slice(windowStart, windowEnd);
   const hasOlder = windowStart > 0;
-  const hasNewer = messageOffset > 0;
+  const hasNewer = windowEnd < messages.length;
+
+  // After React renders the new window, restore scroll so the anchor message
+  // stays at the same visual position it was before. Works for both directions.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    const anchor = anchorRef.current;
+    if (!container || !anchor) return;
+
+    const el = container.querySelector(
+      `[data-msg-id="${anchor.msgId}"]`,
+    ) as HTMLElement | null;
+    if (el) {
+      const currentOffset =
+        el.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      container.scrollTop += currentOffset - anchor.offsetFromTop;
+    }
+
+    anchorRef.current = null;
+    setTimeout(() => {
+      isLoadingRef.current = false;
+    }, 400);
+  }, [windowStart]);
 
   const scrollToMessage = useCallback(
     (messageId: string) => {
@@ -73,11 +151,15 @@ export function ChatMessagesView({
         // Message might be outside the visible window — find its index and jump there
         const idx = messages.findIndex((m) => m.id === messageId);
         if (idx !== -1) {
-          const newOffset = Math.max(
+          // Center the window around the target message
+          const newStart = Math.max(
             0,
-            messages.length - idx - MESSAGES_PER_PAGE,
+            Math.min(
+              idx - Math.floor(MESSAGES_PER_PAGE / 2),
+              messages.length - MESSAGES_PER_PAGE,
+            ),
           );
-          setMessageOffset(newOffset);
+          setWinStart(newStart);
           setTimeout(() => {
             const retryEl = scrollContainerRef.current?.querySelector(
               `[data-msg-id="${messageId}"]`,
@@ -147,29 +229,115 @@ export function ChatMessagesView({
     onDeleteEphemeralMessage,
   ]);
 
-  // Auto-scroll when new messages arrive
+  // Auto-scroll only when user is near the bottom (not browsing older messages)
   useEffect(() => {
+    if (!isNearBottomRef.current || isLoadingRef.current) return;
     const id = window.setTimeout(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }, 50);
     return () => window.clearTimeout(id);
   }, [messages, isOtherTyping]);
 
-  // Mark messages from the other person as read
+  // Auto-load older/newer messages on scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const distFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      isNearBottomRef.current = distFromBottom < 150;
+
+      if (isLoadingRef.current) return;
+
+      // Load older when scrolled near top
+      if (container.scrollTop < 80 && hasOlder) {
+        isLoadingRef.current = true;
+        // Anchor the first visible message so we can restore its position
+        const firstEl = container.querySelector(
+          "[data-msg-id]",
+        ) as HTMLElement | null;
+        if (firstEl) {
+          anchorRef.current = {
+            msgId: firstEl.getAttribute("data-msg-id")!,
+            offsetFromTop:
+              firstEl.getBoundingClientRect().top -
+              container.getBoundingClientRect().top,
+          };
+        }
+        setWinStart((prev) => Math.max(0, prev - LOAD_CHUNK));
+      }
+
+      // Reached the top of locally-available messages — fetch older from server
+      if (
+        container.scrollTop < 80 &&
+        !hasOlder &&
+        hasMoreOnServer &&
+        !isLoadingOlder &&
+        loadOlderFromServer
+      ) {
+        // Anchor the first visible message for scroll restoration after new data arrives
+        const firstEl = container.querySelector(
+          "[data-msg-id]",
+        ) as HTMLElement | null;
+        if (firstEl) {
+          anchorRef.current = {
+            msgId: firstEl.getAttribute("data-msg-id")!,
+            offsetFromTop:
+              firstEl.getBoundingClientRect().top -
+              container.getBoundingClientRect().top,
+          };
+        }
+        loadOlderFromServer();
+      }
+
+      // Load newer when scrolled near bottom
+      if (distFromBottom < 80 && hasNewer) {
+        isLoadingRef.current = true;
+        // Anchor the last visible message so we can restore its position
+        const allMsgEls = container.querySelectorAll("[data-msg-id]");
+        const lastEl = allMsgEls[allMsgEls.length - 1] as HTMLElement | null;
+        if (lastEl) {
+          anchorRef.current = {
+            msgId: lastEl.getAttribute("data-msg-id")!,
+            offsetFromTop:
+              lastEl.getBoundingClientRect().top -
+              container.getBoundingClientRect().top,
+          };
+        }
+        setWinStart((prev) =>
+          Math.min(messages.length - MESSAGES_PER_PAGE, prev + LOAD_CHUNK),
+        );
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [
+    hasOlder,
+    hasNewer,
+    messages.length,
+    LOAD_CHUNK,
+    hasMoreOnServer,
+    isLoadingOlder,
+    loadOlderFromServer,
+  ]);
+
+  // Mark messages from the other person as read (only visible window)
   useEffect(() => {
     if (!slotId) return;
-    messages.forEach((msg) => {
+    visibleMessages.forEach((msg) => {
       markMessageAsRead(msg);
     });
-  }, [messages, slotId, markMessageAsRead]);
+  }, [visibleMessages, slotId, markMessageAsRead]);
 
-  // Mark that I've seen my read receipts (second checkmark)
+  // Mark that I've seen my read receipts (only visible window)
   useEffect(() => {
     if (!slotId) return;
-    messages.forEach((msg) => {
+    visibleMessages.forEach((msg) => {
       markReceiptAsSeen(msg);
     });
-  }, [messages, slotId, markReceiptAsSeen]);
+  }, [visibleMessages, slotId, markReceiptAsSeen]);
 
   // Long-press delete state
   const [longPressedMsgId, setLongPressedMsgId] = useState<string | null>(null);
@@ -268,15 +436,18 @@ export function ChatMessagesView({
         </div>
       )}
 
-      {/* Load older messages button */}
-      {hasOlder && (
-        <button
-          type="button"
-          onClick={() => setMessageOffset((prev) => prev + MESSAGES_PER_PAGE)}
-          className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white transition-colors"
-        >
-          ↑ Load {Math.min(MESSAGES_PER_PAGE, windowStart)} older messages
-        </button>
+      {/* Server-side loading spinner */}
+      {isLoadingOlder && (
+        <div className="w-full py-3 flex justify-center">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-500 border-t-transparent" />
+        </div>
+      )}
+
+      {/* Older messages sentinel */}
+      {hasOlder && !isLoadingOlder && (
+        <div className="w-full py-3 text-center text-xs text-neutral-500 animate-pulse">
+          Loading older messages…
+        </div>
       )}
 
       {/* Only render the current window of messages */}
@@ -611,15 +782,11 @@ export function ChatMessagesView({
         );
       })}
 
-      {/* Jump to newest messages button */}
+      {/* Newer messages sentinel */}
       {hasNewer && (
-        <button
-          type="button"
-          onClick={() => setMessageOffset(0)}
-          className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white transition-colors"
-        >
-          ↓ Back to newest messages
-        </button>
+        <div className="w-full py-3 text-center text-xs text-neutral-500 animate-pulse">
+          Loading newer messages…
+        </div>
       )}
 
       {isOtherTyping && (

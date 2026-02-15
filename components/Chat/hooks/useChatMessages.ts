@@ -17,6 +17,7 @@ export function useChatMessages(
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const typingTimeoutRef = useRef<number | null>(null);
   const markedAsReadRef = useRef<Set<string>>(new Set());
@@ -38,6 +39,7 @@ export function useChatMessages(
     if (!slotId || !screenName.trim() || !messageText.trim() || !encryptionKey)
       return;
     setIsSending(true);
+    setSendError(null);
 
     setTypingState(false);
 
@@ -73,7 +75,7 @@ export function useChatMessages(
       setMessageText("");
       setReplyingTo(null);
     } catch {
-      // Error handled by caller
+      setSendError("Message failed to send.");
       throw new Error("Message failed to send.");
     } finally {
       setIsSending(false);
@@ -144,6 +146,7 @@ export function useChatMessages(
         
         await push(msgRef, msgData);
       } catch {
+        setSendError("Media failed to send.");
         throw new Error("Media failed to send.");
       } finally {
         setIsSending(false);
@@ -260,6 +263,7 @@ export function useChatMessages(
 
         await push(msgRef, msgData);
       } catch {
+        setSendError("Ephemeral video failed to send.");
         throw new Error("Ephemeral video failed to send.");
       } finally {
         setIsSending(false);
@@ -290,6 +294,7 @@ export function useChatMessages(
 
         await push(msgRef, msgData);
       } catch {
+        setSendError("Drawing failed to send.");
         throw new Error("Drawing failed to send.");
       } finally {
         setIsSending(false);
@@ -399,6 +404,8 @@ export function useChatMessages(
     messageText,
     setMessageText,
     isSending,
+    sendError,
+    setSendError,
     replyingTo,
     setReplyingTo,
     handleSendMessage,

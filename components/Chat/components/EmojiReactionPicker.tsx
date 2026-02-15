@@ -8,7 +8,25 @@ import React, {
   useState,
 } from "react";
 
-const QUICK_EMOJIS = ["❤️", "😂", "😮", "😢", "🔥", "👍", "🖕", "💩"];
+const QUICK_EMOJIS = [
+  "❤️",
+  "💘",
+  "😍",
+  "🥰",
+  "😘",
+  "😂",
+  "🤣",
+  "😆",
+  "😁",
+  "😢",
+  "🤦‍♂️",
+  "🙆‍♂️",
+  "🔥",
+  "💯",
+  "👍",
+  "🖕",
+  "💩",
+];
 
 // Full emoji grid organized by category
 const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
@@ -173,6 +191,8 @@ const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
       "💔",
       "❤️‍🔥",
       "❤️‍🩹",
+      "❤️+🔥",
+      "❤️+🩹",
       "💕",
       "💞",
       "💓",
@@ -225,6 +245,51 @@ const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
     ],
   },
   {
+    label: "People",
+    emojis: [
+      "🤦‍♂️",
+      "🤦‍♀️",
+      "🤦",
+      "🙆‍♂️",
+      "🙆‍♀️",
+      "🤷‍♂️",
+      "🤷‍♀️",
+      "🤷",
+      "🙅‍♂️",
+      "🙅‍♀️",
+      "🙋‍♂️",
+      "🙋‍♀️",
+      "🤙",
+      "🤳",
+      "💁‍♂️",
+      "💁‍♀️",
+      "🙇‍♂️",
+      "🙇‍♀️",
+      "🤴",
+      "👸",
+      "🧔",
+      "👨‍💻",
+      "👩‍💻",
+      "🧑‍💻",
+      "👨‍🍳",
+      "🕵️‍♂️",
+      "🦸‍♂️",
+      "🦹‍♂️",
+      "🧟‍♂️",
+      "🧛‍♂️",
+      "👻",
+      "🤡",
+      "💅",
+      "🏃‍♂️",
+      "🏃‍♀️",
+      "🚶‍♂️",
+      "🧎‍♂️",
+      "🫠",
+      "🫃",
+      "🤰",
+    ],
+  },
+  {
     label: "Animals",
     emojis: [
       "🐶",
@@ -251,6 +316,31 @@ const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
       "🐬",
       "🦈",
       "🐙",
+    ],
+  },
+  {
+    label: "Reactions",
+    emojis: [
+      "❗",
+      "❓",
+      "‼️",
+      "⁉️",
+      "✅",
+      "❌",
+      "💤",
+      "💢",
+      "💬",
+      "💭",
+      "👀",
+      "🫡",
+      "🚩",
+      "⚠️",
+      "🚫",
+      "💀",
+      "☠️",
+      "🤝",
+      "🙏",
+      "🫶",
     ],
   },
 ];
@@ -411,7 +501,7 @@ export function EmojiReactionPicker({
       {showQuickBar && !showFullPicker && (
         <div
           ref={quickBarRef}
-          className={`pointer-events-auto absolute z-50 bottom-8 flex items-center gap-0.5 rounded-full bg-neutral-900/95 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg shadow-black/40 ${
+          className={`pointer-events-auto absolute z-50 bottom-8 w-72 flex flex-wrap items-center gap-2 rounded-3xl bg-neutral-900/95 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg shadow-black/40 ${
             isMine ? "left-0" : "right-0"
           }`}
           style={{ whiteSpace: "nowrap" }}
