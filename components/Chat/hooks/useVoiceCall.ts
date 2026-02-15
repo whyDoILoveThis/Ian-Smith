@@ -40,6 +40,7 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
   const durationIntervalRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
   // Queue ICE candidates that arrive before remote description is set
@@ -97,6 +98,7 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
       analyserRef.current = null;
+      gainNodeRef.current = null;
     }
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
@@ -155,7 +157,68 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       if (!remoteAudioRef.current) return;
 
       console.log("[VoiceCall] ontrack fired – stream tracks:", remoteStream.getTracks().length);
-      remoteAudioRef.current.srcObject = remoteStream;
+
+      // ── Audio boost pipeline via Web Audio API ──
+      // Route through a GainNode to amplify volume (fixes low audio on mobile)
+      try {
+        const AC =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        if (AC) {
+          const ctx = new AC();
+          audioContextRef.current = ctx;
+          if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+          const source = ctx.createMediaStreamSource(remoteStream);
+
+          // Gain node: boost volume by 3x (mobile devices often have very low WebRTC audio)
+          const gainNode = ctx.createGain();
+          gainNode.gain.value = 3.0;
+          gainNodeRef.current = gainNode;
+
+          // Analyser for visual audio level
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          analyserRef.current = analyser;
+
+          // Pipeline: source → gain → analyser + destination
+          source.connect(gainNode);
+          gainNode.connect(analyser);
+          gainNode.connect(ctx.destination);
+
+          // Create a boosted MediaStream from the destination for the audio element
+          // This ensures mobile browsers actually play the audio through the speaker
+          if (typeof ctx.createMediaStreamDestination === "function") {
+            const dest = ctx.createMediaStreamDestination();
+            gainNode.connect(dest);
+            remoteAudioRef.current.srcObject = dest.stream;
+          } else {
+            remoteAudioRef.current.srcObject = remoteStream;
+          }
+
+          const updateLevel = () => {
+            if (!analyserRef.current) return;
+            const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+            analyserRef.current.getByteFrequencyData(data);
+            const avg = data.reduce((a, b) => a + b, 0) / data.length;
+            setRemoteAudioLevel(Math.min(100, avg * 1.5));
+            animationFrameRef.current = requestAnimationFrame(updateLevel);
+          };
+          updateLevel();
+        } else {
+          // Fallback: direct stream assignment
+          remoteAudioRef.current.srcObject = remoteStream;
+        }
+      } catch {
+        // Fallback: direct stream assignment if Web Audio API fails
+        console.warn("[VoiceCall] Web Audio API boost failed, using direct stream");
+        remoteAudioRef.current.srcObject = remoteStream;
+      }
+
+      // Ensure volume is maxed
+      remoteAudioRef.current.volume = 1.0;
+
       // Try to play immediately, then retry after a short delay for mobile
       const tryPlay = () => {
         remoteAudioRef.current
@@ -169,36 +232,6 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
           });
       };
       tryPlay();
-
-      // Set up audio level monitoring for the visual indicator
-      try {
-        const AC =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext })
-            .webkitAudioContext;
-        if (!AC) return;
-        const ctx = new AC();
-        audioContextRef.current = ctx;
-        // Resume context (required on iOS Safari after user gesture)
-        if (ctx.state === "suspended") ctx.resume().catch(() => {});
-        const source = ctx.createMediaStreamSource(remoteStream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 256;
-        analyserRef.current = analyser;
-        source.connect(analyser);
-
-        const updateLevel = () => {
-          if (!analyserRef.current) return;
-          const data = new Uint8Array(analyserRef.current.frequencyBinCount);
-          analyserRef.current.getByteFrequencyData(data);
-          const avg = data.reduce((a, b) => a + b, 0) / data.length;
-          setRemoteAudioLevel(Math.min(100, avg * 1.5));
-          animationFrameRef.current = requestAnimationFrame(updateLevel);
-        };
-        updateLevel();
-      } catch {
-        /* audio analyser not supported – call still works */
-      }
     };
 
     pc.onconnectionstatechange = () => {
@@ -403,9 +436,12 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
   const toggleSpeaker = useCallback(() => {
     setIsSpeaker((prev) => {
       const next = !prev;
+      // Speaker = full boost, Handset = lower gain for earpiece use
+      if (gainNodeRef.current) {
+        gainNodeRef.current.gain.value = next ? 3.0 : 0.5;
+      }
       if (remoteAudioRef.current) {
-        // Speaker = full volume, Handset = low volume for earpiece use
-        remoteAudioRef.current.volume = next ? 1.0 : 0.15;
+        remoteAudioRef.current.volume = next ? 1.0 : 0.3;
       }
       return next;
     });
@@ -531,9 +567,13 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
   useEffect(() => {
     const audio = document.createElement("audio");
     audio.autoplay = true;
+    audio.volume = 1.0;
     audio.setAttribute("playsinline", "true");
     // Allow audio to play when phone is on silent (iOS)
     audio.setAttribute("x-webkit-airplay", "allow");
+    // Force media session to treat this as voice communication
+    // so it routes to the correct output (speaker not earpiece)
+    (audio as unknown as Record<string, unknown>).mozAudioChannelType = "content";
     // Append to DOM – some mobile browsers need the element in the DOM for playback
     audio.style.display = "none";
     document.body.appendChild(audio);
