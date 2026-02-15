@@ -57,6 +57,15 @@ export default function AIContentSugestions() {
   );
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
+  // ── Service Worker registration for PWA + Push ─────────────────────
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/sw.js")
+        .catch((err) => console.warn("SW registration failed:", err));
+    }
+  }, []);
+
   // ── Toast notifications for errors/success ─────────────────────────
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdCounter = useRef(0);
@@ -138,18 +147,28 @@ export default function AIContentSugestions() {
   }, [showRealChat, disguiseTimeout]);
 
   // ── Panic close: press "p" to instantly hide chat back to AI disguise ──
+  // When input is focused: Alt+P triggers panic
+  // When input is NOT focused: P triggers panic
   useEffect(() => {
     const handlePanicKey = (e: KeyboardEvent) => {
-      // Don't trigger when typing in an input, textarea, or contenteditable
       const tag = (e.target as HTMLElement)?.tagName;
-      if (
+      const isInInput =
         tag === "INPUT" ||
         tag === "TEXTAREA" ||
-        (e.target as HTMLElement)?.isContentEditable
-      )
-        return;
+        (e.target as HTMLElement)?.isContentEditable;
 
-      if (e.key === "p" || e.key === "P") {
+      const isAltP = e.altKey && (e.key === "p" || e.key === "P");
+      const isP =
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        (e.key === "p" || e.key === "P");
+
+      // Trigger if: (in input and Alt+P) or (not in input and P)
+      const shouldTrigger = (isInInput && isAltP) || (!isInInput && isP);
+
+      if (shouldTrigger) {
+        e.preventDefault();
         // Reset disguise timeout to 0 ("always") so it doesn't auto-skip back
         if (disguiseTimeout > 0) {
           handleSetDisguiseTimeout(0);
@@ -321,20 +340,32 @@ export default function AIContentSugestions() {
         /* audio not available */
       }
 
-      // 2. Browser / ServiceWorker notification (for when tab is in background)
+      // 2. Send push notification via API (works even when tab is closed)
+      fetch("/api/push-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomPath,
+          senderSlotId: slotId,
+          title: msg.sender || "New message",
+          body,
+        }),
+      }).catch(() => {
+        /* silently fail — push is best effort */
+      });
+
+      // 3. Local notification fallback (for when tab is in background but SW push not available)
       if (
         typeof Notification !== "undefined" &&
         Notification.permission === "granted"
       ) {
         const title = msg.sender || "New message";
-        const options = { body, tag: msg.id, icon: "/favicon.ico" };
+        const options = { body, tag: msg.id, icon: "/icons/icon-192x192.png" };
 
-        // Try ServiceWorker notification first (works on mobile)
         if (navigator.serviceWorker?.controller) {
           navigator.serviceWorker.ready
             .then((reg) => reg.showNotification(title, options))
             .catch(() => {
-              // Fallback to classic Notification constructor
               try {
                 new Notification(title, options);
               } catch {
@@ -350,7 +381,57 @@ export default function AIContentSugestions() {
         }
       }
     }
-  }, [firebaseWithSlot.messages, notificationsEnabled, slotId]);
+  }, [firebaseWithSlot.messages, notificationsEnabled, slotId, roomPath]);
+
+  // ── Push subscription helper ──────────────────────────────────────
+  const subscribeToPush = useCallback(
+    async (reg: ServiceWorkerRegistration) => {
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey || !slotId) return;
+
+      try {
+        // Check for existing subscription
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: vapidKey,
+          });
+        }
+
+        // Save subscription to Firebase via our API
+        await fetch("/api/push-subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomPath,
+            slotId,
+            subscription: sub.toJSON(),
+          }),
+        });
+      } catch (err) {
+        console.warn("Push subscription failed:", err);
+      }
+    },
+    [roomPath, slotId],
+  );
+
+  const unsubscribeFromPush = useCallback(async () => {
+    if (!slotId) return;
+    try {
+      const reg = await navigator.serviceWorker?.ready;
+      const sub = await reg?.pushManager?.getSubscription();
+      if (sub) await sub.unsubscribe();
+
+      await fetch("/api/push-subscribe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomPath, slotId }),
+      });
+    } catch {
+      /* best effort */
+    }
+  }, [roomPath, slotId]);
 
   const handleToggleNotifications = useCallback(async () => {
     if (!notificationsEnabled) {
@@ -362,11 +443,20 @@ export default function AIContentSugestions() {
       } else if (Notification.permission === "denied") {
         return; // can't enable, browser blocked it
       }
+
+      // Subscribe to push notifications
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        await subscribeToPush(reg);
+      }
+
       setNotificationsEnabled(true);
     } else {
+      // Turning off — unsubscribe from push
+      await unsubscribeFromPush();
       setNotificationsEnabled(false);
     }
-  }, [notificationsEnabled]);
+  }, [notificationsEnabled, subscribeToPush, unsubscribeFromPush]);
 
   // Touch Indicators
   const touchIndicators = useTouchIndicators(slotId, roomPath);

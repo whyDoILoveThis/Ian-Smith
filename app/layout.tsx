@@ -17,6 +17,13 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Ian Smith",
   description: "Ian Thai Smith's personal website",
+  manifest: "/manifest.json",
+  themeColor: "#000000",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Ian Smith",
+  },
 };
 
 export default function RootLayout({
@@ -28,6 +35,10 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
+        <head>
+          <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+          <meta name="mobile-web-app-capable" content="yes" />
+        </head>
         <body
           className={`relative pb-44 min-h-screen
            ${inter.className}`}
