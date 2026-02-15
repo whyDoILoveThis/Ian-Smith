@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useRef } from "react";
 import type { Message, ThemeColors } from "../types";
 
 type ChatInputAreaProps = {
@@ -30,6 +30,16 @@ export function ChatInputArea({
   onOpenVideoRecorder,
   chatTheme,
 }: ChatInputAreaProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const sendAndRefocus = () => {
+    handleSendMessage();
+    // Re-focus input after send (multiple attempts to beat any competing blur)
+    setTimeout(() => inputRef.current?.focus(), 0);
+    setTimeout(() => inputRef.current?.focus(), 50);
+    setTimeout(() => inputRef.current?.focus(), 150);
+  };
+
   return (
     <div className="flex-shrink-0 border-t border-white/10 bg-black/60 px-2 py-2 safe-area-inset-bottom">
       {/* Reply preview bar */}
@@ -64,13 +74,15 @@ export function ChatInputArea({
       )}
       <div className="flex items-center gap-2">
         <input
+          ref={inputRef}
+          autoFocus
           type="text"
           placeholder={slotId ? "Message" : "Join to chat"}
           value={messageText}
           disabled={!slotId || isSending}
           onChange={(e) => handleTypingChange(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleSendMessage();
+            if (e.key === "Enter") sendAndRefocus();
           }}
           className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-${chatTheme}-400 border-opacity-70 disabled:opacity-50`}
         />
@@ -121,7 +133,7 @@ export function ChatInputArea({
           </svg>
         </button>
         <button
-          onClick={handleSendMessage}
+          onClick={sendAndRefocus}
           disabled={!slotId || isSending || !messageText.trim()}
           className={`flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${themeColors.btn} ${themeColors.text} hover:opacity-80`}
         >

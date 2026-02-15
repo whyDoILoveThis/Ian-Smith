@@ -228,11 +228,11 @@ export function ChatHeader({
           <span className="text-sm font-semibold text-white flex items-center gap-1.5">
             {activeTab === "chat" ? (
               <span>
-                Chat <span className="text-[8px]">v1.5</span>
+                Chat <span className="text-[8px]">v2.0</span>
               </span>
             ) : (
               <span>
-                Room <span className="text-[8px]">v1.6</span>
+                Room <span className="text-[8px]">v2.0</span>
               </span>
             )}
             {otherPersonOnline ? (

@@ -94,8 +94,8 @@ export function ChatMessagesView({
       // so the user keeps seeing the same messages.
       const shift = messages.length - prevMsgLenRef.current;
       setWinStart((prev) => prev + shift);
-    } else if (grew && isNearBottomRef.current) {
-      // New messages at the end and user is near bottom — pin to newest
+    } else if (grew) {
+      // New messages at the end — always pin to newest
       setWinStart(Math.max(0, messages.length - MESSAGES_PER_PAGE));
     }
 
@@ -229,14 +229,62 @@ export function ChatMessagesView({
     onDeleteEphemeralMessage,
   ]);
 
-  // Auto-scroll only when user is near the bottom (not browsing older messages)
+  // Track last known message count for periodic scroll check
+  const lastKnownCountRef = useRef(messages.length);
+  const lastKnownLastIdRef = useRef(
+    messages.length > 0 ? messages[messages.length - 1]?.id : null,
+  );
+
+  // Scroll to bottom helper
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, []);
+
+  // Scroll to bottom on initial load
   useEffect(() => {
-    if (!isNearBottomRef.current || isLoadingRef.current) return;
     const id = window.setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    }, 50);
+      bottomRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+    }, 100);
     return () => window.clearTimeout(id);
-  }, [messages, isOtherTyping]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Periodic check — lightweight interval that compares message count/last ID
+  // and scrolls to bottom if anything changed
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const currentCount = messages.length;
+      const currentLastId =
+        currentCount > 0 ? messages[currentCount - 1]?.id : null;
+
+      if (
+        currentCount !== lastKnownCountRef.current ||
+        currentLastId !== lastKnownLastIdRef.current
+      ) {
+        lastKnownCountRef.current = currentCount;
+        lastKnownLastIdRef.current = currentLastId;
+        // Pin window to bottom
+        setWinStart(Math.max(0, currentCount - MESSAGES_PER_PAGE));
+        requestAnimationFrame(() => {
+          bottomRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "end",
+          });
+        });
+      }
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, [messages]);
+
+  // Also scroll on typing indicator changes
+  useEffect(() => {
+    if (isOtherTyping) {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      });
+    }
+  }, [isOtherTyping]);
 
   // Auto-load older/newer messages on scroll
   useEffect(() => {
