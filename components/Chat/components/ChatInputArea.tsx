@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import type { Message, ThemeColors } from "../types";
 
 type ChatInputAreaProps = {
@@ -31,13 +31,24 @@ export function ChatInputArea({
   chatTheme,
 }: ChatInputAreaProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const wasSendingRef = useRef(false);
+
+  // Re-focus input once isSending flips back to false (send complete)
+  useEffect(() => {
+    if (wasSendingRef.current && !isSending) {
+      // Use rAF + setTimeout to wait until the input is re-enabled in the DOM
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    }
+    wasSendingRef.current = isSending;
+  }, [isSending]);
 
   const sendAndRefocus = () => {
     handleSendMessage();
-    // Re-focus input after send (multiple attempts to beat any competing blur)
+    // Immediate refocus attempts for fast sends
     setTimeout(() => inputRef.current?.focus(), 0);
     setTimeout(() => inputRef.current?.focus(), 50);
-    setTimeout(() => inputRef.current?.focus(), 150);
   };
 
   return (

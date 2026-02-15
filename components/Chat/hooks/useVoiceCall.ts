@@ -35,6 +35,7 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const callStartTimeRef = useRef<number | null>(null);
   const durationIntervalRef = useRef<number | null>(null);
@@ -114,8 +115,85 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     }
     pendingCandidatesRef.current = [];
     callStartTimeRef.current = null;
+    remoteStreamRef.current = null;
     setCallDuration(0);
     setRemoteAudioLevel(0);
+  }, []);
+
+  // Create / resume an AudioContext. MUST be called inside a user-gesture
+  // handler (click / touchend) so the context is unlocked on iOS / Android.
+  const ensureAudioContext = useCallback(() => {
+    if (audioContextRef.current) {
+      if (audioContextRef.current.state === "suspended") {
+        audioContextRef.current.resume().catch(() => {});
+      }
+      return audioContextRef.current;
+    }
+    try {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AC) return null;
+      const ctx = new AC();
+      audioContextRef.current = ctx;
+      return ctx;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Apply the Web Audio gain-boost pipeline to the remote stream.
+  // Safe to call multiple times – it no-ops if already wired up.
+  const setupAudioBoost = useCallback(() => {
+    const stream = remoteStreamRef.current;
+    const audio = remoteAudioRef.current;
+    const ctx = audioContextRef.current;
+    if (!stream || !audio || !ctx) return;
+    if (gainNodeRef.current) return; // already set up
+
+    try {
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+      const source = ctx.createMediaStreamSource(stream);
+
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 3.0;
+      gainNodeRef.current = gainNode;
+
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+
+      source.connect(gainNode);
+      gainNode.connect(analyser);
+
+      // Route boosted audio to audio element only (avoid double output)
+      if (typeof ctx.createMediaStreamDestination === "function") {
+        const dest = ctx.createMediaStreamDestination();
+        gainNode.connect(dest);
+        audio.srcObject = dest.stream;
+      } else {
+        // Fallback – direct output through AudioContext speakers
+        gainNode.connect(ctx.destination);
+      }
+
+      // Audio-level visualisation loop
+      const updateLevel = () => {
+        if (!analyserRef.current) return;
+        const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        setRemoteAudioLevel(Math.min(100, avg * 1.5));
+        animationFrameRef.current = requestAnimationFrame(updateLevel);
+      };
+      updateLevel();
+
+      audio.volume = 1.0;
+      audio.play().catch(() => {});
+    } catch {
+      console.warn("[VoiceCall] Audio boost setup failed, keeping direct stream");
+    }
   }, []);
 
   // ── Peer connection factory ──────────────────────────────────────────
@@ -154,90 +232,35 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     pc.ontrack = (event) => {
       // Use event.streams[0] if available, otherwise create a stream from the track
       const remoteStream = event.streams?.[0] ?? new MediaStream([event.track]);
+      remoteStreamRef.current = remoteStream;
       if (!remoteAudioRef.current) return;
 
       console.log("[VoiceCall] ontrack fired – stream tracks:", remoteStream.getTracks().length);
 
-      // ── Audio boost pipeline via Web Audio API ──
-      // Route through a GainNode to amplify volume (fixes low audio on mobile)
-      try {
-        const AC =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext })
-            .webkitAudioContext;
-        if (AC) {
-          const ctx = new AC();
-          audioContextRef.current = ctx;
-          if (ctx.state === "suspended") ctx.resume().catch(() => {});
-
-          const source = ctx.createMediaStreamSource(remoteStream);
-
-          // Gain node: boost volume by 3x (mobile devices often have very low WebRTC audio)
-          const gainNode = ctx.createGain();
-          gainNode.gain.value = 3.0;
-          gainNodeRef.current = gainNode;
-
-          // Analyser for visual audio level
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 256;
-          analyserRef.current = analyser;
-
-          // Pipeline: source → gain → analyser + destination
-          source.connect(gainNode);
-          gainNode.connect(analyser);
-          gainNode.connect(ctx.destination);
-
-          // Create a boosted MediaStream from the destination for the audio element
-          // This ensures mobile browsers actually play the audio through the speaker
-          if (typeof ctx.createMediaStreamDestination === "function") {
-            const dest = ctx.createMediaStreamDestination();
-            gainNode.connect(dest);
-            remoteAudioRef.current.srcObject = dest.stream;
-          } else {
-            remoteAudioRef.current.srcObject = remoteStream;
-          }
-
-          const updateLevel = () => {
-            if (!analyserRef.current) return;
-            const data = new Uint8Array(analyserRef.current.frequencyBinCount);
-            analyserRef.current.getByteFrequencyData(data);
-            const avg = data.reduce((a, b) => a + b, 0) / data.length;
-            setRemoteAudioLevel(Math.min(100, avg * 1.5));
-            animationFrameRef.current = requestAnimationFrame(updateLevel);
-          };
-          updateLevel();
-        } else {
-          // Fallback: direct stream assignment
-          remoteAudioRef.current.srcObject = remoteStream;
-        }
-      } catch {
-        // Fallback: direct stream assignment if Web Audio API fails
-        console.warn("[VoiceCall] Web Audio API boost failed, using direct stream");
-        remoteAudioRef.current.srcObject = remoteStream;
-      }
-
-      // Ensure volume is maxed
+      // Assign the raw stream directly – the gain-boost pipeline is applied
+      // later (in the "connected" handler) to avoid interfering with the
+      // WebRTC signalling / ICE process and to ensure the AudioContext is
+      // created inside a user-gesture so it isn't suspended on iOS.
+      remoteAudioRef.current.srcObject = remoteStream;
       remoteAudioRef.current.volume = 1.0;
 
       // Try to play immediately, then retry after a short delay for mobile
-      const tryPlay = () => {
-        remoteAudioRef.current
-          ?.play()
-          .catch((e) => {
-            console.warn("[VoiceCall] audio.play() blocked:", e.message);
-            // Retry after a short delay
-            setTimeout(() => {
-              remoteAudioRef.current?.play().catch(() => {});
-            }, 300);
-          });
-      };
-      tryPlay();
+      remoteAudioRef.current
+        .play()
+        .catch((e) => {
+          console.warn("[VoiceCall] audio.play() blocked:", e.message);
+          setTimeout(() => {
+            remoteAudioRef.current?.play().catch(() => {});
+          }, 300);
+        });
     };
 
     pc.onconnectionstatechange = () => {
       console.log("[VoiceCall] connection state:", pc.connectionState);
       if (pc.connectionState === "connected") {
         setCallStatus("connected");
+        // Apply gain-boost now that the connection is stable
+        setupAudioBoost();
         callStartTimeRef.current = Date.now();
         durationIntervalRef.current = window.setInterval(() => {
           if (callStartTimeRef.current) {
@@ -261,7 +284,7 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
 
     peerConnectionRef.current = pc;
     return pc;
-  }, [slotId, otherSlotId, cleanup, roomPath]);
+  }, [slotId, otherSlotId, cleanup, roomPath, setupAudioBoost]);
 
   // ── Start an outgoing call ───────────────────────────────────────────
 
@@ -272,6 +295,8 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       setCallStatus("calling");
       setCallerId(slotId);
 
+      // Create AudioContext in user-gesture context so it is unlocked on iOS
+      ensureAudioContext();
       // Warm-up audio so remote playback is unlocked (user-gesture context)
       warmUpAudio();
 
@@ -317,7 +342,7 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       setCallStatus("idle");
       setCallerId(null);
     }
-  }, [slotId, otherSlotId, createPeerConnection, cleanup, warmUpAudio, roomPath]);
+  }, [slotId, otherSlotId, createPeerConnection, cleanup, warmUpAudio, ensureAudioContext, roomPath]);
 
   // ── Answer an incoming call ──────────────────────────────────────────
 
@@ -327,6 +352,8 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     try {
       setCallStatus("connecting");
 
+      // Create / resume AudioContext in user-gesture context (unlocks on iOS)
+      ensureAudioContext();
       // Warm-up audio so remote playback is unlocked (user-gesture context)
       warmUpAudio();
 
@@ -391,7 +418,7 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       setCallStatus("idle");
       setCallerId(null);
     }
-  }, [slotId, otherSlotId, createPeerConnection, cleanup, warmUpAudio, roomPath]);
+  }, [slotId, otherSlotId, createPeerConnection, cleanup, warmUpAudio, ensureAudioContext, roomPath]);
 
   // ── End / decline call ───────────────────────────────────────────────
 
