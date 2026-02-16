@@ -263,12 +263,13 @@ export default function AIContentSugestions() {
   // Voice Call
   const voiceCall = useVoiceCall(slotId, roomPath);
 
-  // Auto-expand call overlay when a call starts or an incoming call rings
+  // Auto-expand call overlay when a call starts, incoming call rings, or error occurs
   useEffect(() => {
     if (
       voiceCall.callStatus === "ringing" ||
       voiceCall.callStatus === "calling" ||
-      voiceCall.callStatus === "connecting"
+      voiceCall.callStatus === "connecting" ||
+      voiceCall.callStatus === "error"
     ) {
       setIsCallExpanded(true);
     }
@@ -637,10 +638,12 @@ export default function AIContentSugestions() {
   }
 
   // Main chat UI
-  // Show call overlay when expanded (any active call state)
+  // Show call overlay when expanded (any active call state or error)
   const hasActiveCall =
     voiceCall.callStatus !== "idle" && voiceCall.callStatus !== "ended";
-  const showCallOverlay = hasActiveCall && isCallExpanded;
+  // Also show overlay if there's an error to display
+  const hasCallError = !!voiceCall.callError;
+  const showCallOverlay = (hasActiveCall || hasCallError) && isCallExpanded;
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-black">
@@ -692,6 +695,12 @@ export default function AIContentSugestions() {
           onToggleMute={voiceCall.toggleMute}
           onToggleSpeaker={voiceCall.toggleSpeaker}
           onMinimize={() => setIsCallExpanded(false)}
+          // Debug props
+          callError={voiceCall.callError}
+          onClearError={voiceCall.clearError}
+          debugState={voiceCall.debugState}
+          showDebugPanel={voiceCall.showDebugPanel}
+          onToggleDebugPanel={voiceCall.toggleDebugPanel}
         />
       )}
 

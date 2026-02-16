@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import type { CallStatus, ThemeColors } from "../types";
+import type {
+  CallStatus,
+  ThemeColors,
+  CallError,
+  CallDebugState,
+} from "../types";
 
 type VoiceCallOverlayProps = {
   callStatus: CallStatus;
@@ -17,6 +22,12 @@ type VoiceCallOverlayProps = {
   onToggleMute: () => void;
   onToggleSpeaker: () => void;
   onMinimize?: () => void;
+  // New: Error and debug props
+  callError?: CallError | null;
+  onClearError?: () => void;
+  debugState?: CallDebugState | null;
+  showDebugPanel?: boolean;
+  onToggleDebugPanel?: () => void;
 };
 
 function formatDuration(seconds: number): string {
@@ -39,6 +50,11 @@ export function VoiceCallOverlay({
   onToggleMute,
   onToggleSpeaker,
   onMinimize,
+  callError,
+  onClearError,
+  debugState,
+  showDebugPanel,
+  onToggleDebugPanel,
 }: VoiceCallOverlayProps) {
   const [pulseScale, setPulseScale] = useState(1);
 
@@ -51,12 +67,17 @@ export function VoiceCallOverlay({
     return () => clearInterval(interval);
   }, [callStatus]);
 
-  if (callStatus === "idle" || callStatus === "ended") return null;
+  // Show overlay for error state too
+  if (callStatus === "idle" || callStatus === "ended") {
+    // But if there's an error, still show it briefly
+    if (!callError) return null;
+  }
 
   const isRinging = callStatus === "ringing";
   const isCalling = callStatus === "calling";
   const isConnected = callStatus === "connected";
   const isConnecting = callStatus === "connecting";
+  const isError = callStatus === "error";
 
   return (
     <div
@@ -70,10 +91,53 @@ export function VoiceCallOverlay({
         }`}
         style={{
           background: `radial-gradient(circle at center, ${
-            isRinging ? "#f59e0b" : isConnected ? "#10b981" : "#6366f1"
+            isError
+              ? "#ef4444"
+              : isRinging
+                ? "#f59e0b"
+                : isConnected
+                  ? "#10b981"
+                  : "#6366f1"
           } 0%, transparent 70%)`,
         }}
       />
+
+      {/* Debug button — top-left corner */}
+      {onToggleDebugPanel && (
+        <button
+          type="button"
+          onClick={onToggleDebugPanel}
+          className={`absolute top-4 left-4 z-10 flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-sm transition-all hover:bg-white/20 active:scale-90 ${
+            showDebugPanel
+              ? "bg-amber-500/30 text-amber-400"
+              : "bg-white/10 text-white/70"
+          }`}
+          style={{
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
+          }}
+          aria-label="Toggle debug panel"
+        >
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+        </button>
+      )}
 
       {/* Close / minimize overlay button — top-right corner */}
       {onMinimize && (
@@ -117,6 +181,14 @@ export function VoiceCallOverlay({
             />
           )}
 
+          {/* Error pulse ring */}
+          {isError && (
+            <div
+              className="absolute inset-0 rounded-full border-4 border-red-500 animate-pulse"
+              style={{ opacity: 0.6 }}
+            />
+          )}
+
           {/* Pulse ring for ringing/calling */}
           {(isRinging || isCalling) && (
             <div
@@ -132,37 +204,101 @@ export function VoiceCallOverlay({
           {/* Avatar */}
           <div
             className={`relative flex h-28 w-28 items-center justify-center rounded-full text-4xl font-bold shadow-2xl ${
-              isConnected
-                ? "bg-gradient-to-br from-emerald-400 to-teal-500"
-                : isRinging
-                  ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                  : "bg-gradient-to-br from-indigo-400 to-purple-500"
+              isError
+                ? "bg-gradient-to-br from-red-400 to-rose-500"
+                : isConnected
+                  ? "bg-gradient-to-br from-emerald-400 to-teal-500"
+                  : isRinging
+                    ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                    : "bg-gradient-to-br from-indigo-400 to-purple-500"
             }`}
           >
-            <span className="text-white drop-shadow-lg">
-              {callerName.charAt(0).toUpperCase()}
-            </span>
+            {isError ? (
+              <svg
+                className="h-12 w-12 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            ) : (
+              <span className="text-white drop-shadow-lg">
+                {callerName.charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Status text */}
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white">{callerName}</h2>
+          <h2 className="text-2xl font-bold text-white">
+            {isError ? "Call Failed" : callerName}
+          </h2>
           <p
             className={`mt-2 text-sm font-medium ${
-              isConnected
-                ? "text-emerald-400"
-                : isRinging
-                  ? "text-amber-400"
-                  : "text-indigo-400"
+              isError
+                ? "text-red-400"
+                : isConnected
+                  ? "text-emerald-400"
+                  : isRinging
+                    ? "text-amber-400"
+                    : "text-indigo-400"
             }`}
           >
+            {isError && callError?.message}
             {isRinging && "Incoming call..."}
             {isCalling && "Calling..."}
             {isConnecting && "Connecting..."}
             {isConnected && formatDuration(callDuration)}
           </p>
+          {/* Error details */}
+          {isError && callError?.details && (
+            <p className="mt-2 text-xs text-red-300/70 max-w-xs">
+              {callError.details}
+            </p>
+          )}
+          {isError && callError?.code && (
+            <p className="mt-1 text-xs text-red-400/50 font-mono">
+              Error code: {callError.code}
+            </p>
+          )}
         </div>
+
+        {/* Error action buttons */}
+        {isError && (
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                onClearError?.();
+                onEnd();
+              }}
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all"
+              style={{ touchAction: "manipulation" }}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Call controls - INCOMING CALL (Ringing) */}
         {isRinging && (
@@ -424,6 +560,214 @@ export function VoiceCallOverlay({
           <p className="text-sm font-medium text-amber-400">Microphone muted</p>
         )}
       </div>
+
+      {/* Debug Panel */}
+      {showDebugPanel && debugState && (
+        <div className="absolute bottom-0 left-0 right-0 max-h-[50vh] overflow-y-auto bg-black/95 backdrop-blur-xl border-t border-white/10">
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-amber-400">Debug Panel</h3>
+              <span className="text-xs text-white/50">
+                Status: {callStatus}
+              </span>
+            </div>
+
+            {/* Connection States */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-1">Signaling</div>
+                <div
+                  className={`font-mono ${
+                    debugState.signalingState === "stable"
+                      ? "text-emerald-400"
+                      : "text-amber-400"
+                  }`}
+                >
+                  {debugState.signalingState ?? "N/A"}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-1">ICE Connection</div>
+                <div
+                  className={`font-mono ${
+                    debugState.iceConnectionState === "connected" ||
+                    debugState.iceConnectionState === "completed"
+                      ? "text-emerald-400"
+                      : debugState.iceConnectionState === "failed" ||
+                          debugState.iceConnectionState === "disconnected"
+                        ? "text-red-400"
+                        : "text-amber-400"
+                  }`}
+                >
+                  {debugState.iceConnectionState ?? "N/A"}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-1">ICE Gathering</div>
+                <div
+                  className={`font-mono ${
+                    debugState.iceGatheringState === "complete"
+                      ? "text-emerald-400"
+                      : "text-amber-400"
+                  }`}
+                >
+                  {debugState.iceGatheringState ?? "N/A"}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-1">Connection</div>
+                <div
+                  className={`font-mono ${
+                    debugState.connectionState === "connected"
+                      ? "text-emerald-400"
+                      : debugState.connectionState === "failed"
+                        ? "text-red-400"
+                        : "text-amber-400"
+                  }`}
+                >
+                  {debugState.connectionState ?? "N/A"}
+                </div>
+              </div>
+            </div>
+
+            {/* Candidates & Tracks */}
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="bg-white/5 rounded p-2 text-center">
+                <div className="text-white/50 mb-1">Local ICE</div>
+                <div className="text-lg font-bold text-indigo-400">
+                  {debugState.localCandidatesCount}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded p-2 text-center">
+                <div className="text-white/50 mb-1">Remote ICE</div>
+                <div className="text-lg font-bold text-indigo-400">
+                  {debugState.remoteCandidatesCount}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded p-2 text-center">
+                <div className="text-white/50 mb-1">Pending</div>
+                <div
+                  className={`text-lg font-bold ${
+                    debugState.pendingCandidatesCount > 0
+                      ? "text-amber-400"
+                      : "text-white/30"
+                  }`}
+                >
+                  {debugState.pendingCandidatesCount}
+                </div>
+              </div>
+            </div>
+
+            {/* Media State */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-1">Local Stream</div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`h-2 w-2 rounded-full ${debugState.hasLocalStream ? "bg-emerald-400" : "bg-red-400"}`}
+                  />
+                  <span className="text-white/70">
+                    {debugState.hasLocalStream
+                      ? `${debugState.localTracksCount} tracks`
+                      : "None"}
+                  </span>
+                  {debugState.localAudioEnabled && (
+                    <span className="text-emerald-400 text-xs">(enabled)</span>
+                  )}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-1">Remote Stream</div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`h-2 w-2 rounded-full ${debugState.hasRemoteStream ? "bg-emerald-400" : "bg-red-400"}`}
+                  />
+                  <span className="text-white/70">
+                    {debugState.hasRemoteStream
+                      ? `${debugState.remoteTracksCount} tracks`
+                      : "None"}
+                  </span>
+                  {debugState.remoteAudioPlaying && (
+                    <span className="text-emerald-400 text-xs">(playing)</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Signals */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-1">Signals Sent</div>
+                <div className="text-lg font-bold text-cyan-400">
+                  {debugState.signalsSent}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-1">Signals Received</div>
+                <div className="text-lg font-bold text-cyan-400">
+                  {debugState.signalsReceived}
+                </div>
+              </div>
+            </div>
+
+            {debugState.lastSignalType && (
+              <div className="bg-white/5 rounded p-2 text-xs">
+                <span className="text-white/50">Last signal: </span>
+                <span className="text-cyan-400 font-mono">
+                  {debugState.lastSignalType}
+                </span>
+                {debugState.lastSignalTime && (
+                  <span className="text-white/30 ml-2">
+                    (
+                    {Math.round(
+                      (Date.now() - debugState.lastSignalTime) / 1000,
+                    )}
+                    s ago)
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Event Log */}
+            {debugState.eventLog.length > 0 && (
+              <div className="bg-white/5 rounded p-2">
+                <div className="text-white/50 mb-2 text-xs">Recent Events</div>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {debugState.eventLog
+                    .slice(-10)
+                    .reverse()
+                    .map((event, i) => (
+                      <div
+                        key={i}
+                        className="text-xs font-mono flex items-start gap-2"
+                      >
+                        <span className="text-white/30 w-16 flex-shrink-0">
+                          {new Date(event.timestamp).toLocaleTimeString()}
+                        </span>
+                        <span
+                          className={
+                            event.level === "error"
+                              ? "text-red-400"
+                              : event.level === "warn"
+                                ? "text-amber-400"
+                                : "text-white/70"
+                          }
+                        >
+                          {event.event}
+                        </span>
+                        {event.details && (
+                          <span className="text-white/40 truncate">
+                            {event.details}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
