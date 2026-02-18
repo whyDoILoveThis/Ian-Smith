@@ -98,7 +98,7 @@ export function ChatInputArea({
           className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-${chatTheme}-400 border-opacity-70 disabled:opacity-50`}
         />
         <label
-          className={`flex-shrink-0 rounded-full border border-${chatTheme}-400 p-2.5 text-${chatTheme}-400 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"}`}
+          className={`flex-shrink-0 rounded-full border border-${chatTheme}-400 p-2.5 text-white/85 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"}`}
         >
           <input
             type="file"

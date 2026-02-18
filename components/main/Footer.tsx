@@ -47,7 +47,6 @@ const Footer = () => {
           <LinkUnderlineAnim linkText="Blogs" linkHref={LINK_MY_BLOGS} />
           <LinkUnderlineAnim linkText="C++ Zone" linkHref="/its-cpp" />
           <LinkUnderlineAnim linkText="Time" linkHref="/its-time" />
-          <LinkUnderlineAnim linkText="Time" linkHref="/its-time" />
         </div>
         <div className="flex items-center gap-4 mb-2">
           <Link className="text-[28px]" href={"https://facebook.com"}>
