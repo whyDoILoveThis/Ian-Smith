@@ -14,7 +14,11 @@ import {
   Code,
   Music,
   HelpCircle,
+  Wand2,
+  Settings2,
+  ChevronDown,
 } from "lucide-react";
+import type { QuizStyle, QuizDifficulty } from "@/types/Quiz.type";
 
 interface QuizSetupProps {
   onSubmit: (config: QuizConfig) => void;
@@ -34,12 +38,52 @@ const PRESET_TOPICS = [
   { label: "Music Theory", icon: Music },
 ];
 
+const STYLE_OPTIONS: {
+  value: QuizStyle;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "auto",
+    label: "Auto-detect",
+    description: "AI analyzes your prompt to determine the best style",
+  },
+  {
+    value: "knowledge",
+    label: "Knowledge/Trivia",
+    description: "Factual questions testing understanding",
+  },
+  {
+    value: "self-assessment",
+    label: "Self-Assessment",
+    description: "Questions about your experiences & traits",
+  },
+  {
+    value: "opinion",
+    label: "Opinion/Preference",
+    description: "Questions about your preferences",
+  },
+];
+
+const DIFFICULTY_OPTIONS: { value: QuizDifficulty; label: string }[] = [
+  { value: "easy", label: "Easy" },
+  { value: "medium", label: "Medium" },
+  { value: "hard", label: "Hard" },
+  { value: "mixed", label: "Mixed" },
+];
+
 export default function QuizSetup({ onSubmit, isLoading }: QuizSetupProps) {
   const [topic, setTopic] = useState("");
   const [questionCount, setQuestionCount] = useState(10);
   const [trueFalse, setTrueFalse] = useState(30);
   const [multipleChoice, setMultipleChoice] = useState(50);
   const [typed, setTyped] = useState(20);
+
+  // AI Settings
+  const [showAISettings, setShowAISettings] = useState(false);
+  const [quizStyle, setQuizStyle] = useState<QuizStyle>("auto");
+  const [difficulty, setDifficulty] = useState<QuizDifficulty>("medium");
+  const [creativity, setCreativity] = useState(50);
 
   const totalPercentage = trueFalse + multipleChoice + typed;
   const isValidPercentage = totalPercentage === 100;
@@ -55,6 +99,11 @@ export default function QuizSetup({ onSubmit, isLoading }: QuizSetupProps) {
         trueFalse,
         multipleChoice,
         typed,
+      },
+      aiSettings: {
+        style: quizStyle,
+        difficulty,
+        creativity,
       },
     });
   };
@@ -92,7 +141,7 @@ export default function QuizSetup({ onSubmit, isLoading }: QuizSetupProps) {
     <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="text-center mb-10">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 via-blue-500 to-cyan-500 mb-6 shadow-lg shadow-purple-500/25 animate-pulse">
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 via-blue-500 to-cyan-500 mb-6 shadow-lg shadow-purple-500/25">
           <HelpCircle className="w-10 h-10 text-white" />
         </div>
         <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 dark:from-purple-400 dark:via-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
@@ -149,7 +198,123 @@ export default function QuizSetup({ onSubmit, isLoading }: QuizSetupProps) {
           </div>
         </div>
 
-        {/* Question Count Card */}
+        {/* AI Settings Card */}
+        <div className="relative rounded-2xl border border-white/20 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl shadow-xl shadow-black/5 dark:shadow-black/20 overflow-hidden">
+          {/* Toggle Header */}
+          <button
+            type="button"
+            onClick={() => setShowAISettings(!showAISettings)}
+            className="w-full flex items-center justify-between p-6 hover:bg-white/30 dark:hover:bg-slate-800/30 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
+                <Settings2 className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <span className="text-sm font-semibold text-foreground/80 block">
+                  AI Generation Settings
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Customize how the AI generates your quiz
+                </span>
+              </div>
+            </div>
+            <ChevronDown
+              className={`w-5 h-5 text-muted-foreground transition-transform duration-300 ${showAISettings ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {/* Collapsible Content */}
+          <div
+            className={`grid transition-all duration-300 ${showAISettings ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+          >
+            <div className="overflow-hidden">
+              <div className="px-6 pb-6 space-y-5">
+                {/* Quiz Style */}
+                <div>
+                  <label className="text-sm font-semibold text-foreground/80 mb-3 block">
+                    Quiz Style
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {STYLE_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setQuizStyle(option.value)}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.02] ${
+                          quizStyle === option.value
+                            ? "border-amber-500 bg-amber-500/20 shadow-md shadow-amber-500/20"
+                            : "border-slate-200/50 dark:border-slate-700/50 bg-white/50 dark:bg-slate-800/50 hover:border-amber-500/50 hover:bg-amber-500/10"
+                        }`}
+                        disabled={isLoading}
+                      >
+                        <span
+                          className={`text-sm font-medium block ${quizStyle === option.value ? "text-amber-700 dark:text-amber-300" : ""}`}
+                        >
+                          {option.label}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {option.description}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Difficulty */}
+                <div>
+                  <label className="text-sm font-semibold text-foreground/80 mb-3 block">
+                    Difficulty
+                  </label>
+                  <div className="flex gap-2">
+                    {DIFFICULTY_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setDifficulty(option.value)}
+                        className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all duration-200 hover:scale-[1.02] ${
+                          difficulty === option.value
+                            ? "border-amber-500 bg-amber-500/20 text-amber-700 dark:text-amber-300 shadow-md shadow-amber-500/20"
+                            : "border-slate-200/50 dark:border-slate-700/50 bg-white/50 dark:bg-slate-800/50 hover:border-amber-500/50 hover:bg-amber-500/10"
+                        }`}
+                        disabled={isLoading}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Creativity Slider */}
+                <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50/50 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200/50 dark:border-amber-800/30">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      <Wand2 className="w-4 h-4 text-amber-500" />
+                      Creativity
+                    </span>
+                    <span className="text-sm font-bold text-amber-600 dark:text-amber-400">
+                      {creativity}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={10}
+                    max={100}
+                    value={creativity}
+                    onChange={(e) => setCreativity(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-amber-100 dark:bg-amber-900/50 accent-amber-500"
+                    disabled={isLoading}
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                    <span>Predictable</span>
+                    <span>Balanced</span>
+                    <span>Creative</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="relative rounded-2xl border border-white/20 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl shadow-black/5 dark:shadow-black/20 overflow-hidden">
           <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
 
@@ -308,11 +473,10 @@ export default function QuizSetup({ onSubmit, isLoading }: QuizSetupProps) {
             </div>
           </div>
         </div>
-
         {/* Submit Button */}
         <Button
           type="submit"
-          className="relative w-full h-14 text-lg font-semibold rounded-xl bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.02] transition-all duration-300 border-0 overflow-hidden group"
+          className="relative w-full h-14 text-lg font-semibold rounded-xl bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.02] transition-all duration-300 border-0 overflow-hidden group text-white"
           disabled={!topic.trim() || !isValidPercentage || isLoading}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />

@@ -1,24 +1,83 @@
 import { NextResponse } from "next/server";
-import type { QuizConfig, Quiz, QuizQuestion, UserAnswer, QuizResult, QuestionFeedback } from "@/types/Quiz.type";
+import type { QuizConfig, Quiz, QuizQuestion, UserAnswer, QuizResult, QuestionFeedback, QuizStyle } from "@/types/Quiz.type";
+
+const getStyleInstructions = (style: QuizStyle): string => {
+  switch (style) {
+    case "knowledge":
+      return `FORCED STYLE: KNOWLEDGE/TRIVIA QUIZ
+You MUST generate factual questions testing understanding of the subject.
+Questions should have objectively correct answers based on facts.
+Do NOT generate self-assessment or opinion questions.`;
+    case "self-assessment":
+      return `FORCED STYLE: SELF-ASSESSMENT/SCREENING QUIZ
+You MUST generate questions that ask about the USER'S OWN experiences, feelings, behaviors, and traits.
+Questions should be first-person: "Do YOU often...", "Have YOU ever...", "When YOU are in a situation..."
+These are NOT knowledge questions - they're introspective questions about the quiz-taker.
+For "correctAnswer", use typical indicator responses (but note this is not a diagnosis).`;
+    case "opinion":
+      return `FORCED STYLE: OPINION/PREFERENCE QUIZ
+You MUST generate questions about what the user prefers, thinks, or feels about topics.
+There are no objectively "correct" answers - just options.
+Use the "correctAnswer" field to store a reasonable/common response.`;
+    case "auto":
+    default:
+      return `AUTO-DETECT STYLE:
+Analyze the user's request to determine what kind of quiz they want:
+
+A) SELF-ASSESSMENT/SCREENING - If they mention "do I have", "am I", "screening", "test myself", "find out if I", "personality", etc.
+   → Generate first-person introspective questions about the user's behaviors/feelings
+
+B) KNOWLEDGE/TRIVIA - If they want to test knowledge ABOUT a topic
+   → Generate factual questions with objectively correct answers
+
+C) OPINION/PREFERENCE - If they want to explore preferences
+   → Generate questions about what the user prefers or thinks`;
+  }
+};
+
+const getDifficultyInstructions = (difficulty: string): string => {
+  switch (difficulty) {
+    case "easy":
+      return "DIFFICULTY: Generate EASY questions. Use simple vocabulary, straightforward concepts, and commonly known facts.";
+    case "medium":
+      return "DIFFICULTY: Generate MEDIUM difficulty questions. Balance between accessible and challenging content.";
+    case "hard":
+      return "DIFFICULTY: Generate HARD questions. Use advanced concepts, nuanced details, and less commonly known information.";
+    case "mixed":
+    default:
+      return "DIFFICULTY: Generate a MIX of easy, medium, and hard questions throughout the quiz.";
+  }
+};
 
 const GENERATE_QUIZ_PROMPT = (config: QuizConfig) => {
-  const { topic, questionCount, questionTypes } = config;
+  const { topic, questionCount, questionTypes, aiSettings } = config;
   
   // Calculate how many of each type
   const trueFalseCount = Math.round((questionTypes.trueFalse / 100) * questionCount);
   const multipleChoiceCount = Math.round((questionTypes.multipleChoice / 100) * questionCount);
   const typedCount = questionCount - trueFalseCount - multipleChoiceCount;
+  
+  const styleInstructions = getStyleInstructions(aiSettings?.style || "auto");
+  const difficultyInstructions = getDifficultyInstructions(aiSettings?.difficulty || "medium");
 
   return {
     role: "system",
-    content: `You are a quiz generator. Generate a quiz about "${topic}" with exactly ${questionCount} questions.
+    content: `You are an intelligent quiz generator.
+
+USER'S REQUEST: "${topic}"
+
+${styleInstructions}
+
+${difficultyInstructions}
+
+Create exactly ${questionCount} questions.
 
 Question distribution:
 - True/False questions: ${trueFalseCount}
-- Multiple Choice questions (4 options each): ${multipleChoiceCount}
+- Multiple Choice questions (4 options each): ${multipleChoiceCount}  
 - Typed answer questions (short answer): ${typedCount}
 
-IMPORTANT: Return ONLY valid JSON, no markdown, no code blocks, no explanation. The response must be parseable JSON.
+IMPORTANT: Return ONLY valid JSON, no markdown, no code blocks, no explanation.
 
 Return this exact JSON structure:
 {
@@ -46,19 +105,20 @@ Return this exact JSON structure:
   ]
 }
 
-Rules:
+CRITICAL RULES:
+- FOLLOW THE STYLE INSTRUCTIONS ABOVE - this is the most important rule
 - Each question must have a unique sequential id starting from 1
 - Multiple choice must have exactly 4 options
 - True/False must have options ["True", "False"]
 - Typed questions should have short, clear expected answers (1-3 words ideally)
 - correctAnswer must exactly match one of the options (for true-false and multiple-choice)
-- Questions should be educational and appropriate for general audiences
-- Vary difficulty from easy to medium
+- Generate DIVERSE and UNIQUE questions - do not repeat similar questions
+- Questions should be appropriate for general audiences
 - Return ONLY the JSON object, nothing else`
   };
 };
 
-const GRADE_QUIZ_PROMPT = (questions: QuizQuestion[], answers: UserAnswer[]) => {
+const GRADE_QUIZ_PROMPT = (questions: QuizQuestion[], answers: UserAnswer[], quizStyle: string = "knowledge") => {
   const questionsWithAnswers = questions.map(q => {
     const userAnswer = answers.find(a => a.questionId === q.id);
     return {
@@ -69,6 +129,48 @@ const GRADE_QUIZ_PROMPT = (questions: QuizQuestion[], answers: UserAnswer[]) => 
       userAnswer: userAnswer?.answer || "No answer provided"
     };
   });
+
+  const isSelfAssessment = quizStyle === "self-assessment";
+
+  if (isSelfAssessment) {
+    return {
+      role: "system",
+      content: `You are a compassionate psychological assessment interpreter. This is a SELF-ASSESSMENT quiz where the user answered questions about their own experiences and traits. There are NO right or wrong answers - only insights.
+
+Quiz Responses:
+${JSON.stringify(questionsWithAnswers, null, 2)}
+
+IMPORTANT: Return ONLY valid JSON, no markdown, no code blocks. This is a self-assessment, NOT a knowledge test.
+
+Return this exact JSON structure:
+{
+  "feedback": [
+    {
+      "questionId": 1,
+      "isCorrect": true,
+      "feedback": "Brief insight about what this response might indicate. Be supportive and non-judgmental."
+    }
+  ],
+  "likelihoodPercentage": 65,
+  "summary": "A thoughtful 2-4 sentence paragraph summarizing the overall assessment results..."
+}
+
+Rules for self-assessment grading:
+- Set "isCorrect" to true for ALL answers (there are no wrong answers in self-assessment)
+- The "feedback" should provide insight, not judgment (e.g., "This response suggests you may often feel..." not "Correct!")
+- "likelihoodPercentage" is a number 0-100 representing how strongly the responses align with typical indicators of the assessed trait/condition
+  - 0-30: Few indicators present
+  - 31-50: Some indicators present  
+  - 51-70: Moderate indicators present
+  - 71-85: Strong indicators present
+  - 86-100: Very strong indicators present
+- Be warm, supportive, and non-clinical in tone
+- The "summary" MUST be included and should synthesize the overall picture
+- Never diagnose - use phrases like "may indicate", "suggests", "could reflect"
+- End the summary with a brief note encouraging professional consultation if they have concerns
+- Return ONLY the JSON object, nothing else`
+    };
+  }
 
   return {
     role: "system",
@@ -103,10 +205,10 @@ Rules:
   };
 };
 
-async function callGroqAPI(systemPrompt: { role: string; content: string }, userMessage?: string) {
+async function callGroqAPI(systemPrompt: { role: string; content: string }, userMessage?: string, temperature: number = 0.7) {
   const messages = userMessage 
     ? [systemPrompt, { role: "user", content: userMessage }]
-    : [systemPrompt, { role: "user", content: "Generate the quiz now." }];
+    : [systemPrompt, { role: "user", content: "Generate the quiz now based on my request." }];
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -117,7 +219,7 @@ async function callGroqAPI(systemPrompt: { role: string; content: string }, user
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages,
-      temperature: 0.7,
+      temperature,
     }),
   });
 
@@ -173,8 +275,12 @@ export async function POST(req: Request) {
         );
       }
 
+      // Calculate temperature from creativity (10-100 maps to 0.1-1.0)
+      const creativity = config.aiSettings?.creativity ?? 50;
+      const temperature = Math.max(0.1, Math.min(1.0, creativity / 100));
+
       const systemPrompt = GENERATE_QUIZ_PROMPT(config);
-      const result = await callGroqAPI(systemPrompt);
+      const result = await callGroqAPI(systemPrompt, undefined, temperature);
 
       const quiz: Quiz = {
         id: crypto.randomUUID(),
@@ -187,7 +293,7 @@ export async function POST(req: Request) {
     }
 
     if (action === "grade") {
-      const { questions, answers } = body as { questions: QuizQuestion[]; answers: UserAnswer[] };
+      const { questions, answers, quizStyle } = body as { questions: QuizQuestion[]; answers: UserAnswer[]; quizStyle?: string };
 
       if (!questions || !answers) {
         return NextResponse.json(
@@ -196,8 +302,10 @@ export async function POST(req: Request) {
         );
       }
 
-      const systemPrompt = GRADE_QUIZ_PROMPT(questions, answers);
+      const systemPrompt = GRADE_QUIZ_PROMPT(questions, answers, quizStyle || "knowledge");
       const result = await callGroqAPI(systemPrompt, "Grade these answers now.");
+
+      const isSelfAssessment = quizStyle === "self-assessment";
 
       // Calculate score
       const feedbackList: QuestionFeedback[] = result.feedback.map((f: { questionId: number; isCorrect: boolean; feedback: string }) => {
@@ -211,6 +319,8 @@ export async function POST(req: Request) {
           correctAnswer: question?.correctAnswer || "",
           isCorrect: f.isCorrect,
           feedback: f.feedback,
+          options: question?.options,
+          type: question?.type || "typed",
         };
       });
 
@@ -219,8 +329,12 @@ export async function POST(req: Request) {
         quizId: body.quizId || "",
         score: correctCount,
         totalQuestions: questions.length,
-        percentage: Math.round((correctCount / questions.length) * 100),
+        percentage: isSelfAssessment 
+          ? (result.likelihoodPercentage ?? 50) 
+          : Math.round((correctCount / questions.length) * 100),
         feedback: feedbackList,
+        quizStyle: quizStyle as QuizStyle | undefined,
+        summary: result.summary,
       };
 
       return NextResponse.json({ result: quizResult });

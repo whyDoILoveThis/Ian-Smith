@@ -222,7 +222,7 @@ export default function QuizQuestion({
             <Button
               onClick={onSubmit}
               disabled={!currentAnswer && question.type !== "typed"}
-              className="flex-1 h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-[1.02] transition-all duration-300 border-0"
+              className="flex-1 h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-[1.02] transition-all duration-300 border-0 text-white"
             >
               <Send className="w-5 h-5 mr-2" />
               Submit Quiz
@@ -231,7 +231,7 @@ export default function QuizQuestion({
             <Button
               onClick={onNext}
               disabled={!currentAnswer && question.type !== "typed"}
-              className="flex-1 h-12 rounded-xl bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.02] transition-all duration-300 border-0"
+              className="flex-1 h-12 rounded-xl bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.02] transition-all duration-300 border-0 text-white"
             >
               Next
               <ChevronRight className="w-5 h-5 ml-2" />

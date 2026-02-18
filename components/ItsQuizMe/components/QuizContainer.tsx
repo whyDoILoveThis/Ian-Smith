@@ -12,6 +12,12 @@ import type {
 } from "@/types/Quiz.type";
 import { Sparkles, AlertTriangle, RotateCcw } from "lucide-react";
 
+const scrollToTop = () => {
+  setTimeout(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, 50);
+};
+
 type QuizState = "setup" | "taking" | "grading" | "review";
 
 export default function QuizContainer() {
@@ -22,10 +28,14 @@ export default function QuizContainer() {
   const [result, setResult] = useState<QuizResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFailedAction, setLastFailedAction] = useState<"generate" | "grade" | null>(null);
+  const [lastConfig, setLastConfig] = useState<QuizConfig | null>(null);
 
   const handleSetupSubmit = useCallback(async (config: QuizConfig) => {
     setIsLoading(true);
     setError(null);
+    setLastConfig(config);
+    setLastFailedAction(null);
 
     try {
       const response = await fetch("/api/its-quiz-me", {
@@ -44,8 +54,11 @@ export default function QuizContainer() {
       setAnswers([]);
       setCurrentQuestionIndex(0);
       setState("taking");
+      scrollToTop();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
+      setLastFailedAction("generate");
+      scrollToTop();
     } finally {
       setIsLoading(false);
     }
@@ -74,21 +87,25 @@ export default function QuizContainer() {
     if (!quiz) return;
     if (currentQuestionIndex < quiz.questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
+      scrollToTop();
     }
   }, [quiz, currentQuestionIndex]);
 
   const handlePrevious = useCallback(() => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex((prev) => prev - 1);
+      scrollToTop();
     }
   }, [currentQuestionIndex]);
 
   const handleSubmit = useCallback(async () => {
     if (!quiz) return;
 
+    scrollToTop();
     setState("grading");
     setIsLoading(true);
     setError(null);
+    setLastFailedAction(null);
 
     try {
       const response = await fetch("/api/its-quiz-me", {
@@ -99,6 +116,7 @@ export default function QuizContainer() {
           quizId: quiz.id,
           questions: quiz.questions,
           answers,
+          quizStyle: lastConfig?.aiSettings?.style || "auto",
         }),
       });
 
@@ -110,13 +128,16 @@ export default function QuizContainer() {
 
       setResult(data.result);
       setState("review");
+      scrollToTop();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
+      setLastFailedAction("grade");
       setState("taking");
+      scrollToTop();
     } finally {
       setIsLoading(false);
     }
-  }, [quiz, answers]);
+  }, [quiz, answers, lastConfig]);
 
   const handleRetry = useCallback(() => {
     setAnswers([]);
@@ -130,8 +151,59 @@ export default function QuizContainer() {
     setAnswers([]);
     setCurrentQuestionIndex(0);
     setResult(null);
+    setLastFailedAction(null);
+    setLastConfig(null);
     setState("setup");
   }, []);
+
+  const handleRegrade = useCallback(async () => {
+    if (!quiz) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/its-quiz-me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "grade",
+          quizId: quiz.id,
+          questions: quiz.questions,
+          answers,
+          quizStyle: lastConfig?.aiSettings?.style || "auto",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to regrade quiz");
+      }
+
+      setResult(data.result);
+      scrollToTop();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [quiz, answers, lastConfig]);
+
+  const handleErrorRetry = useCallback(() => {
+    setError(null);
+    
+    if (lastFailedAction === "generate" && lastConfig) {
+      // Retry generating the quiz with the same config
+      handleSetupSubmit(lastConfig);
+    } else if (lastFailedAction === "grade" && quiz) {
+      // Retry grading the quiz
+      handleSubmit();
+    } else {
+      // Fallback: go back to setup
+      handleNewQuiz();
+    }
+  }, [lastFailedAction, lastConfig, quiz, handleSetupSubmit, handleSubmit, handleNewQuiz]);
 
   const getCurrentAnswer = useCallback(() => {
     if (!quiz) return "";
@@ -193,12 +265,7 @@ export default function QuizContainer() {
             </h2>
             <p className="text-muted-foreground mb-6">{error}</p>
             <button
-              onClick={() => {
-                setError(null);
-                if (state !== "setup") {
-                  handleNewQuiz();
-                }
-              }}
+              onClick={handleErrorRetry}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-white font-medium shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-105 transition-all duration-300"
             >
               <RotateCcw className="w-4 h-4" />
@@ -239,6 +306,8 @@ export default function QuizContainer() {
           topic={quiz.topic}
           onRetry={handleRetry}
           onNewQuiz={handleNewQuiz}
+          onRegrade={handleRegrade}
+          isRegrading={isLoading}
         />
       );
 
