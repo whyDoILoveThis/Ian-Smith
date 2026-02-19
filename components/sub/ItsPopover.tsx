@@ -7,6 +7,7 @@ interface Props {
   zIndex?: string;
   show?: boolean;
   setShow?: (show: boolean) => void;
+  closeWhenClicked?: boolean;
   bgBlur?: "0" | "none" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 }
 
@@ -16,6 +17,7 @@ const ItsPopover = ({
   zIndex = "999",
   show,
   setShow,
+  closeWhenClicked = true,
   bgBlur,
 }: Props) => {
   const isOpen = true;
@@ -38,7 +40,7 @@ const ItsPopover = ({
 
   return (
     <div
-      onClick={() => setShow && setShow(false)}
+      onClick={() => setShow && closeWhenClicked && setShow(false)}
       className={`bg-black bg-opacity-60 fixed inset-0 zz-top-plus4 
                     flex flex-col items-center ${className && className}
     `}

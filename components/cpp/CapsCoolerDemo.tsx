@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import CapsCoolerIcon from "@/images/icon--caps-cooler.ico";
 
-const CAPS_TIMEOUT_MS = 5000; // how long before fake caps turns off
+const DEFAULT_TIMEOUT_MS = 5000; // default delay before fake caps turns off
 const TIMER_TICK_MS = 100; // visual countdown tick
 
 export default function CapsCoolerDemo() {
@@ -18,6 +18,8 @@ export default function CapsCoolerDemo() {
   const [fakeCapsOn, setFakeCapsOn] = useState(false);
   const [value, setValue] = useState("");
   const [remainingMs, setRemainingMs] = useState(0);
+  const [timeoutMs, setTimeoutMs] = useState(DEFAULT_TIMEOUT_MS);
+  const timeoutMsRef = useRef(DEFAULT_TIMEOUT_MS);
 
   // Setter that keeps ref & state in sync immediately
   const setFakeCapsState = (next: boolean) => {
@@ -25,10 +27,17 @@ export default function CapsCoolerDemo() {
     setFakeCapsOn(next);
   };
 
+  // Keep ref in sync so timer callbacks always read the latest value
+  const handleTimeoutChange = (ms: number) => {
+    const clamped = Math.max(500, ms);
+    setTimeoutMs(clamped);
+    timeoutMsRef.current = clamped;
+  };
+
   // Start or (re)start the single ticking loop using an end timestamp
   const startTimer = () => {
-    endRef.current = Date.now() + CAPS_TIMEOUT_MS;
-    setRemainingMs(CAPS_TIMEOUT_MS);
+    endRef.current = Date.now() + timeoutMsRef.current;
+    setRemainingMs(timeoutMsRef.current);
 
     // if a tick is already running, don't create another one
     if (tickRef.current != null) return;
@@ -71,8 +80,8 @@ export default function CapsCoolerDemo() {
   // Reset timer (update end) if currently on — uses ref to avoid stale reads
   const resetTimer = () => {
     if (!fakeCapsOnRef.current) return;
-    endRef.current = Date.now() + CAPS_TIMEOUT_MS;
-    setRemainingMs(CAPS_TIMEOUT_MS);
+    endRef.current = Date.now() + timeoutMsRef.current;
+    setRemainingMs(timeoutMsRef.current);
     if (tickRef.current == null) startTimer();
   };
 
@@ -152,11 +161,10 @@ export default function CapsCoolerDemo() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const incoming = e.target.value;
-    const normalized = fakeCapsOnRef.current
-      ? incoming.toUpperCase()
-      : incoming.toLowerCase();
-    setValue(normalized);
+    // Accept value as-is — casing for printable keys is handled in handleKeyDown,
+    // and paste is handled in handlePaste. This avoids re-casing the entire
+    // string on backspace/delete.
+    setValue(e.target.value);
     resetTimer();
   };
 
@@ -199,7 +207,7 @@ export default function CapsCoolerDemo() {
 
   // UI helpers
   const pctRemaining = fakeCapsOnRef.current
-    ? Math.max(0, Math.round((remainingMs / CAPS_TIMEOUT_MS) * 100))
+    ? Math.max(0, Math.round((remainingMs / timeoutMsRef.current) * 100))
     : 0;
   const statusColorClass = fakeCapsOnRef.current
     ? "text-red-700"
@@ -499,10 +507,53 @@ export default function CapsCoolerDemo() {
             </div>
           </div>
 
-          <p className="mt-1 mb-6 text-xs" style={{ color: "#000" }}>
+          <p className="mt-1 mb-2 text-xs" style={{ color: "#000" }}>
             The actual app runs in the background as a tray app, and does not
             have any visual idle timer.
           </p>
+
+          {/* Delay config input */}
+          <div
+            className="mb-6 flex items-center gap-2"
+            style={{ fontFamily: "Tahoma, sans-serif" }}
+          >
+            <label
+              htmlFor="delay-input"
+              className="text-[11px] text-black font-bold whitespace-nowrap"
+            >
+              Delay (ms):
+            </label>
+            <input
+              id="delay-input"
+              type="number"
+              min={500}
+              step={500}
+              value={timeoutMs}
+              onChange={(e) => handleTimeoutChange(Number(e.target.value))}
+              className="w-[72px] px-1 py-[2px] text-[11px] border"
+              style={{
+                background: "white",
+                borderColor: "#7f9db9",
+                outline: "none",
+                borderRadius: 0,
+                fontFamily: "Tahoma, sans-serif",
+                color: "#000",
+              }}
+            />
+            <span className="text-[10px] text-black">
+              Simulates the{" "}
+              <code
+                style={{
+                  background: "#ddd",
+                  padding: "0 2px",
+                  fontSize: "10px",
+                }}
+              >
+                delay_ms
+              </code>{" "}
+              value from the config file.
+            </span>
+          </div>
 
           <p className="mt-3 text-xs" style={{ color: "#000" }}>
             ⚠️ <strong>Note:</strong> This demo simulates only the effect of

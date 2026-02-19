@@ -11,6 +11,7 @@ import { ClerkProvider, SignedIn, SignedOut } from "@clerk/nextjs";
 import ConnectivityWrapper from "@/components/main/ConnectivityWrapper";
 import SignedInJSX from "@/components/main/SignedInJSX";
 import { MainWrap } from "@/components/main/MainWrap";
+import { BreadcrumbProvider } from "@/breadcrumb";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -44,20 +45,22 @@ export default function RootLayout({
            ${inter.className}`}
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <SignedIn>
-              <ConnectivityWrapper>
-                <MainWrap>
-                  <SignedInJSX adminUserId={AdminsUserId}>
-                    {children}
-                  </SignedInJSX>
-                </MainWrap>
-              </ConnectivityWrapper>
-            </SignedIn>
-            <SignedOut>
-              <ConnectivityWrapper>
-                <MainWrap>{children}</MainWrap>
-              </ConnectivityWrapper>
-            </SignedOut>
+            <BreadcrumbProvider>
+              <SignedIn>
+                <ConnectivityWrapper>
+                  <MainWrap>
+                    <SignedInJSX adminUserId={AdminsUserId}>
+                      {children}
+                    </SignedInJSX>
+                  </MainWrap>
+                </ConnectivityWrapper>
+              </SignedIn>
+              <SignedOut>
+                <ConnectivityWrapper>
+                  <MainWrap>{children}</MainWrap>
+                </ConnectivityWrapper>
+              </SignedOut>
+            </BreadcrumbProvider>
           </ThemeProvider>
         </body>
       </html>

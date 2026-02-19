@@ -13,6 +13,7 @@ import Footer from "@/components/main/Footer";
 import PurpleParticleToggle from "@/components/main/PurpleParticleToggle";
 import BrainfTodo from "@/components/sub/BrainfTodo";
 import NetworkSpeedMini from "@/components/main/NetworkSpeedMini";
+import WaterSortShowcase from "@/components/main/WaterSortShowcase";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
@@ -33,9 +34,14 @@ export default function Home() {
       </div>
       <Skills />
       <Projects />
+      <WaterSortShowcase />
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && (
-        <ItsPopover show={showBot} setShow={setShowBot}>
+        <ItsPopover
+          closeWhenClicked={false}
+          show={showBot}
+          setShow={setShowBot}
+        >
           <div className="w-full pr-4 h-full">
             <ItsBot show={showBot} setShow={setShowBot} />
           </div>
