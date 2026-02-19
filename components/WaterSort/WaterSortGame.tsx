@@ -1310,16 +1310,23 @@ export default function WaterSortGame() {
   const canPourCenter =
     selectedTop === targetColor && centerFill < TUBE_CAPACITY;
 
-  // Any non-full tube is a valid target (you can stack any color on any color)
+  // Only allow pouring onto a tube whose top color matches (or is empty)
   const validTargets = useMemo(() => {
     const set = new Set<number>();
     if (selectedTube === null || selectedTop === null) return set;
     for (let i = 0; i < tubes.length; i++) {
       if (i === selectedTube) continue;
       if (tubes[i].length >= TUBE_CAPACITY) continue;
-      // Skip pointless: single-layer tube → empty tube
-      if (tubes[i].length === 0 && tubes[selectedTube].length === 1) continue;
-      set.add(i);
+      // Empty tube is valid (unless pointless single-layer → empty)
+      if (tubes[i].length === 0) {
+        if (tubes[selectedTube].length === 1) continue; // pointless move
+        set.add(i);
+        continue;
+      }
+      // Top color must match
+      if (tubes[i][tubes[i].length - 1] === selectedTop) {
+        set.add(i);
+      }
     }
     return set;
   }, [selectedTube, selectedTop, tubes]);
