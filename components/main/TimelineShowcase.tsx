@@ -340,11 +340,81 @@ export default function TimelineShowcase() {
   }, [scale, getMsForX, containerWidth, setCenterMs]);
 
   /* -- Drag panning with inertia (shared hook) -- */
-  const { handlers: panHandlers } = useTimelineInertia(
+  const { handlers: panHandlers, stopInertia } = useTimelineInertia(
     scale,
     containerWidth,
     setCenterMs,
   );
+
+  /* -- Pinch-to-zoom (mobile) -- */
+  const isPinchingRef = useRef(false);
+  const pinchInitialDistRef = useRef(0);
+  const pinchInitialScaleRef = useRef(0);
+  const pinchMidLocalXRef = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length >= 2) {
+      stopInertia();
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const t1 = e.touches[0],
+        t2 = e.touches[1];
+      pinchInitialDistRef.current = Math.hypot(
+        t2.clientX - t1.clientX,
+        t2.clientY - t1.clientY,
+      );
+      pinchInitialScaleRef.current = scale;
+      pinchMidLocalXRef.current =
+        (t1.clientX + t2.clientX) / 2 - rect.left;
+      isPinchingRef.current = true;
+      return;
+    }
+    isPinchingRef.current = false;
+    panHandlers.onTouchStart(e);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (isPinchingRef.current || e.touches.length >= 2) {
+      if (e.touches.length < 2) return;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const t1 = e.touches[0],
+        t2 = e.touches[1];
+      const dist = Math.hypot(
+        t2.clientX - t1.clientX,
+        t2.clientY - t1.clientY,
+      );
+      if (!isPinchingRef.current) {
+        pinchInitialDistRef.current = dist;
+        pinchInitialScaleRef.current = scale;
+        pinchMidLocalXRef.current =
+          (t1.clientX + t2.clientX) / 2 - rect.left;
+        isPinchingRef.current = true;
+      }
+      const factor = dist / (pinchInitialDistRef.current || dist);
+      const newScale = Math.max(
+        0.005,
+        Math.min(500, pinchInitialScaleRef.current * factor),
+      );
+      const beforeMs = getMsForX(pinchMidLocalXRef.current);
+      const visibleMsAfter = (BASE_RANGE_DAYS * MS_PER_DAY) / newScale;
+      const startAfter =
+        beforeMs -
+        (pinchMidLocalXRef.current / containerWidth) * visibleMsAfter;
+      setScale(newScale);
+      setCenterMs(startAfter + visibleMsAfter / 2);
+      return;
+    }
+    panHandlers.onTouchMove(e);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (isPinchingRef.current) {
+      if (e.touches.length < 2) isPinchingRef.current = false;
+      return;
+    }
+    panHandlers.onTouchEnd(e);
+  };
 
   /* -- Center helpers for header nav -- */
   const centerOnFirstNode = useCallback(() => {
@@ -542,7 +612,13 @@ export default function TimelineShowcase() {
               ref={containerRef}
               className="relative w-full overflow-visible select-none touch-none"
               style={{ height: 380, cursor: "grab" }}
-              {...panHandlers}
+              onMouseDown={panHandlers.onMouseDown}
+              onMouseMove={panHandlers.onMouseMove}
+              onMouseUp={panHandlers.onMouseUp}
+              onMouseLeave={panHandlers.onMouseLeave}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             >
               <TimelineCanvas
                 containerWidth={containerWidth}
