@@ -19,6 +19,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { QuizStyle, QuizDifficulty } from "@/types/Quiz.type";
+import { Eye, EyeOff } from "lucide-react";
 
 interface QuizSetupProps {
   onSubmit: (config: QuizConfig) => void;
@@ -85,6 +86,9 @@ export default function QuizSetup({ onSubmit, isLoading }: QuizSetupProps) {
   const [difficulty, setDifficulty] = useState<QuizDifficulty>("medium");
   const [creativity, setCreativity] = useState(50);
 
+  // Feedback mode
+  const [instantFeedback, setInstantFeedback] = useState(false);
+
   const totalPercentage = trueFalse + multipleChoice + typed;
   const isValidPercentage = totalPercentage === 100;
 
@@ -105,6 +109,7 @@ export default function QuizSetup({ onSubmit, isLoading }: QuizSetupProps) {
         difficulty,
         creativity,
       },
+      instantFeedback,
     });
   };
 
@@ -473,6 +478,56 @@ export default function QuizSetup({ onSubmit, isLoading }: QuizSetupProps) {
             </div>
           </div>
         </div>
+        {/* Instant Feedback Toggle Card */}
+        <div className="relative rounded-2xl border border-white/20 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-6 shadow-xl shadow-black/5 dark:shadow-black/20 overflow-hidden">
+          <div className="absolute -top-20 -left-20 w-40 h-40 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 ${
+                  instantFeedback
+                    ? "bg-gradient-to-br from-cyan-500 to-blue-500 shadow-cyan-500/25"
+                    : "bg-gradient-to-br from-slate-500 to-slate-600 shadow-slate-500/25"
+                }`}
+              >
+                {instantFeedback ? (
+                  <Eye className="w-5 h-5 text-white" />
+                ) : (
+                  <EyeOff className="w-5 h-5 text-white" />
+                )}
+              </div>
+              <div>
+                <span className="text-sm font-semibold text-foreground/80 block">
+                  Instant Feedback
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {instantFeedback
+                    ? "See correct answers after each question"
+                    : "See all results after completing the quiz"}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setInstantFeedback(!instantFeedback)}
+              className={`relative w-12 h-7 rounded-full transition-all duration-300 ${
+                instantFeedback
+                  ? "bg-gradient-to-r from-cyan-500 to-blue-500 shadow-md shadow-cyan-500/30"
+                  : "bg-slate-200 dark:bg-slate-700"
+              }`}
+              disabled={isLoading}
+            >
+              <div
+                className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-all duration-300 ${
+                  instantFeedback ? "left-[22px]" : "left-0.5"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
         {/* Submit Button */}
         <Button
           type="submit"

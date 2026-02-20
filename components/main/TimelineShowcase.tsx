@@ -14,6 +14,8 @@ import Link from "next/link";
 import TimelineCanvas from "@/components/0Timeline/TimelineCanvas";
 import TimelineNodes from "@/components/0Timeline/TimelineNodes";
 import TimelineHeader from "@/components/0Timeline/TimelineHeader";
+import TimelineScrollHint from "@/components/0Timeline/TimelineScrollHint";
+import { useTimelineInertia } from "@/components/0Timeline/hooks/useTimelineInertia";
 import {
   dateToX,
   xToDateMs,
@@ -295,7 +297,7 @@ export default function TimelineShowcase() {
     [centerMs, scale, containerWidth],
   );
 
-  /* -- Zoom (Alt+wheel) & scroll-pan -- */
+  /* -- Zoom (Alt+wheel) & scroll-pan (Ctrl+wheel) -- */
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -320,41 +322,29 @@ export default function TimelineShowcase() {
         setCenterMs(startAfter + visibleMsAfter / 2);
         return;
       }
-      // Regular scroll -> pan
-      e.preventDefault();
-      const visibleMs = (BASE_RANGE_DAYS * MS_PER_DAY) / scale;
-      const shiftMs = ((e.deltaY + e.deltaX) / containerWidth) * visibleMs;
-      setCenterMs((c) => c + shiftMs);
+
+      if (e.ctrlKey) {
+        // Ctrl + scroll -> pan
+        e.preventDefault();
+        const visibleMs = (BASE_RANGE_DAYS * MS_PER_DAY) / scale;
+        const shiftMs = ((e.deltaY + e.deltaX) / containerWidth) * visibleMs;
+        setCenterMs((c) => c + shiftMs);
+        return;
+      }
+
+      // No modifier -> let the page scroll normally
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [scale, getMsForX, containerWidth, setCenterMs]);
 
-  /* -- Mouse-drag panning -- */
-  const isPanningRef = useRef(false);
-  const lastXRef = useRef(0);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    isPanningRef.current = true;
-    lastXRef.current = e.clientX;
-  }, []);
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!isPanningRef.current) return;
-      const dx = e.clientX - lastXRef.current;
-      lastXRef.current = e.clientX;
-      const visibleMs = (BASE_RANGE_DAYS * MS_PER_DAY) / scale;
-      const msPerPx = visibleMs / containerWidth;
-      setCenterMs((c) => c - dx * msPerPx);
-    },
-    [scale, containerWidth, setCenterMs],
+  /* -- Drag panning with inertia (shared hook) -- */
+  const { handlers: panHandlers } = useTimelineInertia(
+    scale,
+    containerWidth,
+    setCenterMs,
   );
-
-  const handleMouseUp = useCallback(() => {
-    isPanningRef.current = false;
-  }, []);
 
   /* -- Center helpers for header nav -- */
   const centerOnFirstNode = useCallback(() => {
@@ -426,7 +416,7 @@ export default function TimelineShowcase() {
 
       {/* -- Card -- */}
       <motion.div
-        className="relative z-10 rounded-3xl border border-white/10 overflow-x-clip
+        className="relative z-10 rounded-3xl border border-white/10 overflow-clip
           bg-gradient-to-b from-white/[0.06] to-white/[0.02]
           backdrop-blur-xl shadow-2xl shadow-cyan-500/5"
         initial={{ opacity: 0, y: 40 }}
@@ -552,10 +542,7 @@ export default function TimelineShowcase() {
               ref={containerRef}
               className="relative w-full overflow-visible select-none touch-none"
               style={{ height: 380, cursor: "grab" }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
+              {...panHandlers}
             >
               <TimelineCanvas
                 containerWidth={containerWidth}
@@ -586,20 +573,7 @@ export default function TimelineShowcase() {
                 canEdit={false}
               />
 
-              {/* Zoom hint — prominent badge */}
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-white/10 text-[11px] text-neutral-300 backdrop-blur-sm">
-                  <span className="flex items-center gap-1">
-                    Hold{" "}
-                    <kbd className="px-1.5 py-0.5 rounded bg-white/15 text-white font-mono text-[10px] border border-white/20">
-                      Alt
-                    </kbd>
-                    + Scroll to zoom
-                  </span>
-                  <span className="text-neutral-600">|</span>
-                  <span>Drag to pan</span>
-                </div>
-              </div>
+              <TimelineScrollHint />
 
               {/* Toast notification - on timeline */}
               <Toast

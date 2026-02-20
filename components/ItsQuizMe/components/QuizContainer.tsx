@@ -28,14 +28,18 @@ export default function QuizContainer() {
   const [result, setResult] = useState<QuizResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastFailedAction, setLastFailedAction] = useState<"generate" | "grade" | null>(null);
+  const [lastFailedAction, setLastFailedAction] = useState<
+    "generate" | "grade" | null
+  >(null);
   const [lastConfig, setLastConfig] = useState<QuizConfig | null>(null);
+  const [instantFeedback, setInstantFeedback] = useState(false);
 
   const handleSetupSubmit = useCallback(async (config: QuizConfig) => {
     setIsLoading(true);
     setError(null);
     setLastConfig(config);
     setLastFailedAction(null);
+    setInstantFeedback(!!config.instantFeedback);
 
     try {
       const response = await fetch("/api/its-quiz-me", {
@@ -192,7 +196,7 @@ export default function QuizContainer() {
 
   const handleErrorRetry = useCallback(() => {
     setError(null);
-    
+
     if (lastFailedAction === "generate" && lastConfig) {
       // Retry generating the quiz with the same config
       handleSetupSubmit(lastConfig);
@@ -203,7 +207,14 @@ export default function QuizContainer() {
       // Fallback: go back to setup
       handleNewQuiz();
     }
-  }, [lastFailedAction, lastConfig, quiz, handleSetupSubmit, handleSubmit, handleNewQuiz]);
+  }, [
+    lastFailedAction,
+    lastConfig,
+    quiz,
+    handleSetupSubmit,
+    handleSubmit,
+    handleNewQuiz,
+  ]);
 
   const getCurrentAnswer = useCallback(() => {
     if (!quiz) return "";
@@ -295,6 +306,7 @@ export default function QuizContainer() {
           totalQuestions={quiz.questions.length}
           isLastQuestion={currentQuestionIndex === quiz.questions.length - 1}
           isFirstQuestion={currentQuestionIndex === 0}
+          instantFeedback={instantFeedback}
         />
       );
 

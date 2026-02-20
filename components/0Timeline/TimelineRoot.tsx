@@ -24,6 +24,8 @@ import TimelineListOfTimelines from "./TimelineListOfTimelines";
 import TimelineListOfUsers from "./TimelineListOfUsers";
 import TimelineSettings from "./TimelineSettings";
 import TimelineTutorial from "./TimelineTutorial";
+import TimelineScrollHint from "./TimelineScrollHint";
+import { useTimelineInertia } from "./hooks/useTimelineInertia";
 import { appwrImgUp } from "@/appwrite/appwrStorage";
 import {
   AITimelineModal,
@@ -186,16 +188,12 @@ export default function TimelineRoot({
     }
   }, [currentNodes, setCenterMs]);
 
-  // panning state (refs for perf)
-  const isPanningRef = useRef(false);
-  const lastXRef = useRef<number>(0);
+  // panning state refs (non-hook)
   const dragDistanceRef = useRef<number>(0);
   const isPinchingRef = useRef(false);
   const pinchInitialDistanceRef = useRef<number>(0);
   const pinchInitialScaleRef = useRef<number>(1);
   const pinchMidLocalXRef = useRef<number>(0);
-  const inertiaRafRef = useRef<number>(0);
-  const inertiaActiveRef = useRef(false);
 
   // visual fake cursor + trail
   const fakeCursorRef = useRef<HTMLDivElement | null>(null);
@@ -203,7 +201,6 @@ export default function TimelineRoot({
   const trailRefs = useRef<HTMLDivElement[]>([]);
   const mouseX = useRef<number>(0);
   const mouseY = useRef<number>(0);
-  const velocityRef = useRef<number>(0);
   const trailPositions = useRef(
     Array.from({ length: 8 }, () => ({ x: 0, y: 0 })),
   );
@@ -218,6 +215,17 @@ export default function TimelineRoot({
   const [containerWidth, setContainerWidth] = useState<number>(
     containerRef.current?.clientWidth || 1200,
   );
+
+  // panning state — inertia refs from shared hook (must be after containerWidth)
+  const {
+    stopInertia,
+    startInertia,
+    isPanningRef,
+    lastXRef,
+    velocityRef,
+    inertiaActiveRef,
+    inertiaRafRef,
+  } = useTimelineInertia(scale, containerWidth, setCenterMs);
 
   // Auto-select or open modal based on timelines state
   useEffect(() => {
@@ -325,7 +333,7 @@ export default function TimelineRoot({
         setCenterMs(startAfter + visibleMsAfter / 2);
         return;
       }
-      if (e.shiftKey) {
+      if (e.ctrlKey) {
         e.preventDefault();
         panBy(e.deltaY, containerWidth, BASE_RANGE_DAYS);
         return;
@@ -500,8 +508,7 @@ export default function TimelineRoot({
   // -------------------------
   const startPanning = useCallback(
     (clientX: number, clientY: number) => {
-      inertiaActiveRef.current = false;
-      if (inertiaRafRef.current) cancelAnimationFrame(inertiaRafRef.current);
+      stopInertia();
       isPanningRef.current = true;
       lastXRef.current = clientX;
       dragDistanceRef.current = 0;
@@ -511,7 +518,7 @@ export default function TimelineRoot({
       setTrailOpacity(1);
       requestPointerLock();
     },
-    [requestPointerLock, setTrailOpacity],
+    [requestPointerLock, setTrailOpacity, stopInertia, isPanningRef, lastXRef],
   );
 
   const stopPanning = useCallback(() => {
@@ -523,34 +530,14 @@ export default function TimelineRoot({
     setTrailOpacity(0);
     if (isPointerLocked()) exitPointerLock();
     if (wasPanning) {
-      const initialV = velocityRef.current;
-      if (Math.abs(initialV) > 0.5) {
-        inertiaActiveRef.current = true;
-        const friction = 0.92;
-        const minV = 0.15;
-        const step = () => {
-          if (!inertiaActiveRef.current) return;
-          velocityRef.current *= friction;
-          const visibleMs = (BASE_RANGE_DAYS * MS_PER_DAY) / scale;
-          const msPerPx = visibleMs / containerWidth;
-          const deltaMs = velocityRef.current * msPerPx;
-          setCenterMs((c) => c - deltaMs);
-          if (Math.abs(velocityRef.current) <= minV) {
-            inertiaActiveRef.current = false;
-            return;
-          }
-          inertiaRafRef.current = requestAnimationFrame(step);
-        };
-        inertiaRafRef.current = requestAnimationFrame(step);
-      }
+      startInertia();
     }
   }, [
     exitPointerLock,
     isPointerLocked,
     setTrailOpacity,
-    scale,
-    containerWidth,
-    setCenterMs,
+    startInertia,
+    isPanningRef,
   ]);
 
   // ===============================
@@ -578,8 +565,7 @@ export default function TimelineRoot({
   // 📱 TOUCH START/END (mobile support)
   // ===============================
   const onTouchStart = (e: React.TouchEvent) => {
-    inertiaActiveRef.current = false;
-    if (inertiaRafRef.current) cancelAnimationFrame(inertiaRafRef.current);
+    stopInertia();
     if (e.touches.length >= 2) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -988,20 +974,7 @@ export default function TimelineRoot({
             />
           ) : null}
 
-          {/* Zoom hint — prominent badge (identical to demo) */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-white/10 text-[11px] text-neutral-300 backdrop-blur-sm">
-              <span className="flex items-center gap-1">
-                Hold{" "}
-                <kbd className="px-1.5 py-0.5 rounded bg-white/15 text-white font-mono text-[10px] border border-white/20">
-                  Alt
-                </kbd>
-                + Scroll to zoom
-              </span>
-              <span className="text-neutral-600">|</span>
-              <span>Drag to pan</span>
-            </div>
-          </div>
+          <TimelineScrollHint />
 
           {/* Only show create UI if user can edit */}
           {canEdit && createAtMs !== null && (

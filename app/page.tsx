@@ -15,6 +15,7 @@ import BrainfTodo from "@/components/sub/BrainfTodo";
 import NetworkSpeedMini from "@/components/main/NetworkSpeedMini";
 import WaterSortShowcase from "@/components/main/WaterSortShowcase";
 import TimelineShowcase from "@/components/main/TimelineShowcase";
+import ItsQuizMeShowcase from "@/components/main/ItsQuizMeShowcase";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
@@ -41,6 +42,7 @@ export default function Home() {
       <Projects />
       <WaterSortShowcase />
       <TimelineShowcase />
+      <ItsQuizMeShowcase />
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && (
         <ItsPopover

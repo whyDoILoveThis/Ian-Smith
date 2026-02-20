@@ -25,6 +25,7 @@ interface QuizQuestionProps {
   totalQuestions: number;
   isLastQuestion: boolean;
   isFirstQuestion: boolean;
+  instantFeedback?: boolean;
 }
 
 export default function QuizQuestion({
@@ -38,6 +39,7 @@ export default function QuizQuestion({
   totalQuestions,
   isLastQuestion,
   isFirstQuestion,
+  instantFeedback = false,
 }: QuizQuestionProps) {
   const [typedAnswer, setTypedAnswer] = useState(currentAnswer);
 
@@ -166,41 +168,76 @@ export default function QuizQuestion({
               </p>
             </div>
           ) : (
-            question.options?.map((option, index) => (
-              <button
-                key={index}
-                onClick={() => onAnswer(option)}
-                className={`group w-full p-4 rounded-xl border-2 text-left transition-all duration-300 hover:scale-[1.01] ${
-                  currentAnswer === option
-                    ? "border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/10"
-                    : "border-slate-200/50 dark:border-slate-700/50 hover:border-purple-500/50 hover:bg-purple-500/5 bg-white/50 dark:bg-slate-800/50"
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <span
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all duration-300 ${
-                      currentAnswer === option
-                        ? "bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-md shadow-purple-500/30"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30 group-hover:text-purple-600 dark:group-hover:text-purple-400"
-                    }`}
-                  >
-                    {String.fromCharCode(65 + index)}
-                  </span>
-                  <span
-                    className={`flex-1 font-medium transition-colors ${
-                      currentAnswer === option
-                        ? "text-purple-700 dark:text-purple-300"
-                        : ""
-                    }`}
-                  >
-                    {option}
-                  </span>
-                  {currentAnswer === option && (
-                    <CheckCircle2 className="w-5 h-5 text-purple-500 animate-in zoom-in duration-200" />
-                  )}
-                </div>
-              </button>
-            ))
+            question.options?.map((option, index) => {
+              const isSelected = currentAnswer === option;
+              const hasAnswered = !!currentAnswer;
+              const isCorrectOption =
+                instantFeedback &&
+                hasAnswered &&
+                option === question.correctAnswer;
+              const isWrongSelection =
+                instantFeedback &&
+                hasAnswered &&
+                isSelected &&
+                option !== question.correctAnswer;
+
+              return (
+                <button
+                  key={index}
+                  onClick={() => {
+                    if (instantFeedback && hasAnswered) return;
+                    onAnswer(option);
+                  }}
+                  className={`group w-full p-4 rounded-xl border-2 text-left transition-all duration-300 hover:scale-[1.01] ${
+                    isCorrectOption
+                      ? "border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
+                      : isWrongSelection
+                        ? "border-red-500 bg-red-500/10 shadow-lg shadow-red-500/10"
+                        : isSelected
+                          ? "border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/10"
+                          : "border-slate-200/50 dark:border-slate-700/50 hover:border-purple-500/50 hover:bg-purple-500/5 bg-white/50 dark:bg-slate-800/50"
+                  } ${instantFeedback && hasAnswered ? "cursor-default" : ""}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <span
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                        isCorrectOption
+                          ? "bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-md shadow-emerald-500/30"
+                          : isWrongSelection
+                            ? "bg-gradient-to-br from-red-400 to-red-600 text-white shadow-md shadow-red-500/30"
+                            : isSelected
+                              ? "bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-md shadow-purple-500/30"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30 group-hover:text-purple-600 dark:group-hover:text-purple-400"
+                      }`}
+                    >
+                      {String.fromCharCode(65 + index)}
+                    </span>
+                    <span
+                      className={`flex-1 font-medium transition-colors ${
+                        isCorrectOption
+                          ? "text-emerald-700 dark:text-emerald-300"
+                          : isWrongSelection
+                            ? "text-red-700 dark:text-red-300"
+                            : isSelected
+                              ? "text-purple-700 dark:text-purple-300"
+                              : ""
+                      }`}
+                    >
+                      {option}
+                    </span>
+                    {isCorrectOption && (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 animate-in zoom-in duration-200" />
+                    )}
+                    {isWrongSelection && (
+                      <XCircle className="w-5 h-5 text-red-500 animate-in zoom-in duration-200" />
+                    )}
+                    {isSelected && !instantFeedback && (
+                      <CheckCircle2 className="w-5 h-5 text-purple-500 animate-in zoom-in duration-200" />
+                    )}
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
       </div>

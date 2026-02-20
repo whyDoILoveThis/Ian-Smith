@@ -18,6 +18,7 @@ export interface QuizConfig {
     typed: number; // percentage 0-100
   };
   aiSettings: AISettings;
+  instantFeedback?: boolean; // show correct/wrong after each question
 }
 
 export interface QuizQuestion {
