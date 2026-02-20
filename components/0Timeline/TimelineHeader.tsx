@@ -66,11 +66,83 @@ export default function TimelineHeader({
   }, [currentYear]);
 
   const Actions: React.FC<{ vertical?: boolean }> = ({ vertical }) => {
+    if (vertical) {
+      // Mobile menu: single column, all items in one flat list
+      return (
+        <div className="flex flex-col justify-center items-center gap-4">
+          {viewingUser && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+              <span className="text-xs text-amber-400">Viewing:</span>
+              <span className="text-sm font-medium text-amber-300">
+                {viewingUser.displayName}
+              </span>
+              {onGoHome && (
+                <button
+                  onClick={onGoHome}
+                  type="button"
+                  className="ml-1 text-amber-400 hover:text-amber-200 transition-colors"
+                  title="Return to your dashboard"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
+          {onOpenTimelines && (
+            <button onClick={onOpenTimelines} type="button" aria-label="Open timelines"
+              className="flex items-center gap-2 px-3 py-1 text-sm rounded-full border transition-all duration-200 bg-gradient-to-r from-violet-600/20 to-cyan-600/20 border-violet-500/30 hover:border-violet-400/50 text-violet-300 hover:text-violet-200 whitespace-nowrap">
+              <span className="text-base">📚</span>
+              <span>{activeTimelineName || "Timelines"}</span>
+            </button>
+          )}
+          {onOpenUsers && (
+            <button onClick={onOpenUsers} type="button" aria-label="Browse users"
+              className="flex items-center gap-2 px-3 py-1 text-sm rounded-full border transition-all duration-200 bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border-emerald-500/30 hover:border-emerald-400/50 text-emerald-300 hover:text-emerald-200 whitespace-nowrap">
+              <span className="text-base">👥</span>
+              <span>Users</span>
+            </button>
+          )}
+          {onOpenAIModal && <AIButton onClick={onOpenAIModal} />}
+          {onCenterToday && (
+            <button onClick={onCenterToday} type="button" aria-label="Jump to today"
+              className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-cyan-400 hover:text-cyan-300 whitespace-nowrap" title="Jump to today">
+              Today
+            </button>
+          )}
+          {onCenterFirstNode && (
+            <button onClick={onCenterFirstNode} type="button" aria-label="Jump to first node"
+              className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-emerald-400 hover:text-emerald-300 whitespace-nowrap" title="Jump to first node">
+              ⏮ First
+            </button>
+          )}
+          {onCenterLastNode && (
+            <button onClick={onCenterLastNode} type="button" aria-label="Jump to last node"
+              className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-emerald-400 hover:text-emerald-300 whitespace-nowrap" title="Jump to last node">
+              Last ⏭
+            </button>
+          )}
+          {onToggleShowAll && (
+            <button onClick={onToggleShowAll} type="button" aria-pressed={!!showAllCards}
+              className={`px-3 py-1 text-sm rounded-full border transition-colors whitespace-nowrap ${
+                showAllCards ? "bg-cyan-500 text-black border-cyan-400" : "bg-transparent text-neutral-400 border-neutral-600 hover:border-neutral-400"
+              }`}>
+              {showAllCards ? "Hide All" : "Show All"}
+            </button>
+          )}
+          {onOpenTutorial && (
+            <button onClick={onOpenTutorial} type="button" aria-label="Tutorial"
+              className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-amber-400 hover:text-amber-300 whitespace-nowrap" title="How to use the timeline">
+              ❓ Help
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    // Desktop: two rows
     return (
-      <div
-        className={`flex ${vertical ? "flex-col" : "flex-row flex-wrap"} justify-center items-center gap-4`}
-      >
-        {/* Viewing other user's dashboard indicator */}
+      <div className="flex flex-col items-end gap-2">
+        {/* Viewing indicator (full width) */}
         {viewingUser && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30">
             <span className="text-xs text-amber-400">Viewing:</span>
@@ -90,93 +162,95 @@ export default function TimelineHeader({
           </div>
         )}
 
-        {onOpenTimelines && (
-          <button
-            onClick={onOpenTimelines}
-            type="button"
-            aria-label="Open timelines"
-            className="flex items-center gap-2 px-3 py-1 text-sm rounded-full border transition-all duration-200 bg-gradient-to-r from-violet-600/20 to-cyan-600/20 border-violet-500/30 hover:border-violet-400/50 text-violet-300 hover:text-violet-200 whitespace-nowrap"
-          >
-            <span className="text-base">📚</span>
-            <span>{activeTimelineName || "Timelines"}</span>
-          </button>
-        )}
+        {/* Row 1: Timelines, Users, AI Agent, Sign-in/Settings */}
+        <div className="flex flex-row flex-wrap justify-end items-center gap-3">
+          {onOpenTimelines && (
+            <button
+              onClick={onOpenTimelines}
+              type="button"
+              aria-label="Open timelines"
+              className="flex items-center gap-2 px-3 py-1 text-sm rounded-full border transition-all duration-200 bg-gradient-to-r from-violet-600/20 to-cyan-600/20 border-violet-500/30 hover:border-violet-400/50 text-violet-300 hover:text-violet-200 whitespace-nowrap"
+            >
+              <span className="text-base">📚</span>
+              <span>{activeTimelineName || "Timelines"}</span>
+            </button>
+          )}
+          {onOpenUsers && (
+            <button
+              onClick={onOpenUsers}
+              type="button"
+              aria-label="Browse users"
+              className="flex items-center gap-2 px-3 py-1 text-sm rounded-full border transition-all duration-200 bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border-emerald-500/30 hover:border-emerald-400/50 text-emerald-300 hover:text-emerald-200 whitespace-nowrap"
+            >
+              <span className="text-base">👥</span>
+              <span>Users</span>
+            </button>
+          )}
+          {onOpenAIModal && <AIButton onClick={onOpenAIModal} />}
+          <SettingsAndUserBtn />
+        </div>
 
-        {/* Users button */}
-        {onOpenUsers && (
-          <button
-            onClick={onOpenUsers}
-            type="button"
-            aria-label="Browse users"
-            className="flex items-center gap-2 px-3 py-1 text-sm rounded-full border transition-all duration-200 bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border-emerald-500/30 hover:border-emerald-400/50 text-emerald-300 hover:text-emerald-200 whitespace-nowrap"
-          >
-            <span className="text-base">👥</span>
-            <span>Users</span>
-          </button>
-        )}
-
-        {/* AI Agent button */}
-        {onOpenAIModal && <AIButton onClick={onOpenAIModal} />}
-
-        {onCenterToday && (
-          <button
-            onClick={onCenterToday}
-            type="button"
-            aria-label="Jump to today"
-            className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-cyan-400 hover:text-cyan-300 whitespace-nowrap"
-            title="Jump to today"
-          >
-            Today
-          </button>
-        )}
-        {onCenterFirstNode && (
-          <button
-            onClick={onCenterFirstNode}
-            type="button"
-            aria-label="Jump to first node"
-            className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-emerald-400 hover:text-emerald-300 whitespace-nowrap"
-            title="Jump to first node"
-          >
-            ⏮ First
-          </button>
-        )}
-        {onCenterLastNode && (
-          <button
-            onClick={onCenterLastNode}
-            type="button"
-            aria-label="Jump to last node"
-            className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-emerald-400 hover:text-emerald-300 whitespace-nowrap"
-            title="Jump to last node"
-          >
-            Last ⏭
-          </button>
-        )}
-        {onToggleShowAll && (
-          <button
-            onClick={onToggleShowAll}
-            type="button"
-            aria-pressed={!!showAllCards}
-            className={`px-3 py-1 text-sm rounded-full border transition-colors whitespace-nowrap ${
-              showAllCards
-                ? "bg-cyan-500 text-black border-cyan-400"
-                : "bg-transparent text-neutral-400 border-neutral-600 hover:border-neutral-400"
-            }`}
-          >
-            {showAllCards ? "Hide All" : "Show All"}
-          </button>
-        )}
-        {onOpenTutorial && (
-          <button
-            onClick={onOpenTutorial}
-            type="button"
-            aria-label="Tutorial"
-            className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-amber-400 hover:text-amber-300 whitespace-nowrap"
-            title="How to use the timeline"
-          >
-            ❓ Help
-          </button>
-        )}
-        {!vertical && <SettingsAndUserBtn />}
+        {/* Row 2: Today, First, Last, Show All, Help */}
+        <div className="flex flex-row flex-wrap justify-end items-center gap-3">
+          {onCenterToday && (
+            <button
+              onClick={onCenterToday}
+              type="button"
+              aria-label="Jump to today"
+              className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-cyan-400 hover:text-cyan-300 whitespace-nowrap"
+              title="Jump to today"
+            >
+              Today
+            </button>
+          )}
+          {onCenterFirstNode && (
+            <button
+              onClick={onCenterFirstNode}
+              type="button"
+              aria-label="Jump to first node"
+              className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-emerald-400 hover:text-emerald-300 whitespace-nowrap"
+              title="Jump to first node"
+            >
+              ⏮ First
+            </button>
+          )}
+          {onCenterLastNode && (
+            <button
+              onClick={onCenterLastNode}
+              type="button"
+              aria-label="Jump to last node"
+              className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-emerald-400 hover:text-emerald-300 whitespace-nowrap"
+              title="Jump to last node"
+            >
+              Last ⏭
+            </button>
+          )}
+          {onToggleShowAll && (
+            <button
+              onClick={onToggleShowAll}
+              type="button"
+              aria-pressed={!!showAllCards}
+              className={`px-3 py-1 text-sm rounded-full border transition-colors whitespace-nowrap ${
+                showAllCards
+                  ? "bg-cyan-500 text-black border-cyan-400"
+                  : "bg-transparent text-neutral-400 border-neutral-600 hover:border-neutral-400"
+              }`}
+            >
+              {showAllCards ? "Hide All" : "Show All"}
+            </button>
+          )}
+          {onOpenTutorial && (
+            <button
+              onClick={onOpenTutorial}
+              type="button"
+              aria-label="Tutorial"
+              className="px-3 py-1 text-sm rounded-full border transition-colors bg-transparent text-neutral-400 border-neutral-600 hover:border-amber-400 hover:text-amber-300 whitespace-nowrap"
+              title="How to use the timeline"
+            >
+              ❓ Help
+            </button>
+          )}
+        </div>
       </div>
     );
   };
