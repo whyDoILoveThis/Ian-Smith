@@ -357,7 +357,7 @@ export default function QuizReview({
                             return (
                               <div
                                 key={optIndex}
-                                className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${
+                                className={`flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
                                   isSelfAssessment
                                     ? isSelected
                                       ? "border-violet-500/50 bg-violet-500/10"
@@ -396,7 +396,7 @@ export default function QuizReview({
                                   {option}
                                 </span>
                                 {isSelected && (
-                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${
                                     isSelfAssessment
                                       ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
                                       : isCorrectOption

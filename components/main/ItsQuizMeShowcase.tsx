@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { HelpCircle, CheckCircle2, XCircle } from "lucide-react";
 
 /* ===================================================================
    DEMO DATA – fake quiz questions for the interactive preview
@@ -376,6 +377,13 @@ export default function ItsQuizMeShowcase() {
             viewport={{ once: true }}
             transition={{ delay: 0.35, duration: 0.5 }}
           >
+            {/* Demo badge */}
+            <div className="absolute top-3 right-3 z-10">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30 backdrop-blur-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                Interactive Demo — sample questions only
+              </span>
+            </div>
             <div className="p-6 md:p-8 min-h-[420px] flex flex-col">
               <AnimatePresence mode="wait">
                 {/* ====== SETUP PHASE ====== */}
@@ -391,7 +399,7 @@ export default function ItsQuizMeShowcase() {
                     {/* Mini header */}
                     <div className="text-center mb-6">
                       <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 via-blue-500 to-cyan-500 mb-4 shadow-lg shadow-purple-500/25">
-                        <span className="text-2xl">❓</span>
+                        <HelpCircle className="w-8 h-8 text-white" />
                       </div>
                       <h3 className="text-xl font-bold text-white/90">
                         ItsQuizMe
@@ -734,105 +742,231 @@ export default function ItsQuizMeShowcase() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.4 }}
-                    className="flex-1 flex flex-col items-center justify-center text-center"
+                    className="flex-1 flex flex-col"
                   >
-                    {/* Emoji */}
-                    <motion.div
-                      className="text-5xl mb-4"
-                      animate={{ y: [0, -8, 0] }}
-                      transition={{ duration: 1, repeat: Infinity }}
-                    >
-                      {scorePercent >= 80
-                        ? "🏆"
-                        : scorePercent >= 60
-                          ? "🌟"
-                          : scorePercent >= 40
-                            ? "👍"
-                            : "💪"}
-                    </motion.div>
+                    {/* Score header */}
+                    <div className="text-center mb-6">
+                      {/* Emoji */}
+                      <motion.div
+                        className="text-5xl mb-4"
+                        animate={{ y: [0, -8, 0] }}
+                        transition={{ duration: 1, repeat: Infinity }}
+                      >
+                        {scorePercent >= 80
+                          ? "🏆"
+                          : scorePercent >= 60
+                            ? "🌟"
+                            : scorePercent >= 40
+                              ? "👍"
+                              : "💪"}
+                      </motion.div>
 
-                    <h3 className="text-2xl font-bold text-white/90 mb-2">
-                      Quiz Complete!
-                    </h3>
-                    <p className="text-sm text-white/40 mb-6">
-                      {DEMO_PRESETS[selectedPreset].label}
-                    </p>
+                      <h3 className="text-2xl font-bold text-white/90 mb-2">
+                        Quiz Complete!
+                      </h3>
+                      <p className="text-sm text-white/40 mb-4">
+                        {DEMO_PRESETS[selectedPreset].label}
+                      </p>
 
-                    {/* Score ring */}
-                    <div className="relative w-36 h-36 mb-6">
-                      <svg className="w-full h-full transform -rotate-90">
-                        <circle
-                          cx="72"
-                          cy="72"
-                          r="60"
-                          strokeWidth="10"
-                          fill="none"
-                          className="stroke-white/5"
-                        />
-                        <motion.circle
-                          cx="72"
-                          cy="72"
-                          r="60"
-                          strokeWidth="10"
-                          fill="none"
-                          strokeLinecap="round"
-                          stroke="url(#quizScoreGrad)"
-                          initial={{ strokeDasharray: "0 377" }}
-                          animate={{
-                            strokeDasharray: `${(scorePercent / 100) * 377} 377`,
-                          }}
-                          transition={{ duration: 1, delay: 0.3 }}
-                        />
-                        <defs>
-                          <linearGradient
-                            id="quizScoreGrad"
-                            x1="0%"
-                            y1="0%"
-                            x2="100%"
-                            y2="100%"
+                      {/* Score ring */}
+                      <div className="relative w-36 h-36 mx-auto mb-4">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle
+                            cx="72"
+                            cy="72"
+                            r="60"
+                            strokeWidth="10"
+                            fill="none"
+                            className="stroke-white/5"
+                          />
+                          <motion.circle
+                            cx="72"
+                            cy="72"
+                            r="60"
+                            strokeWidth="10"
+                            fill="none"
+                            strokeLinecap="round"
+                            stroke="url(#quizScoreGrad)"
+                            initial={{ strokeDasharray: "0 377" }}
+                            animate={{
+                              strokeDasharray: `${(scorePercent / 100) * 377} 377`,
+                            }}
+                            transition={{ duration: 1, delay: 0.3 }}
+                          />
+                          <defs>
+                            <linearGradient
+                              id="quizScoreGrad"
+                              x1="0%"
+                              y1="0%"
+                              x2="100%"
+                              y2="100%"
+                            >
+                              <stop offset="0%" stopColor="#a78bfa" />
+                              <stop offset="50%" stopColor="#3b82f6" />
+                              <stop offset="100%" stopColor="#06b6d4" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <motion.span
+                            className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.5 }}
                           >
-                            <stop offset="0%" stopColor="#a78bfa" />
-                            <stop offset="50%" stopColor="#3b82f6" />
-                            <stop offset="100%" stopColor="#06b6d4" />
-                          </linearGradient>
-                        </defs>
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <motion.span
-                          className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: 0.5 }}
-                        >
-                          {scorePercent}%
-                        </motion.span>
-                        <span className="text-xs text-white/30 mt-1">
-                          {correctCount}/{DEMO_QUESTIONS.length} correct
+                            {scorePercent}%
+                          </motion.span>
+                          <span className="text-xs text-white/30 mt-1">
+                            {correctCount}/{DEMO_QUESTIONS.length} correct
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Score message badge */}
+                      <div
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full mb-4 ${
+                          scorePercent >= 80
+                            ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                            : scorePercent >= 60
+                              ? "bg-yellow-500/10 border border-yellow-500/30 text-yellow-400"
+                              : "bg-orange-500/10 border border-orange-500/30 text-orange-400"
+                        }`}
+                      >
+                        <span className="text-sm font-semibold">
+                          {scorePercent >= 80
+                            ? "Excellent Work!"
+                            : scorePercent >= 60
+                              ? "Good Job!"
+                              : "Keep Practicing!"}
                         </span>
                       </div>
                     </div>
 
-                    {/* Score message */}
-                    <div
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6 ${
-                        scorePercent >= 80
-                          ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-                          : scorePercent >= 60
-                            ? "bg-yellow-500/10 border border-yellow-500/30 text-yellow-400"
-                            : "bg-orange-500/10 border border-orange-500/30 text-orange-400"
-                      }`}
-                    >
-                      <span className="text-sm font-semibold">
-                        {scorePercent >= 80
-                          ? "Excellent Work!"
-                          : scorePercent >= 60
-                            ? "Good Job!"
-                            : "Keep Practicing!"}
-                      </span>
+                    {/* Review all questions */}
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-4">
+                      <h4 className="text-sm font-semibold text-white/60 mb-4 flex items-center gap-2">
+                        <span className="w-1 h-4 rounded-full bg-gradient-to-b from-purple-500 to-blue-500" />
+                        Review Your Answers
+                      </h4>
+
+                      <div className="space-y-3">
+                        {DEMO_QUESTIONS.map((dq, idx) => {
+                          const userAnswer = answers[idx] ?? null;
+                          const isCorrect = userAnswer === dq.correctAnswer;
+
+                          return (
+                            <motion.div
+                              key={dq.id}
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.15 + idx * 0.08 }}
+                              className={`p-3.5 rounded-xl border-2 transition-all ${
+                                isCorrect
+                                  ? "border-emerald-500/30 bg-emerald-500/5"
+                                  : "border-red-500/30 bg-red-500/5"
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                {/* Status icon */}
+                                <div
+                                  className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md ${
+                                    isCorrect
+                                      ? "bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-emerald-500/30"
+                                      : "bg-gradient-to-br from-red-400 to-red-600 shadow-red-500/30"
+                                  }`}
+                                >
+                                  {isCorrect ? (
+                                    <CheckCircle2 className="w-4 h-4 text-white" />
+                                  ) : (
+                                    <XCircle className="w-4 h-4 text-white" />
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  {/* Question label */}
+                                  <span className="text-[10px] font-medium text-white/30 uppercase tracking-wider">
+                                    Question {idx + 1}
+                                  </span>
+                                  <p className="text-sm font-semibold text-white/80 mt-0.5 mb-3 leading-relaxed">
+                                    {dq.question}
+                                  </p>
+
+                                  {/* Options review */}
+                                  <div className="space-y-1.5">
+                                    {dq.options.map((option, optIdx) => {
+                                      const isSelected = userAnswer === option;
+                                      const isCorrectOption =
+                                        dq.correctAnswer === option;
+                                      const isWrongSelection =
+                                        isSelected && !isCorrectOption;
+
+                                      return (
+                                        <div
+                                          key={optIdx}
+                                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all ${
+                                            isCorrectOption
+                                              ? "border-emerald-500/40 bg-emerald-500/10"
+                                              : isWrongSelection
+                                                ? "border-red-500/40 bg-red-500/10"
+                                                : "border-white/5 bg-white/[0.02]"
+                                          }`}
+                                        >
+                                          <span
+                                            className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                                              isCorrectOption
+                                                ? "bg-emerald-500 text-white"
+                                                : isWrongSelection
+                                                  ? "bg-red-500 text-white"
+                                                  : "bg-white/5 text-white/30"
+                                            }`}
+                                          >
+                                            {String.fromCharCode(65 + optIdx)}
+                                          </span>
+                                          <span
+                                            className={`flex-1 text-xs ${
+                                              isCorrectOption
+                                                ? "text-emerald-300 font-medium"
+                                                : isWrongSelection
+                                                  ? "text-red-300"
+                                                  : "text-white/50"
+                                            }`}
+                                          >
+                                            {option}
+                                          </span>
+                                          {isSelected && (
+                                            <span
+                                              className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${
+                                                isCorrectOption
+                                                  ? "bg-emerald-500/20 text-emerald-300"
+                                                  : "bg-red-500/20 text-red-300"
+                                              }`}
+                                            >
+                                              Your response
+                                            </span>
+                                          )}
+                                          {isCorrectOption && !isSelected && (
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                          )}
+                                          {isCorrectOption && isSelected && (
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                          )}
+                                          {isWrongSelection && (
+                                            <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    {/* Summary card */}
-                    <div className="w-full p-4 rounded-xl bg-white/[0.03] border border-white/10 mb-6 text-left">
+                    {/* AI summary card */}
+                    <div className="w-full p-4 rounded-xl bg-white/[0.03] border border-white/10 mb-4 text-left">
                       <div className="flex items-start gap-2">
                         <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
                           <span className="text-[9px] font-bold text-white">
