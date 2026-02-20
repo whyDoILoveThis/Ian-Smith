@@ -941,6 +941,9 @@ export default function TimelineRoot({
             scale={scale}
             baseRangeDays={BASE_RANGE_DAYS}
             onTimelineClick={onTimelineClick}
+            onPan={(dir) =>
+              panBy(dir === "left" ? 40 : -40, containerWidth, BASE_RANGE_DAYS)
+            }
           />
 
           {/* Show either AI Preview Timeline OR Regular Timeline based on isPreviewActive */}
@@ -984,6 +987,21 @@ export default function TimelineRoot({
               canEdit={canEdit}
             />
           ) : null}
+
+          {/* Zoom hint — prominent badge (identical to demo) */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-white/10 text-[11px] text-neutral-300 backdrop-blur-sm">
+              <span className="flex items-center gap-1">
+                Hold{" "}
+                <kbd className="px-1.5 py-0.5 rounded bg-white/15 text-white font-mono text-[10px] border border-white/20">
+                  Alt
+                </kbd>
+                + Scroll to zoom
+              </span>
+              <span className="text-neutral-600">|</span>
+              <span>Drag to pan</span>
+            </div>
+          </div>
 
           {/* Only show create UI if user can edit */}
           {canEdit && createAtMs !== null && (

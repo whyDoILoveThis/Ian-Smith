@@ -1,12 +1,22 @@
 // components/0Timeline/TimelineTutorial.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import TimelineHoverCard from "./TimelineHoverCard";
 
 type CursorType = "drag" | "scroll" | "click" | "double-click" | "hover";
+
+/** Steps that target buttons in the header (hidden inside mobile dropdown) */
+const HEADER_BUTTON_STEP_IDS = new Set([
+  "timelines",
+  "users",
+  "ai",
+  "today",
+  "first-last",
+  "show-all",
+]);
 
 interface TutorialStep {
   id: string;
@@ -18,6 +28,7 @@ interface TutorialStep {
   dragOffset?: { x: number; y: number }; // For drag animations
   tip?: string;
   showFakeNode?: boolean; // Show a temporary node under the cursor
+  mobileDescription?: string; // Alternate description for mobile
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
@@ -38,6 +49,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     fallbackArea: { top: 30, left: 15, width: 70, height: 55 },
     cursorType: "scroll",
     tip: "Alt + Scroll Wheel to zoom",
+    mobileDescription:
+      "Pinch with two fingers to zoom in and out. Zooming centers between your fingers.",
   },
   {
     id: "timelines",
@@ -47,6 +60,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     selector: '[aria-label="Open timelines"]',
     cursorType: "click",
     tip: "Use the 👁️ icon to preview without switching",
+    mobileDescription:
+      "Tap the timeline button in the menu to see all available timelines, create new ones, or preview nodes.",
   },
   {
     id: "users",
@@ -55,6 +70,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       "Browse timelines created by other people. Get inspired by their nodes and stories!",
     selector: '[aria-label="Browse users"]',
     cursorType: "click",
+    mobileDescription:
+      "Tap the Users button in the menu to browse timelines from other people.",
   },
   {
     id: "ai",
@@ -64,6 +81,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     selector: '[aria-label="Generate timeline with AI"]',
     cursorType: "click",
     tip: 'Try: "History of space exploration"',
+    mobileDescription:
+      "Tap the AI button in the menu to generate entire timelines from a text prompt!",
   },
   {
     id: "today",
@@ -71,6 +90,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     description: "Instantly center the timeline on today's date.",
     selector: '[aria-label="Jump to today"]',
     cursorType: "click",
+    mobileDescription:
+      "Tap 'Today' in the menu to instantly center the timeline on today's date.",
   },
   {
     id: "first-last",
@@ -79,6 +100,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       "Quickly navigate to the earliest or most recent node on your timeline.",
     selector: '[aria-label="Jump to first node"]',
     cursorType: "click",
+    mobileDescription:
+      "Tap 'First' or 'Last' in the menu to quickly jump to the earliest or most recent node.",
   },
   {
     id: "create",
@@ -88,6 +111,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     selector: "[data-timeline-line]",
     cursorType: "click",
     tip: "You must be signed in to create nodes",
+    mobileDescription:
+      "Tap on the horizontal timeline line to add a new node at that date. A form will appear to fill in the details.",
   },
   {
     id: "view",
@@ -97,6 +122,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     selector: "[data-timeline-line]",
     cursorType: "hover",
     showFakeNode: true,
+    mobileDescription:
+      "Tap on any node dot to see a preview card. Tap the expand button to see full details with images.",
   },
   {
     id: "show-all",
@@ -105,6 +132,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       "Toggle to display all node cards at once, or hide them to see just the dots.",
     selector: "[aria-pressed]",
     cursorType: "click",
+    mobileDescription:
+      "Tap 'Show All' in the menu to display all node cards at once, or hide them to see just the dots.",
   },
 ];
 
@@ -116,60 +145,171 @@ export default function TimelineTutorial({ onClose }: TimelineTutorialProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
   const [animKey, setAnimKey] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const mobileMenuOpenRef = useRef(false);
+
+  // Detect mobile (matches Tailwind md: breakpoint)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Signal to other components (e.g. ItsDropdown) that tutorial is active
+  useEffect(() => {
+    document.body.dataset.tutorialActive = "true";
+    return () => {
+      delete document.body.dataset.tutorialActive;
+    };
+  }, []);
 
   // For the hover demo - ghost hover cycles, but real hover overrides
   const [ghostHovered, setGhostHovered] = useState(false);
   const [realHovered, setRealHovered] = useState(false);
   const [sampleNodeExpanded, setSampleNodeExpanded] = useState(false);
+  const ghostCycleRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const ghostIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const step = TUTORIAL_STEPS[currentStep];
   const isFirst = currentStep === 0;
   const isLast = currentStep === TUTORIAL_STEPS.length - 1;
 
   // Ghost hover animation cycle for the hover step - synced with hoverMove animation
+  // Restarts from scratch whenever real hover releases so CSS + JS stay in sync
+  const startGhostCycle = useCallback(() => {
+    // Clear any existing timers
+    ghostCycleRef.current.forEach((t) => clearTimeout(t));
+    ghostCycleRef.current = [];
+    if (ghostIntervalRef.current) clearInterval(ghostIntervalRef.current);
+
+    const cycle = () => {
+      const t1 = setTimeout(() => setGhostHovered(true), 1000);
+      const t2 = setTimeout(() => setGhostHovered(false), 3000);
+      ghostCycleRef.current = [t1, t2];
+    };
+
+    cycle();
+    ghostIntervalRef.current = setInterval(cycle, 4000);
+  }, []);
+
   useEffect(() => {
     if (step.id !== "view") {
       setGhostHovered(false);
+      ghostCycleRef.current.forEach((t) => clearTimeout(t));
+      if (ghostIntervalRef.current) clearInterval(ghostIntervalRef.current);
       return;
     }
 
-    // Sync with hoverMove animation (4s cycle)
-    // Cursor is on node from 25-75% of cycle (1s-3s)
-    const cycleGhostHover = () => {
-      if (realHovered) return; // Don't interfere with real hover
-      
-      // Start hovering when cursor reaches node
-      const hoverOnTimeout = setTimeout(() => {
-        if (!realHovered) setGhostHovered(true);
-      }, 1000); // 25% of 4s = cursor arrives at node
-      
-      // Stop hovering when cursor leaves node
-      const hoverOffTimeout = setTimeout(() => {
-        if (!realHovered) setGhostHovered(false);
-      }, 3000); // 75% of 4s = cursor leaves node
-      
-      return [hoverOnTimeout, hoverOffTimeout];
-    };
-    
-    // Initial cycle
-    const initialTimeouts = cycleGhostHover();
-    
-    // Repeat every 4 seconds to match animation cycle
-    const interval = setInterval(() => {
-      cycleGhostHover();
-    }, 4000);
+    if (!realHovered) {
+      // (Re)start the ghost cycle and reset the CSS animation so they stay in sync
+      setAnimKey((k) => k + 1);
+      startGhostCycle();
+    } else {
+      // Pause the ghost cycle while the user is truly hovering
+      ghostCycleRef.current.forEach((t) => clearTimeout(t));
+      if (ghostIntervalRef.current) clearInterval(ghostIntervalRef.current);
+      setGhostHovered(false);
+    }
 
     return () => {
-      clearInterval(interval);
-      initialTimeouts?.forEach(t => clearTimeout(t));
+      ghostCycleRef.current.forEach((t) => clearTimeout(t));
+      if (ghostIntervalRef.current) clearInterval(ghostIntervalRef.current);
     };
-  }, [step.id, realHovered]);
+  }, [step.id, realHovered, startGhostCycle]);
 
   // Determine if the sample node should show its card
   const showSampleCard = realHovered || ghostHovered;
 
   // Find and measure the target element
   const updateHighlight = useCallback(() => {
+    const needsMobileMenu = isMobile && HEADER_BUTTON_STEP_IDS.has(step.id);
+
+    if (needsMobileMenu) {
+      // On mobile, ensure the dropdown is open so buttons are visible
+      const trigger = document.querySelector(
+        "[data-tutorial-mobile-trigger]",
+      ) as HTMLElement | null;
+
+      if (trigger) {
+        // Check if the dropdown menu is currently visible
+        const dropdown = trigger.closest(".relative.inline-block");
+        const menu = dropdown?.querySelector(
+          '[role="menu"]',
+        ) as HTMLElement | null;
+        const isOpen =
+          menu &&
+          !menu.classList.contains("pointer-events-none") &&
+          menu.classList.contains("opacity-100");
+
+        if (!isOpen && !mobileMenuOpenRef.current) {
+          // Click the trigger to open it
+          trigger.click();
+          mobileMenuOpenRef.current = true;
+          // Wait for animation, then re-measure
+          setTimeout(() => updateHighlight(), 250);
+          return;
+        }
+
+        // Now find the actual target button inside the open dropdown
+        if (step.selector) {
+          // Search inside the dropdown content specifically
+          const el = menu?.querySelector(step.selector) as HTMLElement | null;
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            const paddingX = 8;
+            const paddingY = 6;
+            setHighlightRect(
+              new DOMRect(
+                rect.left - paddingX,
+                rect.top - paddingY,
+                rect.width + paddingX * 2,
+                rect.height + paddingY * 2,
+              ),
+            );
+            return;
+          }
+        }
+      }
+
+      // Fallback: highlight the hamburger menu itself if we can't find the button
+      if (trigger) {
+        const rect = trigger.getBoundingClientRect();
+        const pad = 8;
+        setHighlightRect(
+          new DOMRect(
+            rect.left - pad,
+            rect.top - pad,
+            rect.width + pad * 2,
+            rect.height + pad * 2,
+          ),
+        );
+        return;
+      }
+    } else {
+      // Not a mobile-menu step: close the dropdown if we opened it
+      if (isMobile && mobileMenuOpenRef.current) {
+        const trigger = document.querySelector(
+          "[data-tutorial-mobile-trigger]",
+        ) as HTMLElement | null;
+        if (trigger) {
+          const dropdown = trigger.closest(".relative.inline-block");
+          const menu = dropdown?.querySelector(
+            '[role="menu"]',
+          ) as HTMLElement | null;
+          const isOpen =
+            menu &&
+            !menu.classList.contains("pointer-events-none") &&
+            menu.classList.contains("opacity-100");
+          if (isOpen) {
+            trigger.click(); // close
+          }
+        }
+        mobileMenuOpenRef.current = false;
+      }
+    }
+
+    // Desktop path (or non-header-button steps on mobile)
     if (step.selector) {
       const el = document.querySelector(step.selector);
       if (el) {
@@ -201,7 +341,7 @@ export default function TimelineTutorial({ onClose }: TimelineTutorialProps) {
         ),
       );
     }
-  }, [step]);
+  }, [step, isMobile]);
 
   useEffect(() => {
     updateHighlight();
@@ -212,9 +352,31 @@ export default function TimelineTutorial({ onClose }: TimelineTutorialProps) {
     return () => window.removeEventListener("resize", updateHighlight);
   }, [currentStep, updateHighlight]);
 
+  // Clean up mobile menu on close
+  const handleClose = useCallback(() => {
+    if (mobileMenuOpenRef.current) {
+      const trigger = document.querySelector(
+        "[data-tutorial-mobile-trigger]",
+      ) as HTMLElement | null;
+      if (trigger) {
+        const dropdown = trigger.closest(".relative.inline-block");
+        const menu = dropdown?.querySelector(
+          '[role="menu"]',
+        ) as HTMLElement | null;
+        const isOpen =
+          menu &&
+          !menu.classList.contains("pointer-events-none") &&
+          menu.classList.contains("opacity-100");
+        if (isOpen) trigger.click();
+      }
+      mobileMenuOpenRef.current = false;
+    }
+    onClose();
+  }, [onClose]);
+
   const handleNext = () => {
     if (isLast) {
-      onClose();
+      handleClose();
     } else {
       setCurrentStep((s) => s + 1);
     }
@@ -229,7 +391,7 @@ export default function TimelineTutorial({ onClose }: TimelineTutorialProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowRight" || e.key === "Enter") handleNext();
     else if (e.key === "ArrowLeft") handlePrev();
-    else if (e.key === "Escape") onClose();
+    else if (e.key === "Escape") handleClose();
   };
 
   // Calculate cursor position (center of highlight)
@@ -529,19 +691,24 @@ export default function TimelineTutorial({ onClose }: TimelineTutorialProps) {
         </div>
       )}
 
-      {/* Info Card - positioned below highlight or at bottom */}
+      {/* Info Card - smart positioning to never cover the highlight */}
       <div
         className="fixed left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-[102] pointer-events-auto"
-        style={{
-          bottom:
-            highlightRect && highlightRect.bottom > window.innerHeight - 200
-              ? "auto"
-              : "32px",
-          top:
-            highlightRect && highlightRect.bottom > window.innerHeight - 200
-              ? "32px"
-              : "auto",
-        }}
+        style={(() => {
+          if (!highlightRect) return { bottom: "32px", top: "auto" };
+          const vh = window.innerHeight;
+          const cardH = 300; // approximate max card height
+          const gap = 16;
+          const spaceBelow = vh - highlightRect.bottom;
+          const spaceAbove = highlightRect.top;
+          // Prefer bottom, but only if the card won't overlap the highlight
+          if (spaceBelow >= cardH + gap) return { bottom: "32px", top: "auto" };
+          if (spaceAbove >= cardH + gap) return { top: "32px", bottom: "auto" };
+          // Neither side has enough room – pick whichever has more room
+          return spaceBelow >= spaceAbove
+            ? { bottom: "32px", top: "auto" }
+            : { top: "32px", bottom: "auto" };
+        })()}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-gradient-to-br from-neutral-900/95 to-neutral-800/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-neutral-600 overflow-hidden">
@@ -557,7 +724,7 @@ export default function TimelineTutorial({ onClose }: TimelineTutorialProps) {
 
           {/* Close button */}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="absolute top-3 right-3 p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X size={18} />
@@ -577,14 +744,30 @@ export default function TimelineTutorial({ onClose }: TimelineTutorialProps) {
 
             {/* Description */}
             <p className="text-neutral-300 text-sm leading-relaxed mb-4">
-              {step.description}
+              {isMobile && step.mobileDescription
+                ? step.mobileDescription
+                : step.description}
             </p>
+
+            {/* Mobile menu hint for header button steps */}
+            {isMobile && HEADER_BUTTON_STEP_IDS.has(step.id) && (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-violet-500/10 border border-violet-500/20 mb-4">
+                <span className="text-violet-400 text-sm">📱</span>
+                <span className="text-violet-200 text-sm">
+                  Open the ☰ menu button to find this option
+                </span>
+              </div>
+            )}
 
             {/* Tip */}
             {step.tip && (
               <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-4">
                 <span className="text-amber-400 text-sm">💡</span>
-                <span className="text-amber-200 text-sm">{step.tip}</span>
+                <span className="text-amber-200 text-sm">
+                  {isMobile && step.id === "zoom"
+                    ? "Pinch with two fingers to zoom"
+                    : step.tip}
+                </span>
               </div>
             )}
 

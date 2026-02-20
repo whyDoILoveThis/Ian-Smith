@@ -15,6 +15,7 @@ import {
 import AIPromptExamples from "./AIPromptExamples";
 import AILoadingAnimation from "./AILoadingAnimation";
 import AIGeneratedPreview from "./AIGeneratedPreview";
+import TutorialModeGuard from "../TutorialModeGuard";
 import type { GeneratedTimeline, GeneratedNode } from "./types";
 
 // Re-export types for convenience
@@ -156,6 +157,7 @@ export default function AITimelineModal({
 
       {/* Modal */}
       <div className="relative w-full max-w-2xl max-h-[90vh] mx-4 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl">
+        <TutorialModeGuard onClose={handleClose} />
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-violet-500/10 via-cyan-500/10 to-pink-500/10">
           <div className="flex items-center gap-3">

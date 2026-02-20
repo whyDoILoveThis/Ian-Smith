@@ -45,7 +45,7 @@ export default function RootLayout({
            ${inter.className}`}
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <BreadcrumbProvider>
+            <BreadcrumbProvider disabled>
               <SignedIn>
                 <ConnectivityWrapper>
                   <MainWrap>

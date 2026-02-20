@@ -184,7 +184,7 @@ export default function TimelineHeader({
   const SettingsAndUserBtn = () => {
     return (
       <div className="flex justify-end items-center gap-2 w-full">
-        <span className="whitespace-nowrap">
+        <div className="whitespace-nowrap">
           {userId ? (
             <span className="w-[32px] h-[32px] flex justify-center items-center">
               <UserButton />
@@ -192,7 +192,7 @@ export default function TimelineHeader({
           ) : (
             <SignInButton mode="modal" />
           )}
-        </span>
+        </div>
         {/* Only show settings if signed in AND is owner */}
         {userId && onOpenSettings && hasActiveTimeline && isOwner && (
           <button
@@ -243,6 +243,7 @@ export default function TimelineHeader({
               type="button"
               className="flex items-center justify-center w-10 h-10 rounded-full border border-neutral-700 bg-neutral-800/60 text-neutral-300 hover:text-white hover:border-neutral-500"
               aria-label="Menu"
+              data-tutorial-mobile-trigger
             >
               <MenuIcon size={20} />
             </button>

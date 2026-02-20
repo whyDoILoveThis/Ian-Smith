@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
+import TutorialModeGuard from "./TutorialModeGuard";
 
 interface TimelineListOfUsersProps {
   users: TimelineUser[];
@@ -21,7 +23,13 @@ export default function TimelineListOfUsers({
   onGoHome,
   onClose,
 }: TimelineListOfUsersProps) {
+  const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   // Filter users based on search query
   const filteredUsers = useMemo(() => {
@@ -62,7 +70,9 @@ export default function TimelineListOfUsers({
     return colors[Math.abs(hash) % colors.length];
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[1000010] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
@@ -71,6 +81,7 @@ export default function TimelineListOfUsers({
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/95 shadow-2xl"
       >
+        <TutorialModeGuard onClose={onClose} />
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div className="flex items-center gap-3">
@@ -260,6 +271,7 @@ export default function TimelineListOfUsers({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

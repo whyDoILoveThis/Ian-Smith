@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Eye } from "lucide-react";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
 import TimelineNodePreviewModal from "./TimelineNodePreviewModal";
+import TutorialModeGuard from "./TutorialModeGuard";
 
 interface TimelineListOfTimelinesProps {
   timelines: Timeline[];
@@ -68,12 +70,18 @@ export default function TimelineListOfTimelines({
   onSelectRegularTimeline,
   onDiscardPreview,
 }: TimelineListOfTimelinesProps) {
+  const [mounted, setMounted] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newColor, setNewColor] = useState("#06b6d4");
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
   const [previewingTimeline, setPreviewingTimeline] = useState<Timeline | null>(
     null,
   );
@@ -126,7 +134,9 @@ export default function TimelineListOfTimelines({
 
   const canClose = timelines.length > 0;
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[1000010] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={canClose ? onClose : undefined}
@@ -135,6 +145,7 @@ export default function TimelineListOfTimelines({
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/95 shadow-2xl"
       >
+        <TutorialModeGuard onClose={onClose} />
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -444,6 +455,7 @@ export default function TimelineListOfTimelines({
           onClose={() => setPreviewingTimeline(null)}
         />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

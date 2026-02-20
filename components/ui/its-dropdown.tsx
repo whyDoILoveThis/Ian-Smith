@@ -35,6 +35,8 @@ export default function ItsDropdown({
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Don't close during tutorial mode
+      if (document.body.dataset.tutorialActive) return;
       if (ref.current && !ref.current.contains(event.target as Node)) {
         setOpen(false);
       }
@@ -46,6 +48,8 @@ export default function ItsDropdown({
   // Content click handler
   const handleContentClick = (e: React.MouseEvent) => {
     if (!closeWhenItemClick) return;
+    // Don't close during tutorial mode
+    if (document.body.dataset.tutorialActive) return;
 
     const target = e.target as HTMLElement | null;
     if (!target) return;

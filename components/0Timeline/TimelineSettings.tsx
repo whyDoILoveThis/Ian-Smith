@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
+import TutorialModeGuard from "./TutorialModeGuard";
 
 const TIMELINE_COLORS = [
   "#ef4444", // red
@@ -91,6 +92,7 @@ export default function TimelineSettings({
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-md bg-neutral-900 border border-neutral-700 rounded-xl p-5 shadow-2xl"
       >
+        <TutorialModeGuard onClose={onClose} />
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">

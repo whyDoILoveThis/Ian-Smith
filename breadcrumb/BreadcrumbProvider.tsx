@@ -67,6 +67,8 @@ interface BreadcrumbProviderProps {
   config?: Partial<BreadcrumbConfig>;
   /** React children — passed through untouched */
   children?: React.ReactNode;
+  /** When true the entire breadcrumb system is skipped — children render normally */
+  disabled?: boolean;
 }
 
 // ── Timing ───────────────────────────────────────────────────
@@ -83,6 +85,7 @@ const WHISPER_CYCLE_MS = 90_000; // rotate message every 90s after that
 export function BreadcrumbProvider({
   config = {},
   children,
+  disabled = false,
 }: BreadcrumbProviderProps) {
   const storeRef = useRef<SessionStore | null>(null);
   const latestContextRef = useRef<LLMContext | null>(null);
@@ -93,7 +96,7 @@ export function BreadcrumbProvider({
 
   useEffect(() => {
     // ── Guard: master kill switch ────────────────────────────
-    if (!mergedConfig.enabled) return;
+    if (disabled || !mergedConfig.enabled) return;
 
     // ── Initialize store ─────────────────────────────────────
     const store = new SessionStore(mergedConfig);
@@ -231,18 +234,18 @@ export function BreadcrumbProvider({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mergedConfig.enabled]);
+  }, [mergedConfig.enabled, disabled]);
 
   const contextValue: BreadcrumbContextValue = {
     getContext: () => latestContextRef.current,
     getStore: () => storeRef.current,
-    isActive: mergedConfig.enabled,
+    isActive: !disabled && mergedConfig.enabled,
   };
 
   return (
     <BreadcrumbContext.Provider value={contextValue}>
       {children}
-      {mergedConfig.enabled && (
+      {!disabled && mergedConfig.enabled && (
         <>
           <BreadcrumbWhisper message={whisperMessage} />
           <IntentProbe store={storeRef.current} />

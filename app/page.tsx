@@ -5,7 +5,7 @@ import Nav from "@/components/main/Nav";
 import Projects from "@/components/main/Projects";
 import Skills from "@/components/main/Skills";
 import ItsPopover from "@/components/sub/ItsPopover";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import BotBtn from "@/components/main/AI/BotBtn";
 import ConfettiCelebration from "@/components/main/ConfettiCelebration";
 import useRefreshOnReconnect from "@/hooks/useRefreshOnReconnect";
@@ -14,11 +14,16 @@ import PurpleParticleToggle from "@/components/main/PurpleParticleToggle";
 import BrainfTodo from "@/components/sub/BrainfTodo";
 import NetworkSpeedMini from "@/components/main/NetworkSpeedMini";
 import WaterSortShowcase from "@/components/main/WaterSortShowcase";
+import TimelineShowcase from "@/components/main/TimelineShowcase";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
 
   useRefreshOnReconnect();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   return (
     <article
@@ -35,6 +40,7 @@ export default function Home() {
       <Skills />
       <Projects />
       <WaterSortShowcase />
+      <TimelineShowcase />
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && (
         <ItsPopover

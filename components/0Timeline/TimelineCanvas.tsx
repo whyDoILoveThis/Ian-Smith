@@ -1,6 +1,6 @@
 // components/timeline/TimelineCanvas.tsx
 "use client";
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useCallback, useEffect } from "react";
 // Date math helpers are not needed here anymore
 import { MS_PER_DAY } from "./lib/constants";
 
@@ -89,12 +89,14 @@ export default function TimelineCanvas({
   scale,
   baseRangeDays,
   onTimelineClick,
+  onPan,
 }: {
   containerWidth: number;
   centerMs: number;
   scale: number;
   baseRangeDays: number;
   onTimelineClick: (e: React.MouseEvent) => void;
+  onPan?: (direction: "left" | "right") => void;
 }) {
   const ticks = useMemo(
     () => getTicks(centerMs, scale, baseRangeDays, containerWidth),
@@ -104,6 +106,43 @@ export default function TimelineCanvas({
     () => getLabels(centerMs, scale, baseRangeDays, containerWidth),
     [centerMs, scale, baseRangeDays, containerWidth],
   );
+
+  /* ── Arrow hold-to-scroll logic ── */
+  const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHold = useCallback(() => {
+    if (holdTimeoutRef.current) {
+      clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+    if (holdIntervalRef.current) {
+      clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
+    }
+  }, []);
+
+  // Clean up on unmount
+  useEffect(() => clearHold, [clearHold]);
+
+  const startHold = useCallback(
+    (dir: "left" | "right") => {
+      if (!onPan) return;
+      clearHold();
+      // Immediate first tick
+      onPan(dir);
+      // After a short delay, start repeating
+      holdTimeoutRef.current = setTimeout(() => {
+        holdIntervalRef.current = setInterval(() => onPan(dir), 50);
+      }, 300);
+    },
+    [onPan, clearHold],
+  );
+
+  const stopHold = useCallback(() => {
+    clearHold();
+  }, [clearHold]);
+
   return (
     <div className="absolute inset-0">
       {/* horizontal line */}
@@ -113,13 +152,39 @@ export default function TimelineCanvas({
         className="absolute cursor-pointer z-10 left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-gradient-to-r from-neutral-800 via-cyan-700/40 to-neutral-800"
       />
 
-      {/* arrows at ends */}
-      <div className="absolute z-20 left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center">
-        <div className="rotate-180 transform text-neutral-500">➤</div>
-      </div>
-      <div className="absolute z-20 right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center">
-        <div className="text-neutral-500">➤</div>
-      </div>
+      {/* arrows at ends — clickable with hold-to-scroll */}
+      <button
+        type="button"
+        aria-label="Scroll timeline left"
+        onMouseDown={() => startHold("left")}
+        onMouseUp={stopHold}
+        onMouseLeave={stopHold}
+        onTouchStart={() => startHold("left")}
+        onTouchEnd={stopHold}
+        className="absolute z-20 left-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center
+          rounded-full cursor-pointer select-none
+          text-neutral-500 hover:text-cyan-400 hover:bg-white/[0.06]
+          active:scale-90 active:text-cyan-300
+          transition-all duration-150"
+      >
+        <div className="rotate-180 transform text-sm">➤</div>
+      </button>
+      <button
+        type="button"
+        aria-label="Scroll timeline right"
+        onMouseDown={() => startHold("right")}
+        onMouseUp={stopHold}
+        onMouseLeave={stopHold}
+        onTouchStart={() => startHold("right")}
+        onTouchEnd={stopHold}
+        className="absolute z-20 right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center
+          rounded-full cursor-pointer select-none
+          text-neutral-500 hover:text-cyan-400 hover:bg-white/[0.06]
+          active:scale-90 active:text-cyan-300
+          transition-all duration-150"
+      >
+        <div className="text-sm">➤</div>
+      </button>
 
       {/* ticks */}
       {ticks.map((t, i) => (
