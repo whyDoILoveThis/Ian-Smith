@@ -8,6 +8,53 @@ import React, {
   useState,
 } from "react";
 
+// ── Text Reaction helpers ──────────────────────────────────────────
+// Key format:  txt_RRGGBB_<encoded text>
+// Firebase RTDB keys cannot contain . $ # [ ] /
+
+const FB_UNSAFE = /[.\$#\[\]\/\%]/g;
+
+function encodeForFirebaseKey(text: string): string {
+  return text.replace(FB_UNSAFE, (ch) => "%" + ch.charCodeAt(0).toString(16).padStart(2, "0").toUpperCase());
+}
+
+function decodeFromFirebaseKey(encoded: string): string {
+  return encoded.replace(/%([0-9A-Fa-f]{2})/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16)),
+  );
+}
+
+export function encodeTextReaction(text: string, hexColor: string): string {
+  const color = hexColor.replace("#", "");
+  return `txt_${color}_${encodeForFirebaseKey(text)}`;
+}
+
+export function decodeTextReaction(
+  key: string,
+): { text: string; color: string } | null {
+  if (!key.startsWith("txt_") || key.length < 12) return null;
+  const color = "#" + key.slice(4, 10);
+  const text = decodeFromFirebaseKey(key.slice(11));
+  return { color, text };
+}
+
+export function isTextReaction(key: string): boolean {
+  return key.startsWith("txt_") && key.length >= 12;
+}
+
+const TEXT_REACTION_COLORS = [
+  "#ef4444", // red
+  "#f97316", // orange
+  "#eab308", // yellow
+  "#22c55e", // green
+  "#06b6d4", // cyan
+  "#3b82f6", // blue
+  "#8b5cf6", // purple
+  "#ec4899", // pink
+  "#f43f5e", // rose
+  "#ffffff", // white
+];
+
 const QUICK_EMOJIS = [
   "❤️",
   "💘",
@@ -362,10 +409,15 @@ export function EmojiReactionPicker({
 }: EmojiReactionPickerProps) {
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [textReactionValue, setTextReactionValue] = useState("");
+  const [textReactionColor, setTextReactionColor] = useState(TEXT_REACTION_COLORS[0]);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerBtnRef = useRef<HTMLButtonElement>(null);
   const quickBarRef = useRef<HTMLDivElement>(null);
   const fullPickerRef = useRef<HTMLDivElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
+  const textPanelRef = useRef<HTMLDivElement>(null);
 
   // Nudge a popup element so it stays fully inside the viewport
   const clampToViewport = useCallback((el: HTMLDivElement | null) => {
@@ -395,10 +447,10 @@ export function EmojiReactionPicker({
   }, []);
 
   useLayoutEffect(() => {
-    if (showQuickBar && !showFullPicker) {
+    if (showQuickBar && !showFullPicker && !showTextInput) {
       clampToViewport(quickBarRef.current);
     }
-  }, [showQuickBar, showFullPicker, clampToViewport]);
+  }, [showQuickBar, showFullPicker, showTextInput, clampToViewport]);
 
   useLayoutEffect(() => {
     if (showFullPicker) {
@@ -406,9 +458,17 @@ export function EmojiReactionPicker({
     }
   }, [showFullPicker, clampToViewport]);
 
+  useLayoutEffect(() => {
+    if (showTextInput) {
+      clampToViewport(textPanelRef.current);
+      // Auto-focus the input
+      setTimeout(() => textInputRef.current?.focus(), 50);
+    }
+  }, [showTextInput, clampToViewport]);
+
   // Close on click outside
   useEffect(() => {
-    if (!showQuickBar && !showFullPicker) return;
+    if (!showQuickBar && !showFullPicker && !showTextInput) return;
     const handler = (e: MouseEvent | TouchEvent) => {
       if (
         containerRef.current &&
@@ -416,6 +476,7 @@ export function EmojiReactionPicker({
       ) {
         setShowQuickBar(false);
         setShowFullPicker(false);
+        setShowTextInput(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -424,7 +485,7 @@ export function EmojiReactionPicker({
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("touchstart", handler);
     };
-  }, [showQuickBar, showFullPicker]);
+  }, [showQuickBar, showFullPicker, showTextInput]);
 
   const handleEmojiClick = useCallback(
     (emoji: string) => {
@@ -435,17 +496,28 @@ export function EmojiReactionPicker({
     [messageId, onReact],
   );
 
+  const handleTextReactionSubmit = useCallback(() => {
+    const trimmed = textReactionValue.trim();
+    if (!trimmed) return;
+    const key = encodeTextReaction(trimmed, textReactionColor);
+    onReact(messageId, key);
+    setTextReactionValue("");
+    setShowTextInput(false);
+    setShowQuickBar(false);
+  }, [textReactionValue, textReactionColor, messageId, onReact]);
+
   const handleTriggerClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (showFullPicker) {
+      if (showFullPicker || showTextInput) {
         setShowFullPicker(false);
+        setShowTextInput(false);
         setShowQuickBar(false);
       } else {
         setShowQuickBar((prev) => !prev);
       }
     },
-    [showFullPicker],
+    [showFullPicker, showTextInput],
   );
 
   // Check if current user already reacted with an emoji
@@ -466,7 +538,7 @@ export function EmojiReactionPicker({
         onClick={handleTriggerClick}
         className={`pointer-events-auto absolute bottom-1.5 opacity-0 group-hover:opacity-100 transition-all duration-150 w-5 h-5 flex items-center justify-center rounded-full hover:bg-white/10 text-neutral-400/50 hover:text-neutral-300 hover:scale-110 ${
           isMine ? "left-1.5" : "right-1.5"
-        } ${showQuickBar || showFullPicker ? "!opacity-100 text-neutral-300" : ""}`}
+        } ${showQuickBar || showFullPicker || showTextInput ? "!opacity-100 text-neutral-300" : ""}`}
         title="React"
       >
         <svg
@@ -498,7 +570,7 @@ export function EmojiReactionPicker({
       </button>
 
       {/* Quick reaction bar */}
-      {showQuickBar && !showFullPicker && (
+      {showQuickBar && !showFullPicker && !showTextInput && (
         <div
           ref={quickBarRef}
           className={`pointer-events-auto absolute z-50 bottom-8 w-72 flex flex-wrap items-center gap-2 rounded-3xl bg-neutral-900/95 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg shadow-black/40 ${
@@ -521,6 +593,18 @@ export function EmojiReactionPicker({
               {emoji}
             </button>
           ))}
+          {/* T button to open text reaction input */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowTextInput(true);
+            }}
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
+            title="Text reaction"
+          >
+            <span className="text-xs font-bold leading-none" style={{ fontFamily: 'serif' }}>T</span>
+          </button>
           {/* Plus button to open full picker */}
           <button
             type="button"
@@ -541,6 +625,108 @@ export function EmojiReactionPicker({
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Text reaction input panel */}
+      {showTextInput && (
+        <div
+          ref={textPanelRef}
+          className={`pointer-events-auto absolute z-50 bottom-8 w-64 rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-xl shadow-black/50 ${
+            isMine ? "left-0" : "right-0"
+          }`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTextInput(false);
+              }}
+              className="text-xs text-neutral-400 hover:text-white transition-colors flex items-center gap-1"
+            >
+              <svg
+                className="w-3 h-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back
+            </button>
+            <span className="text-xs text-neutral-500">Text Reaction</span>
+          </div>
+
+          <div className="p-3 flex flex-col gap-3">
+            {/* Text input */}
+            <input
+              ref={textInputRef}
+              type="text"
+              maxLength={20}
+              value={textReactionValue}
+              onChange={(e) => setTextReactionValue(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") handleTextReactionSubmit();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              placeholder="Type something…"
+              className="w-full bg-white/8 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-neutral-500 outline-none focus:border-white/25 transition-colors"
+            />
+
+            {/* Color picker row */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {TEXT_REACTION_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTextReactionColor(color);
+                  }}
+                  className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${
+                    textReactionColor === color
+                      ? "border-white scale-110"
+                      : "border-transparent"
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+
+            {/* Preview + Send */}
+            <div className="flex items-center justify-between">
+              {/* Live preview pill */}
+              <div className="flex items-center gap-2">
+                {textReactionValue.trim() && (
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: textReactionColor + "30",
+                      color: textReactionColor,
+                      border: `1px solid ${textReactionColor}50`,
+                    }}
+                  >
+                    {textReactionValue.trim()}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={!textReactionValue.trim()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTextReactionSubmit();
+                }}
+                className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Send
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -621,10 +807,11 @@ export function EmojiReactionsDisplay({
 }) {
   // Collect all reactions with counts
   const reactionEntries = Object.entries(reactions)
-    .map(([emoji, users]) => {
+    .map(([key, users]) => {
       const count = (users["1"] ? 1 : 0) + (users["2"] ? 1 : 0);
       const iReacted = slotId ? !!users[slotId] : false;
-      return { emoji, count, iReacted };
+      const textData = isTextReaction(key) ? decodeTextReaction(key) : null;
+      return { key, count, iReacted, textData };
     })
     .filter((r) => r.count > 0);
 
@@ -632,26 +819,60 @@ export function EmojiReactionsDisplay({
 
   return (
     <div className="flex flex-wrap gap-1 mt-1 max-w-[85vw] sm:max-w-[75vw] min-w-0">
-      {reactionEntries.map(({ emoji, count, iReacted }) => (
-        <button
-          key={emoji}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onReact(messageId, emoji);
-          }}
-          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs transition-all duration-150 hover:scale-105 ${
-            iReacted
-              ? "bg-blue-500/25 border border-blue-400/40 text-white"
-              : "bg-white/8 border border-white/10 text-neutral-300 hover:bg-white/15"
-          }`}
-        >
-          <span className="emoji text-sm leading-none">{emoji}</span>
-          {count > 1 && (
-            <span className="text-[10px] leading-none opacity-80">{count}</span>
-          )}
-        </button>
-      ))}
+      {reactionEntries.map(({ key, count, iReacted, textData }) => {
+        // ── Text reaction pill ──
+        if (textData) {
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReact(messageId, key);
+              }}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all duration-150 hover:scale-105 border ${
+                iReacted ? "ring-1 ring-white/40" : ""
+              }`}
+              style={{
+                backgroundColor: textData.color + "30",
+                color: textData.color,
+                borderColor: textData.color + "50",
+              }}
+            >
+              <span className="leading-none">{textData.text}</span>
+              {count > 1 && (
+                <span className="text-[10px] leading-none opacity-80">
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        }
+
+        // ── Emoji reaction (original) ──
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReact(messageId, key);
+            }}
+            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs transition-all duration-150 hover:scale-105 ${
+              iReacted
+                ? "bg-blue-500/25 border border-blue-400/40 text-white"
+                : "bg-white/8 border border-white/10 text-neutral-300 hover:bg-white/15"
+            }`}
+          >
+            <span className="emoji text-sm leading-none">{key}</span>
+            {count > 1 && (
+              <span className="text-[10px] leading-none opacity-80">
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
