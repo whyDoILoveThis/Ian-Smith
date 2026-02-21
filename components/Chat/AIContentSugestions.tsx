@@ -128,7 +128,9 @@ export default function AIContentSugestions() {
       window.localStorage.getItem(DISGUISE_TIMEOUT_KEY + "_entered") || 0,
     );
     const storedCombo = window.localStorage.getItem(COMBO_STORAGE_KEY);
-    const storedPassphrase = window.localStorage.getItem(PASSPHRASE_STORAGE_KEY);
+    const storedPassphrase = window.localStorage.getItem(
+      PASSPHRASE_STORAGE_KEY,
+    );
     if (storedTimeout > 0 && enteredAt > 0 && storedCombo) {
       const elapsed = Date.now() - enteredAt;
       const timeoutMs = storedTimeout * 60 * 1000;

@@ -1256,8 +1256,8 @@ export function RoomSpotsView({
               Migrate Conversation
             </h3>
             <p className="text-xs text-neutral-400 text-center">
-              Enter the destination room combo and passphrase. All messages will be moved from
-              this room to the destination.
+              Enter the destination room combo and passphrase. All messages will
+              be moved from this room to the destination.
             </p>
             <div className="flex items-center justify-center gap-2">
               {([0, 1, 2, 3] as const).map((i) => (
@@ -1286,7 +1286,11 @@ export function RoomSpotsView({
               type="text"
               placeholder="Passphrase (optional — lowercase, no spaces)"
               value={migratePassphrase}
-              onChange={(e) => setMigratePassphrase(e.target.value.toLowerCase().replace(/[^a-z]/g, ""))}
+              onChange={(e) =>
+                setMigratePassphrase(
+                  e.target.value.toLowerCase().replace(/[^a-z]/g, ""),
+                )
+              }
               className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-center text-white placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
             />
             {migrateProgress && (
