@@ -364,8 +364,7 @@ export default function TimelineShowcase() {
         t2.clientY - t1.clientY,
       );
       pinchInitialScaleRef.current = scale;
-      pinchMidLocalXRef.current =
-        (t1.clientX + t2.clientX) / 2 - rect.left;
+      pinchMidLocalXRef.current = (t1.clientX + t2.clientX) / 2 - rect.left;
       isPinchingRef.current = true;
       return;
     }
@@ -380,15 +379,11 @@ export default function TimelineShowcase() {
       if (!rect) return;
       const t1 = e.touches[0],
         t2 = e.touches[1];
-      const dist = Math.hypot(
-        t2.clientX - t1.clientX,
-        t2.clientY - t1.clientY,
-      );
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       if (!isPinchingRef.current) {
         pinchInitialDistRef.current = dist;
         pinchInitialScaleRef.current = scale;
-        pinchMidLocalXRef.current =
-          (t1.clientX + t2.clientX) / 2 - rect.left;
+        pinchMidLocalXRef.current = (t1.clientX + t2.clientX) / 2 - rect.left;
         isPinchingRef.current = true;
       }
       const factor = dist / (pinchInitialDistRef.current || dist);
@@ -413,7 +408,7 @@ export default function TimelineShowcase() {
       if (e.touches.length < 2) isPinchingRef.current = false;
       return;
     }
-    panHandlers.onTouchEnd(e);
+    panHandlers.onTouchEnd();
   };
 
   /* -- Center helpers for header nav -- */
