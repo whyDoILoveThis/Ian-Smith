@@ -7,7 +7,13 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { COMBO_STORAGE_KEY, THEME_COLORS, comboToRoomPath } from "./constants";
+import {
+  COMBO_STORAGE_KEY,
+  PASSPHRASE_STORAGE_KEY,
+  SECRET_PHRASE,
+  THEME_COLORS,
+  comboToRoomPath,
+} from "./constants";
 
 const DISGUISE_TIMEOUT_KEY = "twoWayChatDisguiseTimeout";
 import {
@@ -45,10 +51,16 @@ export default function AIContentSugestions() {
   // Core state for app flow
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
-  const [isUnlocked, setIsUnlocked] = useState(false);
   const [combo, setCombo] = useState<[number, number, number, number] | null>(
     null,
   );
+  const [passphrase, setPassphrase] = useState<string | null>(null);
+
+  // isUnlocked gates all Firebase hooks.
+  // Only true when combo is set AND we're actually showing the chat, so
+  // we never accidentally load a legacy room while still on the disguise screen.
+  const isUnlocked = !!combo && showRealChat;
+
   const [activeTab, setActiveTab] = useState<"chat" | "room">("chat");
   const [isCallExpanded, setIsCallExpanded] = useState(true);
   const [isVideoRecorderOpen, setIsVideoRecorderOpen] = useState(false);
@@ -116,6 +128,7 @@ export default function AIContentSugestions() {
       window.localStorage.getItem(DISGUISE_TIMEOUT_KEY + "_entered") || 0,
     );
     const storedCombo = window.localStorage.getItem(COMBO_STORAGE_KEY);
+    const storedPassphrase = window.localStorage.getItem(PASSPHRASE_STORAGE_KEY);
     if (storedTimeout > 0 && enteredAt > 0 && storedCombo) {
       const elapsed = Date.now() - enteredAt;
       const timeoutMs = storedTimeout * 60 * 1000;
@@ -125,7 +138,7 @@ export default function AIContentSugestions() {
           const parsed = JSON.parse(storedCombo);
           if (Array.isArray(parsed) && parsed.length === 4) {
             setCombo(parsed as [number, number, number, number]);
-            setIsUnlocked(true);
+            if (storedPassphrase) setPassphrase(storedPassphrase);
             setShowRealChat(true);
           }
         } catch {
@@ -201,18 +214,34 @@ export default function AIContentSugestions() {
     };
   }, [showRealChat, disguiseTimeout]);
 
-  // Store combo locally (user-entered)
+  // Store combo + passphrase locally (user-entered)
   useEffect(() => {
     if (combo) {
       window.localStorage.setItem(COMBO_STORAGE_KEY, JSON.stringify(combo));
     }
   }, [combo]);
 
-  // AI Chat hook for disguise
-  const aiChat = useAIChat(combo, setShowRealChat);
+  useEffect(() => {
+    if (passphrase) {
+      window.localStorage.setItem(PASSPHRASE_STORAGE_KEY, passphrase);
+    } else {
+      window.localStorage.removeItem(PASSPHRASE_STORAGE_KEY);
+    }
+  }, [passphrase]);
 
-  // Compute the room path from the combo
-  const roomPath = useMemo(() => comboToRoomPath(combo), [combo]);
+  // When a passphrase is detected from the AI disguise input, store it
+  const handlePassphraseDetected = useCallback((phrase: string) => {
+    setPassphrase(phrase);
+  }, []);
+
+  // AI Chat hook for disguise
+  const aiChat = useAIChat(combo, setShowRealChat, handlePassphraseDetected);
+
+  // Compute the room path from the combo + passphrase
+  const roomPath = useMemo(
+    () => comboToRoomPath(combo, passphrase),
+    [combo, passphrase],
+  );
 
   // Lightweight slots subscription (no messages / decryption)
   const slots = useSlots(isUnlocked, roomPath);
@@ -614,7 +643,6 @@ export default function AIContentSugestions() {
       <LockBoxScreen
         onUnlock={(selectedCombo) => {
           setCombo(selectedCombo);
-          setIsUnlocked(true);
           setShowLockBox(false);
         }}
         onBack={() => setShowLockBox(false)}

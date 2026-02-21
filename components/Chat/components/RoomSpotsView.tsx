@@ -130,6 +130,7 @@ type RoomSpotsViewProps = {
   onMigrateConvo: (
     destCombo: [number, number, number, number],
     onProgress?: (migrated: number, total: number) => void,
+    destPassphrase?: string | null,
   ) => Promise<boolean>;
 };
 
@@ -211,6 +212,7 @@ export function RoomSpotsView({
   const [migrateCombo, setMigrateCombo] = useState<
     [string, string, string, string]
   >(["", "", "", ""]);
+  const [migratePassphrase, setMigratePassphrase] = useState("");
   const [migrateBusy, setMigrateBusy] = useState(false);
   const [migrateSuccess, setMigrateSuccess] = useState<string | null>(null);
   const [migrateProgress, setMigrateProgress] = useState<{
@@ -761,6 +763,7 @@ export function RoomSpotsView({
               type="button"
               onClick={() => {
                 setMigrateCombo(["", "", "", ""]);
+                setMigratePassphrase("");
                 setMigrateSuccess(null);
                 setShowMigrateModal(true);
               }}
@@ -1253,7 +1256,7 @@ export function RoomSpotsView({
               Migrate Conversation
             </h3>
             <p className="text-xs text-neutral-400 text-center">
-              Enter the destination room combo. All messages will be moved from
+              Enter the destination room combo and passphrase. All messages will be moved from
               this room to the destination.
             </p>
             <div className="flex items-center justify-center gap-2">
@@ -1279,6 +1282,13 @@ export function RoomSpotsView({
                 />
               ))}
             </div>
+            <input
+              type="text"
+              placeholder="Passphrase (optional — lowercase, no spaces)"
+              value={migratePassphrase}
+              onChange={(e) => setMigratePassphrase(e.target.value.toLowerCase().replace(/[^a-z]/g, ""))}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-center text-white placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+            />
             {migrateProgress && (
               <div className="space-y-1">
                 <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -1327,6 +1337,7 @@ export function RoomSpotsView({
                     destCombo,
                     (migrated, total) =>
                       setMigrateProgress({ migrated, total }),
+                    migratePassphrase || null,
                   );
                   if (ok) {
                     setMigrateSuccess("Messages migrated!");

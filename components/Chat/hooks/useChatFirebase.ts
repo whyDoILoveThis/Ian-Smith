@@ -54,6 +54,29 @@ export function useChatFirebase(
   // Structural digest — tracks message IDs + text to detect metadata-only updates
   const prevDigestRef = useRef("");
 
+  // Track the current roomPath in a ref so async work can detect stale rooms
+  const roomPathRef = useRef(roomPath);
+  roomPathRef.current = roomPath;
+
+  // Reset all room-specific state whenever the room path changes
+  // (e.g. same combo but different passphrase → different room)
+  useEffect(() => {
+    setMessages([]);
+    setRawMessages([]);
+    setSlots({});
+    setChatTheme("emerald");
+    setPresence({});
+    setLastSeen({});
+    setIndicatorColors({});
+    setIsOtherTyping(false);
+    setTttState(null);
+    olderMsgsRef.current.clear();
+    setHasMoreOnServer(true);
+    prevDigestRef.current = "";
+    prevDecryptedRef.current = new Map();
+    setConnectionError(null);
+  }, [roomPath]);
+
   // Derive encryption key from combo
   useEffect(() => {
     if (!isUnlocked || !combo) {
@@ -350,6 +373,8 @@ export function useChatFirebase(
 
   useEffect(() => {
     let cancelled = false;
+    // Capture the roomPath at effect start so we can detect stale writes
+    const effectRoomPath = roomPath;
 
     async function decryptIncremental() {
       const key = encryptionKeyRef.current;
@@ -362,7 +387,7 @@ export function useChatFirebase(
           ...msg,
           decryptedText: msg.text,
         }));
-        if (!cancelled) setMessages(result);
+        if (!cancelled && roomPathRef.current === effectRoomPath) setMessages(result);
         return;
       }
 
@@ -397,7 +422,7 @@ export function useChatFirebase(
 
       // Nothing to decrypt — publish immediately
       if (needsDecryption.length === 0) {
-        if (!cancelled) {
+        if (!cancelled && roomPathRef.current === effectRoomPath) {
           const newPrev = new Map<string, Message>();
           for (const msg of result) newPrev.set(msg.id, msg);
           prevDecryptedRef.current = newPrev;
@@ -414,7 +439,7 @@ export function useChatFirebase(
         : needsDecryption;
 
       for (let b = 0; b < processingOrder.length; b += BATCH_SIZE) {
-        if (cancelled) return;
+        if (cancelled || roomPathRef.current !== effectRoomPath) return;
         const batch = processingOrder.slice(b, b + BATCH_SIZE);
         const decryptedBatch = await Promise.all(
           batch.map(async ({ msg }) => {
@@ -437,7 +462,7 @@ export function useChatFirebase(
         // During initial load with many messages, push partial updates
         // so the user sees newest messages while older ones decrypt.
         if (isInitialLoad && b + BATCH_SIZE < processingOrder.length) {
-          if (!cancelled) {
+          if (!cancelled && roomPathRef.current === effectRoomPath) {
             const partial = result.map(
               (m, idx) =>
                 m ?? { ...rawMessages[idx], decryptedText: "\u2026" },
@@ -449,7 +474,7 @@ export function useChatFirebase(
         }
       }
 
-      if (cancelled) return;
+      if (cancelled || roomPathRef.current !== effectRoomPath) return;
 
       // Update the prev map for next run
       const newPrev = new Map<string, Message>();
@@ -468,7 +493,7 @@ export function useChatFirebase(
     // encryptionKey (state) is included so this re-runs once the
     // async key derivation completes — encryptionKeyRef alone is a stable
     // ref and would never retrigger this effect.
-  }, [rawMessages, encryptionKey, encryptionKeyRef]);
+  }, [rawMessages, encryptionKey, encryptionKeyRef, roomPath]);
 
   // Load older messages on-demand via a one-shot get().
   // Uses orderByKey + endBefore (push keys are chronological).

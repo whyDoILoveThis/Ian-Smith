@@ -3,21 +3,37 @@ import type { ChatTheme, ThemeColors } from "./types";
 export const ROOM_PATH = "twoWayChat";
 export const STORAGE_KEY = "twoWayChatSession";
 export const COMBO_STORAGE_KEY = "twoWayChatCombo";
+export const PASSPHRASE_STORAGE_KEY = "twoWayChatPassphrase";
 export const DERIVATION_SALT = "twoWayChatComboSalt:v1";
 export const SECRET_PHRASE = "takemetothemagicalplacenow";
 export const MESSAGES_PER_PAGE = 50;
 
-/** Convert a combo to a unique room path in Firebase RTDB.
- *  [1000,1000,1000,1000] → "twoWayChat" (legacy backward-compat)
- *  Any other combo → "twoWayChat_rooms/{a}-{b}-{c}-{d}"
+/** Convert a combo + optional passphrase to a unique room path in Firebase RTDB.
+ *
+ *  Legacy (passphrase is the original SECRET_PHRASE or omitted):
+ *    [1000,1000,1000,1000] → "twoWayChat"
+ *    Any other combo        → "twoWayChat_rooms/{a}-{b}-{c}-{d}"
+ *
+ *  Custom passphrase (anything else):
+ *    Any combo + custom phrase → "twoWayChat_rooms/{a}-{b}-{c}-{d}/{phrase}"
  */
 export function comboToRoomPath(
   combo: [number, number, number, number] | null,
+  passphrase?: string | null,
 ): string {
   if (!combo) return ROOM_PATH;
   const key = combo.join("-");
-  if (key === "1000-1000-1000-1000") return ROOM_PATH;
-  return `twoWayChat_rooms/${key}`;
+
+  // Legacy passphrase or no passphrase → original behaviour (DB paths unchanged)
+  const isLegacy = !passphrase || passphrase === SECRET_PHRASE;
+
+  if (isLegacy) {
+    if (key === "1000-1000-1000-1000") return ROOM_PATH;
+    return `twoWayChat_rooms/${key}`;
+  }
+
+  // Custom passphrase → its own isolated room
+  return `twoWayChat_rooms/${key}/${passphrase}`;
 }
 
 /** Get a per-room localStorage key for session persistence */

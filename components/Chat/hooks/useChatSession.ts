@@ -38,6 +38,10 @@ export function useChatSession(
   const [isImageConfirmOpen, setIsImageConfirmOpen] = useState(false);
 
   const restoreAttemptedRef = useRef(false);
+  // Track which storageKey the current restoreSession was loaded from.
+  // This prevents a stale restoreSession (loaded for room A) from being
+  // applied when the room switches to B in the same React render cycle.
+  const restoreSessionKeyRef = useRef<string | null>(null);
 
   const storageKey = roomStorageKey(roomPath);
 
@@ -50,6 +54,7 @@ export function useChatSession(
     restoreAttemptedRef.current = false;
     setSlotId(null);
     setRestoreSession(null);
+    restoreSessionKeyRef.current = null;
     setError(null);
 
     const raw = window.localStorage.getItem(storageKey);
@@ -59,6 +64,7 @@ export function useChatSession(
         if (parsed?.slotId && parsed?.name) {
           setScreenName(parsed.name);
           setRestoreSession(parsed);
+          restoreSessionKeyRef.current = storageKey;
         } else {
           setScreenName("");
         }
@@ -118,6 +124,8 @@ export function useChatSession(
   useEffect(() => {
     if (!restoreSession || slotId || restoreAttemptedRef.current === true || !isUnlocked)
       return;
+    // Guard: skip if restoreSession is stale (loaded for a different room)
+    if (restoreSessionKeyRef.current !== storageKey) return;
     const desiredSlot = restoreSession.slotId;
     const desiredName = restoreSession.name.trim();
     if (!desiredName) return;
@@ -332,9 +340,10 @@ export function useChatSession(
     async (
       destCombo: [number, number, number, number],
       onProgress?: (migrated: number, total: number) => void,
+      destPassphrase?: string | null,
     ): Promise<boolean> => {
       try {
-        const destRoomPath = comboToRoomPath(destCombo);
+        const destRoomPath = comboToRoomPath(destCombo, destPassphrase);
         if (destRoomPath === roomPath) {
           setError("Destination room is the same as the current room.");
           return false;
