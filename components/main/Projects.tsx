@@ -35,9 +35,10 @@ const Projects = () => {
     <div>
       {" "}
       <article>
-        <h2 className="text-center text-3xl md:text-4xl font-extrabold mt-24 tracking-tight text-neutral-900 dark:text-neutral-100">
+        <h2 className="text-center text-4xl md:text-5xl font-extrabold mt-24 mb-4 tracking-tight bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent">
           My Projects
         </h2>
+        <div className="h-1 w-24 bg-gradient-to-r from-indigo-500 via-blue-500 to-transparent rounded-full mx-auto mb-12" />
 
         {projects.map((project, index) => (
           <ProjectCard

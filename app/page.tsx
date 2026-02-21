@@ -35,26 +35,22 @@ export default function Home() {
       <div className="w-full col-flex items-center mb-6">
         <Header />
       </div>
-      <div className="w-full px-4">
+      <Skills />
+      <div className="w-full mt-10 px-4">
         <ConfettiCelebration />
       </div>
-      <Skills />
       <Projects />
-      <WaterSortShowcase />
-      <TimelineShowcase />
-      <ItsQuizMeShowcase />
+      <>
+        <h2 className="text-center text-4xl md:text-5xl font-extrabold mt-24 mb-4 tracking-tight bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent">
+          Most Recent Projects
+        </h2>
+        <div className="h-1 w-24 bg-gradient-to-r from-indigo-500 via-blue-500 to-transparent rounded-full mb-20 mx-auto" />
+        <WaterSortShowcase />
+        <TimelineShowcase />
+        <ItsQuizMeShowcase />
+      </>
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
-      {showBot && (
-        <ItsPopover
-          closeWhenClicked={false}
-          show={showBot}
-          setShow={setShowBot}
-        >
-          <div className="w-full pr-4 h-full">
-            <ItsBot show={showBot} setShow={setShowBot} />
-          </div>
-        </ItsPopover>
-      )}
+      {showBot && <ItsBot show={showBot} setShow={setShowBot} />}
       <Footer />
     </article>
   );

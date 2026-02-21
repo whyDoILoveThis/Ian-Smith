@@ -7,9 +7,24 @@ import { useSkills } from "@/hooks/useSkills";
 /* ------------------------------------------------------------------ */
 /*  Sparkle burst                                                     */
 /* ------------------------------------------------------------------ */
-type Sparkle = { id: number; x: number; y: number; angle: number; dist: number; size: number; color: string };
+type Sparkle = {
+  id: number;
+  x: number;
+  y: number;
+  angle: number;
+  dist: number;
+  size: number;
+  color: string;
+};
 
-const SPARKLE_COLORS = ["#a855f7", "#c084fc", "#06b6d4", "#f0abfc", "#facc15", "#ffffff"];
+const SPARKLE_COLORS = [
+  "#a855f7",
+  "#c084fc",
+  "#06b6d4",
+  "#f0abfc",
+  "#facc15",
+  "#ffffff",
+];
 
 const SparkleParticle = ({ s }: { s: Sparkle }) => (
   <motion.span
@@ -62,7 +77,8 @@ const SkillCard = ({ skill, index }: { skill: Skill; index: number }) => {
           angle: Math.random() * Math.PI * 2,
           dist: 18 + Math.random() * 28,
           size: 3 + Math.random() * 4,
-          color: SPARKLE_COLORS[Math.floor(Math.random() * SPARKLE_COLORS.length)],
+          color:
+            SPARKLE_COLORS[Math.floor(Math.random() * SPARKLE_COLORS.length)],
         };
       });
       setSparkles((prev) => [...prev, ...newSparkles]);
@@ -111,8 +127,10 @@ const SkillCard = ({ skill, index }: { skill: Skill; index: number }) => {
         ))}
       </AnimatePresence>
       {/* hover glow */}
-      <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300
-        bg-gradient-to-br from-purple-400/10 via-transparent to-cyan-400/10 dark:from-purple-400/15 dark:to-cyan-400/15" />
+      <div
+        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300
+        bg-gradient-to-br from-purple-400/10 via-transparent to-cyan-400/10 dark:from-purple-400/15 dark:to-cyan-400/15"
+      />
       <motion.div animate={iconControls} style={{ perspective: 600 }}>
         <Image
           src={skill.url}
@@ -122,8 +140,10 @@ const SkillCard = ({ skill, index }: { skill: Skill; index: number }) => {
           className="relative z-10 drop-shadow-sm transition-transform duration-300 group-hover:scale-110"
         />
       </motion.div>
-      <span className="relative z-10 text-[13px] font-medium text-neutral-600 dark:text-neutral-300
-        transition-colors duration-300 group-hover:text-neutral-900 dark:group-hover:text-white whitespace-nowrap">
+      <span
+        className="relative z-10 text-[13px] font-medium text-neutral-600 dark:text-neutral-300
+        transition-colors duration-300 group-hover:text-neutral-900 dark:group-hover:text-white whitespace-nowrap"
+      >
         {skill.text}
       </span>
     </motion.li>
@@ -139,18 +159,23 @@ const Skills = () => {
   if (!skills || skills.length === 0) return null;
 
   return (
-    <article className="relative flex flex-col items-center w-full mt-12 mb-4">
-      {/* Section Title */}
+    <article className="relative flex flex-col items-center w-full mt-20 mb-4">
       <motion.h2
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: "-40px" }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="text-center text-3xl md:text-4xl font-extrabold mb-8 tracking-tight
-          text-white"
+        className="text-center text-4xl md:text-5xl font-extrabold mb-4 tracking-tight bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent"
       >
         My Skills
       </motion.h2>
+      <motion.div
+        initial={{ scaleX: 0 }}
+        whileInView={{ scaleX: 1 }}
+        viewport={{ once: true, margin: "-40px" }}
+        transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+        className="h-1 w-24 bg-gradient-to-r from-indigo-500 via-blue-500 to-transparent rounded-full mb-8 origin-center"
+      />
 
       {/* Skills Grid */}
       <ul className="flex flex-wrap justify-center gap-3 w-full max-w-3xl px-4">

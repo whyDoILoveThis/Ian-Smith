@@ -132,23 +132,25 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
   return (
     <>
       <div
-        className="fixed bottom-2 right-2 flex items-center gap-2 z-50"
+        className="fixed bottom-4 right-4 flex items-center gap-3 z-50"
         onMouseEnter={handleHover}
         onMouseLeave={handleHoverLeave}
       >
         {(toastDisabled || disableHints) && (
           <ItsDropdown
             closeWhenItemClick
-            className=" w-[150px] translate-y-2 !bg-white/20 backdrop-blur-md"
+            className=" w-[150px] translate-y-2 !bg-[#151525]/95 !backdrop-blur-2xl !border-white/10"
             position="up-right"
             trigger={
-              <button className={`w-full text-gray-400 hover:text-white`}>
+              <button
+                className={`text-white/30 hover:text-white/60 transition-colors`}
+              >
                 <Settings size={14} />
               </button>
             }
           >
             <button
-              className=" z-50 hover:bg-white/20 rounded-lg !w-full"
+              className=" z-50 hover:bg-white/10 rounded-lg !w-full text-sm"
               onClick={() => saveDisableHints(!disableHints)}
               aria-label="Toggle hints"
             >
@@ -158,22 +160,22 @@ export default function BotBtn({ showBot, setShowBot }: Props) {
         )}
         <button
           onClick={() => setShowBot(!showBot)}
-          className={`h-12 backdrop-blur-md rounded-full overflow-hidden flex items-center justify-center border border-opacity-50 border-white text-white bg-[#0080ffeb]
+          className={`h-14 rounded-full border border-white overflow-hidden flex items-center justify-center text-white bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-indigo-500/25 fab-glow
     transition-all duration-500 ease-in-out
     ${
       showHint && !disableHints
-        ? "max-w-[24rem] px-4 animate-bounce-small"
-        : "w-12 max-w-12 px-0"
+        ? "max-w-[24rem] px-5 animate-bounce-small"
+        : "w-14 max-w-14 px-0"
     }`}
         >
-          <BsRobot size={30} />
+          <BsRobot size={26} />
 
           {!disableHints && (
             <span
-              className={`text-sm font-semibold overflow-hidden transition-all duration-500 ease-in-out
+              className={`text-sm font-medium overflow-hidden transition-all duration-500 ease-in-out
         ${
           showHint
-            ? "pl-2 max-w-[20rem] opacity-100 translate-x-0"
+            ? "pl-3 max-w-[20rem] opacity-100 translate-x-0"
             : "max-w-0 pl-0 opacity-0 -translate-x-2"
         }`}
             >

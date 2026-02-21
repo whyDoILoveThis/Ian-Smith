@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import styles from "../../styles/ProjectCard.module.css";
-import chevron from "../../images/icon--chevron.png";
+
 import { useEffect, useRef, useState } from "react";
 import { MdModeEditOutline } from "react-icons/md";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
@@ -257,19 +257,19 @@ const ProjectCard = ({
 
           <div className={`${styles.projectCMSBtnsWrap} `}>
             {showEdit ? (
-              <h2 className="font-bold text-2xl text-orange-400">
+              <h2 className="font-semibold text-xl tracking-tight text-orange-400">
                 🚧Editing🚧
               </h2>
             ) : (
               <div className="flex gap-2 items-center">
                 <button
-                  className="btn btn-red font-bold text-red-600 text-outline"
+                  className="btn btn-red font-semibold text-red-400 text-outline text-sm tracking-wide"
                   onClick={() => setShowDeletePop(true)}
                 >
                   ❌ Delete
                 </button>
                 <button
-                  className="btn flex items-center gap-1 text-slate-300 font-bold text-outline"
+                  className="btn flex items-center gap-1.5 text-slate-300 font-medium text-sm tracking-wide text-outline"
                   onClick={() => {
                     setShowEdit(!showEdit);
                   }}
@@ -312,8 +312,9 @@ const ProjectCard = ({
                       );
                     }}
                     className={[styles.btnArrow, styles.btnLeft].join(" ")}
+                    title="Previous image"
                   >
-                    <Image src={chevron} alt="left" />
+                    ‹
                   </button>
                   <button
                     onClick={() => {
@@ -322,8 +323,9 @@ const ProjectCard = ({
                       );
                     }}
                     className={[styles.btnArrow, styles.btnRight].join(" ")}
+                    title="Next image"
                   >
-                    <Image src={chevron} alt="right" />
+                    ›
                   </button>
                 </span>
               )}
@@ -389,25 +391,25 @@ const ProjectCard = ({
               <input
                 value={editedProject.title}
                 onChange={(e) => handleInputChange("title", e.target.value)}
-                className={`${styles.name} w-full bg-black bg-opacity-10 focus:outline-none border border-white border-opacity-50 rounded-md p-1 px-4`}
+                className={`${styles.name} w-full bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/20 border border-white/10 rounded-lg p-1.5 px-4 text-white placeholder:text-white/30 transition-colors`}
               />
               <textarea
                 value={editedProject.description}
                 onChange={(e) =>
                   handleInputChange("description", e.target.value)
                 }
-                className={`${styles.description} bg-black bg-opacity-10 focus:outline-none border border-white border-opacity-50 rounded-md p-1 px-4`}
+                className={`${styles.description} bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/20 border border-white/10 rounded-lg p-1.5 px-4 text-white/80 placeholder:text-white/30 transition-colors`}
               />
               <input
                 value={demoUrl || " https://"}
                 onChange={(e) => handleUrlChange(e, setDemoUrl)}
                 placeholder="Demo URL"
-                className={`bg-black bg-opacity-10 focus:outline-none border border-white border-opacity-50 rounded-md p-1 px-4`}
+                className={`bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/20 border border-white/10 rounded-lg p-1.5 px-4 text-white/80 placeholder:text-white/30 transition-colors`}
               />
               <textarea
                 value={editedProject.moreInfo}
                 onChange={(e) => handleInputChange("moreInfo", e.target.value)}
-                className={`${styles.moreInfo} h-[200px] min-h-24 w-full bg-black bg-opacity-10 focus:outline-none border border-white border-opacity-50 rounded-md p-1 px-4`}
+                className={`${styles.moreInfo} h-[200px] min-h-24 w-full bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/20 border border-white/10 rounded-lg p-1.5 px-4 text-white/70 placeholder:text-white/30 transition-colors`}
               />
             </>
           ) : (
@@ -500,11 +502,13 @@ const ProjectCard = ({
         </ul>
       </div>
       {showEdit && (
-        <div className="flex flex-wrap max-w-[75%] gap-2 p-2 mx-8 bg-white bg-opacity-5 rounded-t-none rounded-2xl ">
-          <h2 className="w-full text-center font-bold text-lg">Select Stack</h2>
+        <div className="flex flex-wrap max-w-[75%] gap-2 p-3 mx-8 bg-white/[0.03] backdrop-blur-sm border border-white/[0.08] rounded-t-none rounded-2xl">
+          <h2 className="w-full text-center font-semibold text-base tracking-tight text-white/80">
+            Select Stack
+          </h2>
           {skills.map((skill) => (
             <div
-              className="flex gap-2 border rounded-full w-fit p-2 px-4"
+              className="flex gap-2 border border-white/10 rounded-full w-fit p-2 px-4 hover:border-white/20 transition-colors"
               key={skill.id}
             >
               <ItsCheckbox
@@ -529,38 +533,28 @@ const ProjectCard = ({
         </div>
       )}
       {isFullscreen && (
-        <div className="fixed backdrop-blur-md inset-0 zz-top-plus3 flex items-center justify-center bg-black bg-opacity-80">
+        <div className="fixed backdrop-blur-xl inset-0 zz-top-plus3 flex items-center justify-center bg-black/85">
           {showFullscreenControls && (
             <div className="zz-top-plus-4">
               <button
-                className="absolute top-20 right-4 text-2xl btn btn-round btn-red !bg-red-500 !bg-opacity-60 backdrop-blur-sm"
+                className="absolute top-20 right-4 text-2xl btn btn-round btn-red !bg-red-500/60 backdrop-blur-sm hover:!bg-red-500/80 transition-colors"
                 onClick={() => setIsFullscreen(false)}
               >
                 ✖
               </button>
               <button
-                className="absolute left-4 text-white text-2xl btn btn-round !bg-black/40"
+                className="absolute left-4 text-white text-2xl btn btn-round !bg-black/40 hover:!bg-black/60 transition-colors"
                 onClick={() => prevScreenshot(project.screenshots)}
+                title="Previous image"
               >
-                <Image
-                  className="rotate-90 -translate-x-0.5"
-                  width={25}
-                  height={25}
-                  src={chevron}
-                  alt="left"
-                />
+                ‹
               </button>
               <button
-                className="absolute right-4 text-white text-2xl btn btn-round !bg-black/40"
+                className="absolute right-4 text-white text-2xl btn btn-round !bg-black/40 hover:!bg-black/60 transition-colors"
                 onClick={() => nextScreenshot(project.screenshots)}
+                title="Next image"
               >
-                <Image
-                  className="-rotate-90 translate-x-0.5"
-                  width={25}
-                  height={25}
-                  src={chevron}
-                  alt="right"
-                />
+                ›
               </button>
             </div>
           )}

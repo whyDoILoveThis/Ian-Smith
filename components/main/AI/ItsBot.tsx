@@ -20,6 +20,7 @@ export default function ItsBot({ show, setShow }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
 
   const localKey = (fp?: string) => `portfolioBotConversations:${fp ?? "anon"}`;
@@ -40,8 +41,8 @@ export default function ItsBot({ show, setShow }: Props) {
     const id = uuidv4();
     const title =
       typeof indexBasedTitle === "number"
-        ? `Conversation ${indexBasedTitle}`
-        : `Conversation ${conversations.length + 1 || 1}`;
+        ? `Convo ${indexBasedTitle}`
+        : `Convo ${conversations.length + 1 || 1}`;
     return {
       id,
       title,
@@ -162,7 +163,7 @@ export default function ItsBot({ show, setShow }: Props) {
       // if an empty conversation already exists, reuse it (prevent duplicates)
       if (prev.some((c) => c.messages.length === 0)) return prev;
 
-      const newConv = makeNewConv(fingerprintId ?? undefined, 1);
+      const newConv = makeNewConv(fingerprintId ?? undefined, prev.length + 1);
       setActiveId(newConv.id);
 
       return [newConv, ...prev];
@@ -268,7 +269,11 @@ export default function ItsBot({ show, setShow }: Props) {
 
   // render
   return (
-    <div className="flex flex-col md:flex-row w-full max-w-5xl h-full border rounded-lg rounded-b-none overflow-hidden shadow-lg bg-white dark:bg-gray-900 transition-colors">
+    <div className="chatbot-backdrop fixed inset-0 flex flex-col md:flex-row w-full h-full overflow-hidden text-white z-[1000]">
+      {/* Ambient glow accents */}
+      <div className="pointer-events-none absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/[0.07] rounded-full blur-[120px]" />
+      <div className="pointer-events-none absolute bottom-0 right-1/4 w-80 h-80 bg-blue-500/[0.05] rounded-full blur-[100px]" />
+
       <Sidebar
         conversations={conversations}
         activeId={activeId}
@@ -282,6 +287,7 @@ export default function ItsBot({ show, setShow }: Props) {
         handleClearAll={handleClearAll}
         setShow={setShow}
       />
+      <div className="glass-separator hidden md:block" />
       <MobileSidebar
         conversations={conversations}
         activeId={activeId}
@@ -294,6 +300,8 @@ export default function ItsBot({ show, setShow }: Props) {
         handleDeleteConversation={handleDeleteConversation}
         handleClearAll={handleClearAll}
         setShow={setShow}
+        menuOpen={mobileMenuOpen}
+        setMenuOpen={setMobileMenuOpen}
       />
       <ChatArea
         activeConversation={
@@ -303,6 +311,8 @@ export default function ItsBot({ show, setShow }: Props) {
         setInput={setInput}
         handleSend={handleSend}
         loading={loading}
+        setShow={setShow}
+        mobileMenuOpen={mobileMenuOpen}
       />
     </div>
   );

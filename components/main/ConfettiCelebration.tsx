@@ -102,7 +102,7 @@ const ConfettiCelebration: React.FC = () => {
   return (
     <article className="w-full flex justify-center">
       <div className="flex flex-col w-full max-w-[800px] items-center gap-4 p-6 rounded-xl bg-white/10 border border-white/20">
-        <div className="flex flex-col items-center justify-center">
+        <div className="flex flex-col justify-center">
           <ItsConfettiCannon />
           <span className="italic dark:text-slate-400">
             **Click to throw some confetti!!**
