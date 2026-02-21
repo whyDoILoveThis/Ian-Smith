@@ -15,7 +15,10 @@ import React, {
 const FB_UNSAFE = /[.\$#\[\]\/\%]/g;
 
 function encodeForFirebaseKey(text: string): string {
-  return text.replace(FB_UNSAFE, (ch) => "%" + ch.charCodeAt(0).toString(16).padStart(2, "0").toUpperCase());
+  return text.replace(
+    FB_UNSAFE,
+    (ch) => "%" + ch.charCodeAt(0).toString(16).padStart(2, "0").toUpperCase(),
+  );
 }
 
 function decodeFromFirebaseKey(encoded: string): string {
@@ -411,7 +414,9 @@ export function EmojiReactionPicker({
   const [showFullPicker, setShowFullPicker] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [textReactionValue, setTextReactionValue] = useState("");
-  const [textReactionColor, setTextReactionColor] = useState(TEXT_REACTION_COLORS[0]);
+  const [textReactionColor, setTextReactionColor] = useState(
+    TEXT_REACTION_COLORS[0],
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerBtnRef = useRef<HTMLButtonElement>(null);
   const quickBarRef = useRef<HTMLDivElement>(null);
@@ -603,7 +608,12 @@ export function EmojiReactionPicker({
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
             title="Text reaction"
           >
-            <span className="text-xs font-bold leading-none" style={{ fontFamily: 'serif' }}>T</span>
+            <span
+              className="text-xs font-bold leading-none"
+              style={{ fontFamily: "serif" }}
+            >
+              T
+            </span>
           </button>
           {/* Plus button to open full picker */}
           <button
