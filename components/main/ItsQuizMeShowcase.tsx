@@ -174,20 +174,26 @@ export default function ItsQuizMeShowcase() {
             topic,
             questionCount: 5,
             questionTypes: { trueFalse: 20, multipleChoice: 80, typed: 0 },
-            aiSettings: { style: "knowledge", difficulty: "medium", creativity: 50 },
+            aiSettings: {
+              style: "knowledge",
+              difficulty: "medium",
+              creativity: 50,
+            },
           },
         }),
       });
       const data = await res.json();
       if (data.quiz?.questions?.length) {
         // Ensure every question has an options array (typed questions may not)
-        const qs: DemoQuestion[] = data.quiz.questions.map((q: any, i: number) => ({
-          id: q.id ?? i + 1,
-          type: q.type ?? "multiple-choice",
-          question: q.question,
-          options: q.options ?? [],
-          correctAnswer: q.correctAnswer,
-        }));
+        const qs: DemoQuestion[] = data.quiz.questions.map(
+          (q: any, i: number) => ({
+            id: q.id ?? i + 1,
+            type: q.type ?? "multiple-choice",
+            question: q.question,
+            options: q.options ?? [],
+            correctAnswer: q.correctAnswer,
+          }),
+        );
         setQuestions(qs);
       }
     } catch {
@@ -828,13 +834,13 @@ export default function ItsQuizMeShowcase() {
                     </div>
 
                     {/* Review all questions */}
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-4">
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:p-4 md:p-6 mb-4 overflow-hidden">
                       <h4 className="text-sm font-semibold text-white/60 mb-4 flex items-center gap-2">
                         <span className="w-1 h-4 rounded-full bg-gradient-to-b from-purple-500 to-blue-500" />
                         Review Your Answers
                       </h4>
 
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {questions.map((dq, idx) => {
                           const userAnswer = answers[idx] ?? null;
                           const isCorrect = userAnswer === dq.correctAnswer;
@@ -845,14 +851,14 @@ export default function ItsQuizMeShowcase() {
                               initial={{ opacity: 0, y: 8 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.15 + idx * 0.08 }}
-                              className={`p-3.5 rounded-xl border-2 transition-all ${
+                              className={`p-4 sm:p-5 rounded-xl border-2 transition-all ${
                                 isCorrect
                                   ? "border-emerald-500/30 bg-emerald-500/5"
                                   : "border-red-500/30 bg-red-500/5"
                               }`}
                             >
-                              <div className="flex items-start gap-3">
-                                {/* Status icon */}
+                              {/* Question header row - icon + label inline */}
+                              <div className="flex items-center gap-2.5 mb-3">
                                 <div
                                   className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md ${
                                     isCorrect
@@ -866,83 +872,81 @@ export default function ItsQuizMeShowcase() {
                                     <XCircle className="w-4 h-4 text-white" />
                                   )}
                                 </div>
+                                <span className="text-[10px] font-medium text-white/30 uppercase tracking-wider">
+                                  Question {idx + 1}
+                                </span>
+                              </div>
 
-                                <div className="flex-1 min-w-0">
-                                  {/* Question label */}
-                                  <span className="text-[10px] font-medium text-white/30 uppercase tracking-wider">
-                                    Question {idx + 1}
-                                  </span>
-                                  <p className="text-sm font-semibold text-white/80 mt-0.5 mb-3 leading-relaxed">
-                                    {dq.question}
-                                  </p>
+                              {/* Question text - full width */}
+                              <p className="text-sm font-semibold text-white/80 mb-4 leading-relaxed">
+                                {dq.question}
+                              </p>
 
-                                  {/* Options review */}
-                                  <div className="space-y-1.5">
-                                    {dq.options.map((option, optIdx) => {
-                                      const isSelected = userAnswer === option;
-                                      const isCorrectOption =
-                                        dq.correctAnswer === option;
-                                      const isWrongSelection =
-                                        isSelected && !isCorrectOption;
+                              {/* Options review - full width */}
+                              <div className="space-y-2">
+                                {dq.options.map((option, optIdx) => {
+                                  const isSelected = userAnswer === option;
+                                  const isCorrectOption =
+                                    dq.correctAnswer === option;
+                                  const isWrongSelection =
+                                    isSelected && !isCorrectOption;
 
-                                      return (
-                                        <div
-                                          key={optIdx}
-                                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all ${
+                                  return (
+                                    <div
+                                      key={optIdx}
+                                      className={`flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                                        isCorrectOption
+                                          ? "border-emerald-500/40 bg-emerald-500/10"
+                                          : isWrongSelection
+                                            ? "border-red-500/40 bg-red-500/10"
+                                            : "border-white/5 bg-white/[0.02]"
+                                      }`}
+                                    >
+                                      <span
+                                        className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                                          isCorrectOption
+                                            ? "bg-emerald-500 text-white"
+                                            : isWrongSelection
+                                              ? "bg-red-500 text-white"
+                                              : "bg-white/5 text-white/30"
+                                        }`}
+                                      >
+                                        {String.fromCharCode(65 + optIdx)}
+                                      </span>
+                                      <span
+                                        className={`flex-1 text-sm ${
+                                          isCorrectOption
+                                            ? "text-emerald-300 font-medium"
+                                            : isWrongSelection
+                                              ? "text-red-300"
+                                              : "text-white/50"
+                                        }`}
+                                      >
+                                        {option}
+                                      </span>
+                                      {isSelected && (
+                                        <span
+                                          className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${
                                             isCorrectOption
-                                              ? "border-emerald-500/40 bg-emerald-500/10"
-                                              : isWrongSelection
-                                                ? "border-red-500/40 bg-red-500/10"
-                                                : "border-white/5 bg-white/[0.02]"
+                                              ? "bg-emerald-500/20 text-emerald-300"
+                                              : "bg-red-500/20 text-red-300"
                                           }`}
                                         >
-                                          <span
-                                            className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                                              isCorrectOption
-                                                ? "bg-emerald-500 text-white"
-                                                : isWrongSelection
-                                                  ? "bg-red-500 text-white"
-                                                  : "bg-white/5 text-white/30"
-                                            }`}
-                                          >
-                                            {String.fromCharCode(65 + optIdx)}
-                                          </span>
-                                          <span
-                                            className={`flex-1 text-xs ${
-                                              isCorrectOption
-                                                ? "text-emerald-300 font-medium"
-                                                : isWrongSelection
-                                                  ? "text-red-300"
-                                                  : "text-white/50"
-                                            }`}
-                                          >
-                                            {option}
-                                          </span>
-                                          {isSelected && (
-                                            <span
-                                              className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${
-                                                isCorrectOption
-                                                  ? "bg-emerald-500/20 text-emerald-300"
-                                                  : "bg-red-500/20 text-red-300"
-                                              }`}
-                                            >
-                                              Your response
-                                            </span>
-                                          )}
-                                          {isCorrectOption && !isSelected && (
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                                          )}
-                                          {isCorrectOption && isSelected && (
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                                          )}
-                                          {isWrongSelection && (
-                                            <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
+                                          Your response
+                                        </span>
+                                      )}
+                                      {isCorrectOption && !isSelected && (
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                                      )}
+                                      {isCorrectOption && isSelected && (
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                                      )}
+                                      {isWrongSelection && (
+                                        <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </motion.div>
                           );

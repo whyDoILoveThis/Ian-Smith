@@ -171,9 +171,13 @@ export default function QuizReview({
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 border border-violet-500/30 mb-6">
                 <Brain className="w-5 h-5 text-violet-500" />
                 <span className="text-lg font-semibold text-violet-600 dark:text-violet-400">
-                  {result.percentage >= 70 ? "Strong Indicators" : 
-                   result.percentage >= 50 ? "Moderate Indicators" : 
-                   result.percentage >= 30 ? "Some Indicators" : "Few Indicators"}
+                  {result.percentage >= 70
+                    ? "Strong Indicators"
+                    : result.percentage >= 50
+                      ? "Moderate Indicators"
+                      : result.percentage >= 30
+                        ? "Some Indicators"
+                        : "Few Indicators"}
                 </span>
               </div>
 
@@ -182,9 +186,13 @@ export default function QuizReview({
                 <div className="text-left mt-2 p-5 rounded-xl bg-gradient-to-br from-violet-50/50 to-purple-50/50 dark:from-violet-950/30 dark:to-purple-950/30 border border-violet-200/50 dark:border-violet-800/30">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="w-5 h-5 text-violet-500" />
-                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">Your Results Summary</span>
+                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+                      Your Results Summary
+                    </span>
                   </div>
-                  <p className="text-foreground/80 leading-relaxed">{result.summary}</p>
+                  <p className="text-foreground/80 leading-relaxed">
+                    {result.summary}
+                  </p>
                 </div>
               )}
             </>
@@ -313,10 +321,10 @@ export default function QuizReview({
                       : "border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
                 }`}
               >
-                <div className="flex items-start gap-4">
-                  {/* Status Icon */}
+                {/* Question header row - icon + label inline */}
+                <div className="flex items-center gap-3 mb-3">
                   <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md ${
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md ${
                       isSelfAssessment
                         ? "bg-gradient-to-br from-violet-400 to-purple-600 shadow-violet-500/30"
                         : item.isCorrect
@@ -332,44 +340,45 @@ export default function QuizReview({
                       <XCircle className="w-5 h-5 text-white" />
                     )}
                   </div>
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Question {index + 1}
+                  </span>
+                </div>
 
-                  <div className="flex-1 min-w-0">
-                    {/* Question Number */}
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Question {index + 1}
-                    </span>
+                {/* Question text - full width */}
+                <p className="font-semibold text-foreground/90 mb-4 leading-relaxed">
+                  {item.question}
+                </p>
 
-                    {/* Question Text */}
-                    <p className="font-semibold text-foreground/90 mt-1 mb-4 leading-relaxed">
-                      {item.question}
-                    </p>
+                <div className="min-w-0">
+                  {/* Answers */}
+                  <div className="space-y-2 text-sm mb-4">
+                    {/* Show all options for multiple choice / true-false */}
+                    {item.options && item.options.length > 0 ? (
+                      <div className="space-y-2">
+                        {item.options.map((option, optIndex) => {
+                          const isSelected = item.userAnswer === option;
+                          const isCorrectOption = item.correctAnswer === option;
+                          const isWrongSelection =
+                            isSelected && !isCorrectOption && !isSelfAssessment;
 
-                    {/* Answers */}
-                    <div className="space-y-2 text-sm mb-4">
-                      {/* Show all options for multiple choice / true-false */}
-                      {item.options && item.options.length > 0 ? (
-                        <div className="space-y-2">
-                          {item.options.map((option, optIndex) => {
-                            const isSelected = item.userAnswer === option;
-                            const isCorrectOption = item.correctAnswer === option;
-                            const isWrongSelection = isSelected && !isCorrectOption && !isSelfAssessment;
-                            
-                            return (
-                              <div
-                                key={optIndex}
-                                className={`flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
-                                  isSelfAssessment
-                                    ? isSelected
-                                      ? "border-violet-500/50 bg-violet-500/10"
+                          return (
+                            <div
+                              key={optIndex}
+                              className={`flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                                isSelfAssessment
+                                  ? isSelected
+                                    ? "border-violet-500/50 bg-violet-500/10"
+                                    : "border-slate-200/50 dark:border-slate-700/50 bg-white/30 dark:bg-slate-800/30"
+                                  : isCorrectOption
+                                    ? "border-emerald-500/50 bg-emerald-500/10"
+                                    : isWrongSelection
+                                      ? "border-red-500/50 bg-red-500/10"
                                       : "border-slate-200/50 dark:border-slate-700/50 bg-white/30 dark:bg-slate-800/30"
-                                    : isCorrectOption
-                                      ? "border-emerald-500/50 bg-emerald-500/10"
-                                      : isWrongSelection
-                                        ? "border-red-500/50 bg-red-500/10"
-                                        : "border-slate-200/50 dark:border-slate-700/50 bg-white/30 dark:bg-slate-800/30"
-                                }`}
-                              >
-                                <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
+                              }`}
+                            >
+                              <span
+                                className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                                   isSelfAssessment
                                     ? isSelected
                                       ? "bg-violet-500 text-white"
@@ -379,10 +388,12 @@ export default function QuizReview({
                                       : isWrongSelection
                                         ? "bg-red-500 text-white"
                                         : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
-                                }`}>
-                                  {String.fromCharCode(65 + optIndex)}
-                                </span>
-                                <span className={`flex-1 ${
+                                }`}
+                              >
+                                {String.fromCharCode(65 + optIndex)}
+                              </span>
+                              <span
+                                className={`flex-1 ${
                                   isSelfAssessment
                                     ? isSelected
                                       ? "text-violet-700 dark:text-violet-300 font-medium"
@@ -392,83 +403,93 @@ export default function QuizReview({
                                       : isWrongSelection
                                         ? "text-red-700 dark:text-red-300"
                                         : "text-foreground/70"
-                                }`}>
-                                  {option}
-                                </span>
-                                {isSelected && (
-                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${
+                                }`}
+                              >
+                                {option}
+                              </span>
+                              {isSelected && (
+                                <span
+                                  className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${
                                     isSelfAssessment
                                       ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
                                       : isCorrectOption
                                         ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
                                         : "bg-red-500/20 text-red-700 dark:text-red-300"
-                                  }`}>
-                                    Your response
-                                  </span>
+                                  }`}
+                                >
+                                  Your response
+                                </span>
+                              )}
+                              {!isSelfAssessment &&
+                                isCorrectOption &&
+                                !isSelected && (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                                 )}
-                                {!isSelfAssessment && isCorrectOption && !isSelected && (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              {!isSelfAssessment &&
+                                isCorrectOption &&
+                                isSelected && (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                                 )}
-                                {!isSelfAssessment && isCorrectOption && isSelected && (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                )}
-                                {!isSelfAssessment && isWrongSelection && (
-                                  <XCircle className="w-4 h-4 text-red-500" />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        /* Typed answers - show simple format */
-                        <>
-                          <div
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                              {!isSelfAssessment && isWrongSelection && (
+                                <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      /* Typed answers - show simple format */
+                      <>
+                        <div
+                          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                            isSelfAssessment
+                              ? "bg-violet-500/20"
+                              : item.isCorrect
+                                ? "bg-emerald-500/20"
+                                : "bg-red-500/20"
+                          }`}
+                        >
+                          <span className="text-muted-foreground">
+                            Your {isSelfAssessment ? "response" : "answer"}:
+                          </span>
+                          <span
+                            className={`font-medium ${
                               isSelfAssessment
-                                ? "bg-violet-500/20"
-                                : item.isCorrect ? "bg-emerald-500/20" : "bg-red-500/20"
+                                ? "text-violet-700 dark:text-violet-300"
+                                : item.isCorrect
+                                  ? "text-emerald-700 dark:text-emerald-300"
+                                  : "text-red-700 dark:text-red-300"
                             }`}
                           >
-                            <span className="text-muted-foreground">
-                              Your {isSelfAssessment ? "response" : "answer"}:
-                            </span>
-                            <span
-                              className={`font-medium ${
-                                isSelfAssessment
-                                  ? "text-violet-700 dark:text-violet-300"
-                                  : item.isCorrect ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"
-                              }`}
-                            >
-                              {item.userAnswer || "No answer"}
-                            </span>
-                          </div>
-
-                          {!isSelfAssessment && !item.isCorrect && (
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/20 ml-2">
-                              <span className="text-muted-foreground">
-                                Correct:
-                              </span>
-                              <span className="font-medium text-emerald-700 dark:text-emerald-300">
-                                {item.correctAnswer}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    {/* AI Feedback */}
-                    <div className="p-4 rounded-xl bg-white/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
-                      <div className="flex items-start gap-2">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-[10px] font-bold text-white">
-                            AI
+                            {item.userAnswer || "No answer"}
                           </span>
                         </div>
-                        <p className="text-muted-foreground text-sm leading-relaxed">
-                          {item.feedback}
-                        </p>
+
+                        {!isSelfAssessment && !item.isCorrect && (
+                          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/20 ml-2">
+                            <span className="text-muted-foreground">
+                              Correct:
+                            </span>
+                            <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                              {item.correctAnswer}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* AI Feedback */}
+                  <div className="p-4 rounded-xl bg-white/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+                    <div className="flex items-start gap-2">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-[10px] font-bold text-white">
+                          AI
+                        </span>
                       </div>
+                      <p className="text-muted-foreground text-sm leading-relaxed">
+                        {item.feedback}
+                      </p>
                     </div>
                   </div>
                 </div>
