@@ -6,7 +6,7 @@ import Link from "next/link";
 import { HelpCircle, CheckCircle2, XCircle } from "lucide-react";
 
 /* ===================================================================
-   DEMO DATA – fake quiz questions for the interactive preview
+   Quiz question type (matches API response shape)
    =================================================================== */
 
 interface DemoQuestion {
@@ -16,45 +16,6 @@ interface DemoQuestion {
   options: string[];
   correctAnswer: string;
 }
-
-const DEMO_QUESTIONS: DemoQuestion[] = [
-  {
-    id: 1,
-    type: "multiple-choice",
-    question: "Which planet is known as the Red Planet?",
-    options: ["Venus", "Mars", "Jupiter", "Saturn"],
-    correctAnswer: "Mars",
-  },
-  {
-    id: 2,
-    type: "true-false",
-    question:
-      "The Great Wall of China is visible from space with the naked eye.",
-    options: ["True", "False"],
-    correctAnswer: "False",
-  },
-  {
-    id: 3,
-    type: "multiple-choice",
-    question: "What is the time complexity of binary search?",
-    options: ["O(n)", "O(log n)", "O(n²)", "O(1)"],
-    correctAnswer: "O(log n)",
-  },
-  {
-    id: 4,
-    type: "multiple-choice",
-    question: "Which element has the chemical symbol 'Au'?",
-    options: ["Silver", "Aluminum", "Gold", "Argon"],
-    correctAnswer: "Gold",
-  },
-  {
-    id: 5,
-    type: "true-false",
-    question: "TypeScript is a superset of JavaScript.",
-    options: ["True", "False"],
-    correctAnswer: "True",
-  },
-];
 
 /* Demo preset topics */
 const DEMO_PRESETS = [
@@ -184,7 +145,7 @@ export default function ItsQuizMeShowcase() {
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [questions, setQuestions] = useState<DemoQuestion[]>([]);
 
   /* -- Auto-cycle the setup preset selection -- */
   const presetCycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -199,16 +160,44 @@ export default function ItsQuizMeShowcase() {
     };
   }, [phase]);
 
-  /* -- Generate button handler -- */
-  const handleGenerate = useCallback(() => {
+  /* -- Generate button handler (calls real AI API) -- */
+  const handleGenerate = useCallback(async () => {
     setPhase("generating");
-    if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
-    phaseTimerRef.current = setTimeout(() => {
-      setPhase("question");
-      setCurrentQuestion(0);
-      setAnswers({});
-    }, 2200);
-  }, []);
+    const topic = DEMO_PRESETS[selectedPreset].label;
+    try {
+      const res = await fetch("/api/its-quiz-me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "generate",
+          config: {
+            topic,
+            questionCount: 5,
+            questionTypes: { trueFalse: 20, multipleChoice: 80, typed: 0 },
+            aiSettings: { style: "knowledge", difficulty: "medium", creativity: 50 },
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.quiz?.questions?.length) {
+        // Ensure every question has an options array (typed questions may not)
+        const qs: DemoQuestion[] = data.quiz.questions.map((q: any, i: number) => ({
+          id: q.id ?? i + 1,
+          type: q.type ?? "multiple-choice",
+          question: q.question,
+          options: q.options ?? [],
+          correctAnswer: q.correctAnswer,
+        }));
+        setQuestions(qs);
+      }
+    } catch {
+      // Silently fall through — if AI fails we still move to question phase
+      // with whatever questions we have (could be 0)
+    }
+    setCurrentQuestion(0);
+    setAnswers({});
+    setPhase("question");
+  }, [selectedPreset]);
 
   /* -- Answer selection -- */
   const handleSelectAnswer = useCallback(
@@ -220,10 +209,10 @@ export default function ItsQuizMeShowcase() {
 
   /* -- Navigation -- */
   const handleNext = useCallback(() => {
-    if (currentQuestion < DEMO_QUESTIONS.length - 1) {
+    if (currentQuestion < questions.length - 1) {
       setCurrentQuestion((i) => i + 1);
     }
-  }, [currentQuestion]);
+  }, [currentQuestion, questions.length]);
 
   const handlePrevious = useCallback(() => {
     if (currentQuestion > 0) {
@@ -241,22 +230,18 @@ export default function ItsQuizMeShowcase() {
     setPhase("setup");
     setCurrentQuestion(0);
     setAnswers({});
-  }, []);
-
-  /* -- Cleanup -- */
-  useEffect(() => {
-    return () => {
-      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
-    };
+    setQuestions([]);
   }, []);
 
   /* -- Score calculation for results -- */
-  const correctCount = DEMO_QUESTIONS.filter(
+  const correctCount = questions.filter(
     (dq, i) => answers[i] === dq.correctAnswer,
   ).length;
-  const scorePercent = Math.round((correctCount / DEMO_QUESTIONS.length) * 100);
+  const scorePercent = questions.length
+    ? Math.round((correctCount / questions.length) * 100)
+    : 0;
 
-  const q = DEMO_QUESTIONS[currentQuestion];
+  const q = questions[currentQuestion];
   const currentAnswer = q ? (answers[currentQuestion] ?? null) : null;
   const typeConfig = q
     ? getTypeConfig(q.type)
@@ -381,7 +366,7 @@ export default function ItsQuizMeShowcase() {
             <div className="absolute top-3 right-3 z-10">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30 backdrop-blur-sm">
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-                Interactive Demo — sample questions only
+                Interactive Demo
               </span>
             </div>
             <div className="p-6 md:p-8 min-h-[420px] flex flex-col">
@@ -607,7 +592,7 @@ export default function ItsQuizMeShowcase() {
                             {currentQuestion + 1}
                           </span>
                           <span className="text-sm text-white/30">
-                            of {DEMO_QUESTIONS.length}
+                            of {questions.length}
                           </span>
                         </div>
                         <span
@@ -625,7 +610,7 @@ export default function ItsQuizMeShowcase() {
                         <motion.div
                           className="h-full rounded-full bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-500"
                           animate={{
-                            width: `${((currentQuestion + 1) / DEMO_QUESTIONS.length) * 100}%`,
+                            width: `${questions.length ? ((currentQuestion + 1) / questions.length) * 100 : 0}%`,
                           }}
                           transition={{ duration: 0.5 }}
                         />
@@ -633,7 +618,7 @@ export default function ItsQuizMeShowcase() {
 
                       {/* Nav dots */}
                       <div className="flex justify-center gap-1.5 mt-3">
-                        {DEMO_QUESTIONS.map((_, i) => (
+                        {questions.map((_, i) => (
                           <div
                             key={i}
                             className={`w-2 h-2 rounded-full transition-all duration-300 ${
@@ -712,7 +697,7 @@ export default function ItsQuizMeShowcase() {
                           ← Previous
                         </button>
 
-                        {currentQuestion === DEMO_QUESTIONS.length - 1 ? (
+                        {currentQuestion === questions.length - 1 ? (
                           <button
                             onClick={handleSubmit}
                             disabled={!currentAnswer}
@@ -817,7 +802,7 @@ export default function ItsQuizMeShowcase() {
                             {scorePercent}%
                           </motion.span>
                           <span className="text-xs text-white/30 mt-1">
-                            {correctCount}/{DEMO_QUESTIONS.length} correct
+                            {correctCount}/{questions.length} correct
                           </span>
                         </div>
                       </div>
@@ -850,7 +835,7 @@ export default function ItsQuizMeShowcase() {
                       </h4>
 
                       <div className="space-y-3">
-                        {DEMO_QUESTIONS.map((dq, idx) => {
+                        {questions.map((dq, idx) => {
                           const userAnswer = answers[idx] ?? null;
                           const isCorrect = userAnswer === dq.correctAnswer;
 
