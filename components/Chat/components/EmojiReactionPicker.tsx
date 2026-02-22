@@ -675,7 +675,6 @@ export function EmojiReactionPicker({
             <input
               ref={textInputRef}
               type="text"
-              maxLength={20}
               value={textReactionValue}
               onChange={(e) => setTextReactionValue(e.target.value)}
               onKeyDown={(e) => {
