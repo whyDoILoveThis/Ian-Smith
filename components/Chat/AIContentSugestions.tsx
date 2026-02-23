@@ -877,6 +877,9 @@ export default function AIContentSugestions() {
               handleImageUpload={handleImageUploadWrapper}
               setReplyingTo={chatMessages.setReplyingTo}
               onOpenVideoRecorder={() => setIsVideoRecorderOpen(true)}
+              localPulseKey={chatMessages.localPulseKey}
+              keystrokePulse={firebaseWithSlot.keystrokePulse}
+              indicatorColors={firebaseWithSlot.indicatorColors}
             />
           </>
         )}

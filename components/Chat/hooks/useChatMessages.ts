@@ -20,6 +20,8 @@ export function useChatMessages(
   const [sendError, setSendError] = useState<string | null>(null);
 
   const typingTimeoutRef = useRef<number | null>(null);
+  const localPulseKeyRef = useRef(0);
+  const [localPulseKey, setLocalPulseKey] = useState(0);
   const markedAsReadRef = useRef<Set<string>>(new Set());
   const markedReceiptAsSeenRef = useRef<Set<string>>(new Set());
 
@@ -217,10 +219,20 @@ export function useChatMessages(
     [slotId, roomPath],
   );
 
+  const sendKeystrokePulse = useCallback(() => {
+    if (!slotId) return;
+    set(ref(rtdb, `${roomPath}/keystrokePulse/${slotId}`), Date.now()).catch(() => {});
+  }, [slotId, roomPath]);
+
   const handleTypingChange = useCallback(
     (value: string) => {
       setMessageText(value);
       if (slotId) {
+        // Trigger local pulse immediately
+        localPulseKeyRef.current += 1;
+        setLocalPulseKey(localPulseKeyRef.current);
+        // Broadcast keystroke pulse to other side
+        sendKeystrokePulse();
         setTypingState(true);
         if (typingTimeoutRef.current) {
           window.clearTimeout(typingTimeoutRef.current);
@@ -230,7 +242,7 @@ export function useChatMessages(
         }, 1200);
       }
     },
-    [setTypingState, slotId],
+    [setTypingState, slotId, sendKeystrokePulse],
   );
 
   // Handle sending ephemeral video (recorded in-app)
@@ -415,6 +427,7 @@ export function useChatMessages(
     markMessageAsRead,
     markReceiptAsSeen,
     handleTypingChange,
+    localPulseKey,
     handleSendEphemeralVideo,
     handleSendDrawing,
     markEphemeralViewed,

@@ -41,6 +41,7 @@ export function useChatFirebase(
   const [presence, setPresence] = useState<{ "1"?: boolean; "2"?: boolean }>({});
   const [lastSeen, setLastSeen] = useState<{ "1"?: number; "2"?: number }>({});
   const [indicatorColors, setIndicatorColors] = useState<{ "1"?: string; "2"?: string }>({});
+  const [keystrokePulse, setKeystrokePulse] = useState<{ "1"?: number; "2"?: number }>({});
   const [isLoading, setIsLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [hasMoreOnServer, setHasMoreOnServer] = useState(true);
@@ -68,6 +69,7 @@ export function useChatFirebase(
     setPresence({});
     setLastSeen({});
     setIndicatorColors({});
+    setKeystrokePulse({});
     setIsOtherTyping(false);
     setTttState(null);
     olderMsgsRef.current.clear();
@@ -228,6 +230,19 @@ export function useChatFirebase(
     const unsub = onValue(colorsRef, (snap) => {
       const val = (snap.val() || {}) as { "1"?: string; "2"?: string };
       setIndicatorColors(val);
+    });
+
+    return () => unsub();
+  }, [isUnlocked, roomPath]);
+
+  // Subscribe to keystroke pulses
+  useEffect(() => {
+    if (!isUnlocked) return;
+
+    const pulseRef = ref(rtdb, `${roomPath}/keystrokePulse`);
+    const unsub = onValue(pulseRef, (snap) => {
+      const val = (snap.val() || {}) as { "1"?: number; "2"?: number };
+      setKeystrokePulse(val);
     });
 
     return () => unsub();
@@ -582,6 +597,7 @@ export function useChatFirebase(
     presence,
     lastSeen,
     indicatorColors,
+    keystrokePulse,
     isLoading,
     connectionError,
     hasMoreOnServer,

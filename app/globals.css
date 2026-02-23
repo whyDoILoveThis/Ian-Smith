@@ -503,3 +503,14 @@ input[type="file"]::-webkit-file-upload-button {
 .ambient-float {
   animation: ambient-float 4s ease-in-out infinite;
 }
+
+/* Keystroke pulse glow for chat input */
+@keyframes keystroke-pulse {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+.keystroke-pulse-glow {
+  animation: keystroke-pulse 420ms ease-out forwards;
+  pointer-events: none;
+}

@@ -1,7 +1,13 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { Message, ThemeColors } from "../types";
+
+// Default slot colors (same as touch indicators)
+const DEFAULT_SLOT_COLORS: Record<string, string> = {
+  "1": "#ff3d3f", // coral red
+  "2": "#9d3dff", // purple
+};
 
 type ChatInputAreaProps = {
   slotId: "1" | "2" | null;
@@ -15,6 +21,12 @@ type ChatInputAreaProps = {
   setReplyingTo: (msg: Message | null) => void;
   onOpenVideoRecorder: () => void;
   chatTheme: string;
+  /** Incremented on each local keystroke */
+  localPulseKey?: number;
+  /** Keystroke pulse timestamps from Firebase { "1"?: number, "2"?: number } */
+  keystrokePulse?: { "1"?: number; "2"?: number };
+  /** Custom indicator colors per slot (hex strings) */
+  indicatorColors?: { "1"?: string; "2"?: string };
 };
 
 export function ChatInputArea({
@@ -29,9 +41,31 @@ export function ChatInputArea({
   setReplyingTo,
   onOpenVideoRecorder,
   chatTheme,
+  localPulseKey = 0,
+  keystrokePulse,
+  indicatorColors,
 }: ChatInputAreaProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const wasSendingRef = useRef(false);
+
+  // Track remote pulse from the OTHER slot
+  const otherSlot = slotId === "1" ? "2" : "1";
+  const otherPulseAt = keystrokePulse?.[otherSlot];
+  const [remotePulseKey, setRemotePulseKey] = useState(0);
+
+  // When remote keystroke pulse timestamp changes, bump the remote pulse key
+  useEffect(() => {
+    if (otherPulseAt) {
+      setRemotePulseKey((k) => k + 1);
+    }
+  }, [otherPulseAt]);
+
+  // Resolve colors for each slot (custom → default)
+  const myColor = slotId
+    ? indicatorColors?.[slotId] || DEFAULT_SLOT_COLORS[slotId]
+    : DEFAULT_SLOT_COLORS["1"];
+  const otherColor =
+    indicatorColors?.[otherSlot] || DEFAULT_SLOT_COLORS[otherSlot];
 
   // Re-focus input once isSending flips back to false (send complete)
   useEffect(() => {
@@ -83,7 +117,27 @@ export function ChatInputArea({
           </button>
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
+        {/* Local keystroke pulse glow */}
+        {localPulseKey > 0 && (
+          <div
+            key={`local-${localPulseKey}`}
+            className="keystroke-pulse-glow absolute inset-0 rounded-full"
+            style={{
+              boxShadow: `0 0 14px 3px ${myColor}, inset 0 0 6px 1px ${myColor}40`,
+            }}
+          />
+        )}
+        {/* Remote keystroke pulse glow */}
+        {remotePulseKey > 0 && (
+          <div
+            key={`remote-${remotePulseKey}`}
+            className="keystroke-pulse-glow absolute inset-0 rounded-full"
+            style={{
+              boxShadow: `0 0 14px 3px ${otherColor}, inset 0 0 6px 1px ${otherColor}40`,
+            }}
+          />
+        )}
         <input
           ref={inputRef}
           autoFocus
