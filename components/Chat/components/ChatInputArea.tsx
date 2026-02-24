@@ -78,6 +78,15 @@ export function ChatInputArea({
     wasSendingRef.current = isSending;
   }, [isSending]);
 
+  // Focus input when a message is selected for replying
+  useEffect(() => {
+    if (replyingTo) {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    }
+  }, [replyingTo]);
+
   const sendAndRefocus = () => {
     handleSendMessage();
     // Immediate refocus attempts for fast sends

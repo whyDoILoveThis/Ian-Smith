@@ -299,9 +299,15 @@ export function RoomSpotsView({
         <button
           type="button"
           onClick={() => setShowUpdateNotes(!showUpdateNotes)}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.08] px-4 py-2.5 text-xs text-violet-300 hover:text-violet-100 hover:bg-violet-500/[0.15] active:scale-[0.98] transition-all"
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.08] px-4 py-2.5 text-xs text-violet-300 hover:text-violet-100 hover:bg-violet-500/[0.15] active:scale-[0.98] transition-all relative"
         >
           <span>📋 Update Notes</span>
+          <span className="relative flex items-center">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] animate-pulse" />
+            <span className="absolute -right-3 -top-1 h-4 w-4 rounded-full bg-emerald-500 text-[9px] font-bold text-white flex items-center justify-center leading-none">
+              2
+            </span>
+          </span>
           <span
             className={`text-[10px] transition-transform duration-200 ${showUpdateNotes ? "rotate-180" : ""}`}
           >
@@ -311,6 +317,20 @@ export function RoomSpotsView({
         {showUpdateNotes && (
           <div className="rounded-2xl border border-violet-500/30 bg-violet-500/[0.08] p-4 space-y-2 text-xs text-violet-300 leading-relaxed animate-in slide-in-from-top-1 duration-150">
             {[
+              {
+                icon: "⌨️",
+                color: "text-emerald-400",
+                title: "Reply Focus",
+                desc: "Message input auto-focuses when you select a message to reply to.",
+                isNew: true,
+              },
+              {
+                icon: "🎯",
+                color: "text-emerald-400",
+                title: "Smart Scroll",
+                desc: "Chat won't auto-scroll if you've manually scrolled in the last 2 seconds.",
+                isNew: true,
+              },
               {
                 icon: "📷",
                 color: "text-emerald-400",
@@ -379,6 +399,9 @@ export function RoomSpotsView({
               },
             ].map((note) => (
               <div key={note.title} className="flex items-start gap-2">
+                {note.isNew && (
+                  <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)] animate-pulse flex-shrink-0" />
+                )}
                 <span className={`${note.color} shrink-0`}>{note.icon}</span>
                 <p>
                   <span className="font-medium text-white">{note.title}</span> —{" "}

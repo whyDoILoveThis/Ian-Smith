@@ -68,6 +68,7 @@ export function ChatMessagesView({
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
   const isNearBottomRef = useRef(true);
   const isLoadingRef = useRef(false);
+  const lastManualScrollTimeRef = useRef(0);
   const anchorRef = useRef<{ msgId: string; offsetFromTop: number } | null>(
     null,
   );
@@ -244,6 +245,8 @@ export function ChatMessagesView({
   useEffect(() => {
     const id = window.setTimeout(() => {
       bottomRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+      // Initialize manual scroll time so auto-scroll works on first load
+      lastManualScrollTimeRef.current = 0;
     }, 100);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -256,6 +259,11 @@ export function ChatMessagesView({
       const currentCount = messages.length;
       const currentLastId =
         currentCount > 0 ? messages[currentCount - 1]?.id : null;
+
+      // Only auto-scroll if 2+ seconds have passed since last manual scroll
+      const timeSinceLastManualScroll =
+        Date.now() - lastManualScrollTimeRef.current;
+      if (timeSinceLastManualScroll < 2000) return;
 
       if (
         currentCount !== lastKnownCountRef.current ||
@@ -280,9 +288,17 @@ export function ChatMessagesView({
   // Also scroll on typing indicator changes
   useEffect(() => {
     if (isOtherTyping) {
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-      });
+      // Only auto-scroll if 2+ seconds have passed since last manual scroll
+      const timeSinceLastManualScroll =
+        Date.now() - lastManualScrollTimeRef.current;
+      if (timeSinceLastManualScroll >= 2000) {
+        requestAnimationFrame(() => {
+          bottomRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "end",
+          });
+        });
+      }
     }
   }, [isOtherTyping]);
 
@@ -295,6 +311,9 @@ export function ChatMessagesView({
       const distFromBottom =
         container.scrollHeight - container.scrollTop - container.clientHeight;
       isNearBottomRef.current = distFromBottom < 150;
+
+      // Track manual scroll time
+      lastManualScrollTimeRef.current = Date.now();
 
       if (isLoadingRef.current) return;
 
