@@ -336,6 +336,13 @@ export function RoomSpotsView({
                 isNew: true,
               },
               {
+                icon: "📋",
+                color: "text-sky-400",
+                title: "Copy Button",
+                desc: "Copy message text with the click of a button.",
+                isNew: true,
+              },
+              {
                 icon: "�",
                 color: "text-violet-400",
                 title: "Privacy Mode",

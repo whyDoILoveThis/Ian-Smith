@@ -72,6 +72,7 @@ export function ChatMessagesView({
   const [privacyHoveredMsgId, setPrivacyHoveredMsgId] = useState<string | null>(
     null,
   );
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const isNearBottomRef = useRef(true);
   const isLoadingRef = useRef(false);
   const lastManualScrollTimeRef = useRef(0);
@@ -416,6 +417,13 @@ export function ChatMessagesView({
   const [longPressedMsgId, setLongPressedMsgId] = useState<string | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Delete confirmation modal state
+  const [deleteConfirmMsg, setDeleteConfirmMsg] = useState<{
+    id: string;
+    imageFileId?: string;
+    videoFileId?: string;
+  } | null>(null);
+
   const handleLongPressStart = useCallback((msgId: string, isMine: boolean) => {
     if (!isMine) return;
     longPressTimerRef.current = setTimeout(() => {
@@ -576,7 +584,11 @@ export function ChatMessagesView({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDeleteMessage(msg.id, msg.imageFileId, msg.videoFileId);
+                      setDeleteConfirmMsg({
+                        id: msg.id,
+                        imageFileId: msg.imageFileId,
+                        videoFileId: msg.videoFileId,
+                      });
                       setLongPressedMsgId(null);
                     }}
                     className={`absolute z-30 top-1/2 -translate-y-1/2 ${
@@ -666,10 +678,58 @@ export function ChatMessagesView({
                   </button>
                 )}
 
-                <p className="text-[11px] uppercase tracking-wide opacity-70">
-                  {msg.sender}
-                  {msg.decryptionFailed && (
-                    <span className="ml-2 text-amber-400">⚠️ unencrypted</span>
+                <p className="text-[11px] uppercase tracking-wide opacity-70 flex items-center justify-between gap-2">
+                  <span>
+                    {msg.sender}
+                    {msg.decryptionFailed && (
+                      <span className="ml-2 text-amber-400">
+                        ⚠️ unencrypted
+                      </span>
+                    )}
+                  </span>
+                  {(msg.decryptedText ||
+                    msg.imageUrl ||
+                    msg.videoUrl ||
+                    msg.drawingData) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const textToCopy = msg.decryptedText || "";
+                        if (textToCopy) {
+                          navigator.clipboard.writeText(textToCopy);
+                          setCopiedMsgId(msg.id);
+                          setTimeout(() => setCopiedMsgId(null), 2000);
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 w-5 h-5 rounded hover:bg-white/10 flex items-center justify-center"
+                      title="Copy message text"
+                      disabled={!msg.decryptedText}
+                    >
+                      {copiedMsgId === msg.id ? (
+                        <svg
+                          className="w-3.5 h-3.5 text-emerald-400 animate-in scale-in duration-200"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="w-3.5 h-3.5 text-neutral-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                      )}
+                    </button>
                   )}
                 </p>
                 {msg.decryptedText && (
@@ -937,6 +997,68 @@ export function ChatMessagesView({
               />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmMsg && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-xs rounded-2xl border border-red-500/30 bg-gradient-to-br from-neutral-900 to-red-950/20 p-6 space-y-4 shadow-2xl">
+            {/* Header icon */}
+            <div className="flex justify-center">
+              <div className="h-12 w-12 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                <svg
+                  className="w-6 h-6 text-red-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-base font-semibold text-white text-center">
+              Delete Message?
+            </h3>
+
+            {/* Description */}
+            <p className="text-sm text-neutral-400 text-center">
+              This message will be permanently deleted. This action cannot be
+              undone.
+            </p>
+
+            {/* Buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmMsg(null)}
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10 transition-colors active:scale-[0.98]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteMessage(
+                    deleteConfirmMsg.id,
+                    deleteConfirmMsg.imageFileId,
+                    deleteConfirmMsg.videoFileId,
+                  );
+                  setDeleteConfirmMsg(null);
+                }}
+                className="flex-1 rounded-xl bg-red-500/80 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-500 transition-colors active:scale-[0.98] shadow-lg"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
