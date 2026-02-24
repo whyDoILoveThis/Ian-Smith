@@ -68,6 +68,7 @@ export default function AIContentSugestions() {
     null,
   );
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [privacyMode, setPrivacyMode] = useState(false);
 
   // ── Service Worker registration for PWA + Push ─────────────────────
   useEffect(() => {
@@ -844,6 +845,8 @@ export default function AIContentSugestions() {
             onKickSpot={session.kickSpot}
             onClaimSpot={session.claimSpot}
             onMigrateConvo={session.migrateConvo}
+            privacyMode={privacyMode}
+            onPrivacyModeChange={setPrivacyMode}
           />
         ) : (
           <>
@@ -864,6 +867,7 @@ export default function AIContentSugestions() {
               hasMoreOnServer={firebaseWithSlot.hasMoreOnServer}
               loadOlderFromServer={firebaseWithSlot.loadOlderFromServer}
               isLoadingOlder={firebaseWithSlot.isLoadingOlder}
+              privacyMode={privacyMode}
             />
             <ChatInputArea
               slotId={slotId}

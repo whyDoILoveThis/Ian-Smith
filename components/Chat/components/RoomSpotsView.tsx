@@ -132,6 +132,8 @@ type RoomSpotsViewProps = {
     onProgress?: (migrated: number, total: number) => void,
     destPassphrase?: string | null,
   ) => Promise<boolean>;
+  privacyMode?: boolean;
+  onPrivacyModeChange?: (enabled: boolean) => void;
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -164,6 +166,8 @@ export function RoomSpotsView({
   onMigrateConvo,
   disguiseTimeout,
   onSetDisguiseTimeout,
+  privacyMode = false,
+  onPrivacyModeChange,
 }: RoomSpotsViewProps) {
   // ── State ──────────────────────────────────────────────────────────────
   const [leaveConfirmText, setLeaveConfirmText] = useState("");
@@ -305,7 +309,7 @@ export function RoomSpotsView({
           <span className="relative flex items-center">
             <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] animate-pulse" />
             <span className="absolute -right-3 -top-1 h-4 w-4 rounded-full bg-emerald-500 text-[9px] font-bold text-white flex items-center justify-center leading-none">
-              2
+              3
             </span>
           </span>
           <span
@@ -332,7 +336,14 @@ export function RoomSpotsView({
                 isNew: true,
               },
               {
-                icon: "📷",
+                icon: "�",
+                color: "text-violet-400",
+                title: "Privacy Mode",
+                desc: "Toggle privacy mode to hide messages until you hover — perfect for discreet viewing.",
+                isNew: true,
+              },
+              {
+                icon: "�📷",
                 color: "text-emerald-400",
                 title: "Find All Media",
                 desc: "Scan the entire DB for every photo & drawing — counts update in the badge.",
@@ -764,10 +775,10 @@ export function RoomSpotsView({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════
-            QUICK ACTIONS — Notifications, Migrate
+            QUICK ACTIONS — Notifications, Migrate, Privacy
            ═══════════════════════════════════════════════════════════════ */}
         {slotId && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={onToggleNotifications}
@@ -780,7 +791,19 @@ export function RoomSpotsView({
               <span className="text-base">
                 {notificationsEnabled ? "🔔" : "🔕"}
               </span>
-              <span>{notificationsEnabled ? "Notifs On" : "Notifs Off"}</span>
+              <span>{notificationsEnabled ? "Notifs" : "Muted"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onPrivacyModeChange?.(!privacyMode)}
+              className={`flex items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs active:scale-[0.98] transition-all ${
+                privacyMode
+                  ? "border-violet-400/20 bg-violet-400/[0.06] text-violet-300"
+                  : "border-white/[0.08] bg-white/[0.02] text-neutral-400"
+              }`}
+            >
+              <span className="text-base">{privacyMode ? "👁️‍🗨️" : "👁️"}</span>
+              <span>{privacyMode ? "Private" : "Public"}</span>
             </button>
             <button
               type="button"

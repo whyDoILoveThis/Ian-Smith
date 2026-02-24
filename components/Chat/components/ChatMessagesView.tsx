@@ -43,6 +43,8 @@ type ChatMessagesViewProps = {
   loadOlderFromServer?: () => Promise<void>;
   /** Is a server-side page currently being fetched? */
   isLoadingOlder?: boolean;
+  /** Show privacy mode - messages hidden until hovered */
+  privacyMode?: boolean;
 };
 
 export function ChatMessagesView({
@@ -62,10 +64,14 @@ export function ChatMessagesView({
   hasMoreOnServer = false,
   loadOlderFromServer,
   isLoadingOlder = false,
+  privacyMode = false,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const [privacyHoveredMsgId, setPrivacyHoveredMsgId] = useState<string | null>(
+    null,
+  );
   const isNearBottomRef = useRef(true);
   const isLoadingRef = useRef(false);
   const lastManualScrollTimeRef = useRef(0);
@@ -530,6 +536,8 @@ export function ChatMessagesView({
             className={`group flex ${isMine ? "justify-end" : "justify-start"} relative transition-colors duration-700 rounded-2xl ${
               highlightedMsgId === msg.id ? "bg-white/10" : ""
             }`}
+            onMouseEnter={() => privacyMode && setPrivacyHoveredMsgId(msg.id)}
+            onMouseLeave={() => privacyMode && setPrivacyHoveredMsgId(null)}
           >
             {/* Cloud Poof Animation overlay */}
             {isPoofing && (
@@ -543,6 +551,10 @@ export function ChatMessagesView({
               <div
                 className={`relative w-full rounded-2xl px-3 py-2 text-sm shadow-md select-none transition-all duration-300 ${
                   isPoofing ? "opacity-0 scale-75" : ""
+                } ${
+                  privacyMode && privacyHoveredMsgId !== msg.id
+                    ? "opacity-0"
+                    : ""
                 } ${
                   isMine
                     ? `${themeColors.bg} ${themeColors.text} rounded-br-none`
@@ -834,7 +846,11 @@ export function ChatMessagesView({
               {/* Emoji reactions display below bubble */}
               {msg.reactions && (
                 <div
-                  className={`w-full ${isMine ? "flex justify-end" : "flex justify-start"}`}
+                  className={`w-full ${isMine ? "flex justify-end" : "flex justify-start"} ${
+                    privacyMode && privacyHoveredMsgId !== msg.id
+                      ? "opacity-0"
+                      : ""
+                  } transition-opacity`}
                 >
                   <EmojiReactionsDisplay
                     reactions={msg.reactions}
