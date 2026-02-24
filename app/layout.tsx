@@ -62,6 +62,11 @@ export default function RootLayout({
               </SignedOut>
             </BreadcrumbProvider>
           </ThemeProvider>
+          <script
+            src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`}
+            async
+            defer
+          ></script>
         </body>
       </html>
     </ClerkProvider>
