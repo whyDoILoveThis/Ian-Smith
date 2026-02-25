@@ -1,0 +1,592 @@
+/* ─── LookieThere Styles ──────────────────────────────────────────
+ * Self-contained styles for the LookieThere face detection app.
+ * Uses plain CSS with CSS custom properties for theming.
+ *
+ * DESIGN SYSTEM:
+ * - Glassmorphism cards (backdrop-filter: blur)
+ * - CSS transitions for all animated values (no JS animation lib)
+ * - Mobile-first responsive layout
+ * - Inherits light/dark from the app's ThemeProvider (.dark class)
+ *
+ * PERFORMANCE NOTES:
+ * - All animations use transform/opacity (GPU-composited)
+ * - No box-shadow animations (triggers repaint)
+ * - backdrop-filter is GPU-accelerated on modern browsers
+ * ──────────────────────────────────────────────────────────────── */
+
+/* ── Root layout ─────────────────────────────────────────────────── */
+.lt-root {
+  --lt-max-width: 1100px;
+  --lt-gap: 1.25rem;
+  --lt-radius: 1rem;
+  --lt-glass-bg: rgba(255, 255, 255, 0.65);
+  --lt-glass-border: rgba(255, 255, 255, 0.3);
+  --lt-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --lt-text: hsl(222, 84%, 4.9%);
+  --lt-text-muted: hsl(215, 16%, 47%);
+  --lt-bg-subtle: hsl(210, 40%, 96%);
+  --lt-accent: hsl(222, 47%, 11%);
+
+  max-width: var(--lt-max-width);
+  margin: 0 auto;
+  padding: 2rem 1.25rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lt-gap);
+  color: var(--lt-text);
+  min-height: 100dvh;
+}
+
+/* ── Dark theme overrides ────────────────────────────────────────── */
+.dark .lt-root {
+  --lt-glass-bg: rgba(15, 23, 42, 0.6);
+  --lt-glass-border: rgba(255, 255, 255, 0.08);
+  --lt-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --lt-text: hsl(210, 40%, 98%);
+  --lt-text-muted: hsl(215, 20%, 65%);
+  --lt-bg-subtle: hsl(217, 33%, 17%);
+  --lt-accent: hsl(210, 40%, 98%);
+}
+
+/* ── Glassmorphism base ──────────────────────────────────────────── */
+.lt-glass {
+  background: var(--lt-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--lt-glass-border);
+  border-radius: var(--lt-radius);
+  box-shadow: var(--lt-glass-shadow);
+}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+.lt-header {
+  text-align: center;
+  padding: 0.75rem 0 0.5rem;
+}
+
+.lt-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.lt-title-emoji {
+  font-size: 1.5em;
+}
+
+.lt-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--lt-text-muted);
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.4;
+}
+
+/* ── Info banner ──────────────────────────────────────────────────── */
+.lt-info-banner {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--lt-text-muted);
+}
+
+.lt-info-banner p {
+  margin: 0;
+}
+
+.lt-info-banner strong {
+  color: var(--lt-text);
+}
+
+/* ── Status bar ──────────────────────────────────────────────────── */
+.lt-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.7rem 1.25rem;
+  font-size: 0.8rem;
+  color: var(--lt-text-muted);
+  flex-wrap: wrap;
+}
+
+.lt-status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.lt-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.lt-status-ready {
+  background: hsl(142, 71%, 45%);
+  box-shadow: 0 0 6px hsla(142, 71%, 45%, 0.5);
+}
+
+.lt-status-loading {
+  background: hsl(45, 90%, 55%);
+  animation: lt-pulse 1.2s ease-in-out infinite;
+}
+
+.lt-status-off {
+  background: hsl(0, 0%, 60%);
+}
+
+.lt-status-fps {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--lt-accent);
+}
+
+/* ── Main content grid ───────────────────────────────────────────── */
+.lt-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--lt-gap);
+}
+
+@media (min-width: 768px) {
+  .lt-content {
+    grid-template-columns: 1.4fr 1fr;
+  }
+}
+
+.lt-content-camera {
+  display: flex;
+  flex-direction: column;
+}
+
+.lt-content-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── Camera view ─────────────────────────────────────────────────── */
+.lt-camera-container {
+  position: relative;
+  border-radius: var(--lt-radius);
+  overflow: hidden;
+  background: var(--lt-bg-subtle);
+  aspect-ratio: 4 / 3;
+  box-shadow: var(--lt-glass-shadow);
+}
+
+.lt-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Mirror for selfie-style — transform is GPU-composited, zero cost */
+  transform: scaleX(-1);
+  border-radius: var(--lt-radius);
+}
+
+.lt-camera-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--lt-text-muted);
+}
+
+.lt-camera-placeholder-icon {
+  font-size: 3rem;
+  opacity: 0.5;
+}
+
+.lt-camera-placeholder p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* ── Expression display card ─────────────────────────────────────── */
+.lt-expression-card {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.lt-expression-hero {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lt-expression-emoji {
+  font-size: 2.75rem;
+  /* Smooth emoji transitions via opacity. We can't animate emoji content,
+     but the key prop in React forces a clean swap. */
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.lt-expression-label {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  /* Smooth text transitions */
+  transition: color 0.3s ease;
+}
+
+.lt-expression-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--lt-text-muted);
+}
+
+/* ── Confidence bar ──────────────────────────────────────────────── */
+.lt-confidence-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.lt-confidence-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--lt-text-muted);
+}
+
+.lt-confidence-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--lt-accent);
+}
+
+.lt-confidence-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--lt-bg-subtle);
+  overflow: hidden;
+}
+
+.lt-confidence-fill {
+  height: 100%;
+  border-radius: 3px;
+  /* CSS transition handles the animation — smooth, 0 JS cost */
+  transition: width 0.25s ease-out, background-color 0.3s ease;
+  will-change: width;
+}
+
+/* ── Indicators (eyes closed, brows raised) ──────────────────────── */
+.lt-indicators {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* ── Blink flash pill ────────────────────────────────────────────── */
+.lt-blink-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.4rem;
+  padding: 0.4rem 1rem;
+  border-radius: 2rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: hsl(200, 95%, 40%);
+  background: hsla(200, 90%, 55%, 0.15);
+  box-shadow: 0 0 12px hsla(200, 90%, 55%, 0.3), 0 0 0 1px hsla(200, 90%, 55%, 0.25);
+  animation: lt-blink-flash 0.8s ease-out forwards;
+  pointer-events: none;
+}
+
+.dark .lt-blink-pill {
+  color: hsl(200, 90%, 70%);
+  background: hsla(200, 90%, 55%, 0.2);
+  box-shadow: 0 0 16px hsla(200, 90%, 60%, 0.35), 0 0 0 1px hsla(200, 90%, 60%, 0.2);
+}
+
+@keyframes lt-blink-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) translateY(-4px);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1.08) translateY(0);
+  }
+  30% {
+    transform: scale(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95) translateY(2px);
+  }
+}
+
+.lt-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 2rem;
+  font-size: 0.78rem;
+  background: var(--lt-bg-subtle);
+  color: var(--lt-text-muted);
+  transition: background-color 0.25s ease, color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.lt-indicator-active {
+  background: hsla(142, 71%, 45%, 0.15);
+  color: hsl(142, 71%, 35%);
+  box-shadow: 0 0 0 1px hsla(142, 71%, 45%, 0.3);
+}
+
+.dark .lt-indicator-active {
+  background: hsla(142, 71%, 45%, 0.2);
+  color: hsl(142, 71%, 55%);
+}
+
+/* ── Expression bars card ────────────────────────────────────────── */
+.lt-bars-card {
+  padding: 1.5rem;
+}
+
+.lt-bars-title {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.lt-bars-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--lt-text-muted);
+}
+
+.lt-bars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lt-bar-row {
+  display: grid;
+  grid-template-columns: 1.5rem 5rem 1fr 2.5rem;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.lt-bar-emoji {
+  font-size: 1rem;
+  text-align: center;
+}
+
+.lt-bar-label {
+  color: var(--lt-text-muted);
+  white-space: nowrap;
+}
+
+.lt-bar-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--lt-bg-subtle);
+  overflow: hidden;
+}
+
+.lt-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.25s ease-out, background-color 0.3s ease;
+  will-change: width;
+}
+
+.lt-bar-pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--lt-text-muted);
+}
+
+/* ── Permission prompt ───────────────────────────────────────────── */
+.lt-permission {
+  max-width: 480px;
+  margin: 2rem auto;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.lt-permission-icon {
+  font-size: 3.5rem;
+}
+
+.lt-permission h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.lt-permission p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--lt-text-muted);
+  line-height: 1.5;
+  max-width: 380px;
+}
+
+/* ── Privacy badges ──────────────────────────────────────────────── */
+.lt-privacy-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.lt-badge {
+  padding: 0.3rem 0.75rem;
+  border-radius: 2rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  background: var(--lt-bg-subtle);
+  color: var(--lt-text-muted);
+}
+
+/* ── Button ──────────────────────────────────────────────────────── */
+.lt-btn {
+  margin-top: 0.5rem;
+  padding: 0.7rem 2rem;
+  border: none;
+  border-radius: 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--lt-accent);
+  color: var(--lt-glass-bg);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  outline: none;
+}
+
+.lt-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.lt-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.lt-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.lt-btn-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────── */
+.lt-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: lt-spin 0.6s linear infinite;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────── */
+.lt-footer {
+  padding: 0.85rem 1.25rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--lt-text-muted);
+}
+
+.lt-footer p {
+  margin: 0;
+}
+
+/* ── Animations ──────────────────────────────────────────────────── */
+@keyframes lt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes lt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Responsive tweaks ───────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .lt-root {
+    padding: 1.25rem 0.85rem 2rem;
+  }
+
+  .lt-title {
+    font-size: 1.35rem;
+  }
+
+  .lt-subtitle {
+    font-size: 0.82rem;
+  }
+
+  .lt-expression-emoji {
+    font-size: 2.25rem;
+  }
+
+  .lt-expression-label {
+    font-size: 1.2rem;
+  }
+
+  .lt-bar-row {
+    grid-template-columns: 1.25rem 4rem 1fr 2.25rem;
+    font-size: 0.75rem;
+  }
+
+  .lt-permission {
+    padding: 2rem 1.25rem;
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .lt-confidence-fill,
+  .lt-bar-fill,
+  .lt-indicator,
+  .lt-btn {
+    transition: none;
+  }
+
+  .lt-spinner,
+  .lt-status-loading {
+    animation: none;
+  }
+}
