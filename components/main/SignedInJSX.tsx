@@ -14,7 +14,7 @@ type Props = {
 export default function SignedInJSX({ children, adminUserId }: Props) {
   const { userId } = useAuth();
 
-  const [showMainContent, setShowMainContent] = useState(false);
+  const [showMainContent, setShowMainContent] = useState(true);
 
   if (userId && adminUserId && userId === adminUserId) {
     return (
@@ -39,5 +39,5 @@ export default function SignedInJSX({ children, adminUserId }: Props) {
         )}
       </>
     );
-  } else return <MainWrap>{children}</MainWrap>;
+  } else return <>{children}</>;
 }

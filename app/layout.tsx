@@ -41,7 +41,7 @@ export default function RootLayout({
           <meta name="mobile-web-app-capable" content="yes" />
         </head>
         <body
-          className={`relative pb-44 min-h-screen
+          className={`relative min-h-screen
            ${inter.className}`}
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

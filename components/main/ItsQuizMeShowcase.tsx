@@ -254,7 +254,7 @@ export default function ItsQuizMeShowcase() {
     : getTypeConfig("multiple-choice");
 
   return (
-    <section className="relative w-full max-w-5xl mx-auto my-24 px-4">
+    <section className="relative w-full max-w-5xl mx-auto px-4">
       {/* -- Background glow -- */}
       <div className="absolute inset-0 -z-10 overflow-hidden rounded-3xl">
         <div

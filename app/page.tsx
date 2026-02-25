@@ -16,6 +16,7 @@ import NetworkSpeedMini from "@/components/main/NetworkSpeedMini";
 import WaterSortShowcase from "@/components/main/WaterSortShowcase";
 import TimelineShowcase from "@/components/main/TimelineShowcase";
 import ItsQuizMeShowcase from "@/components/main/ItsQuizMeShowcase";
+import IconCreatorShowcase from "@/components/main/IconCreatorShowcase";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
@@ -28,7 +29,7 @@ export default function Home() {
 
   return (
     <article
-      className={`${!showBot ? "pt-20" : ""} w-full col-flex items-center`}
+      className={`${!showBot ? "pt-20 pb-48" : ""} w-full col-flex items-center`}
     >
       <NetworkSpeedMini />
       {!showBot && <Nav />}
@@ -40,15 +41,16 @@ export default function Home() {
         <ConfettiCelebration />
       </div>
       <Projects />
-      <>
         <h2 className="text-center text-4xl md:text-5xl font-extrabold mt-24 mb-4 tracking-tight bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent">
           Most Recent Projects
         </h2>
         <div className="h-1 w-24 bg-gradient-to-r from-indigo-500 via-blue-500 to-transparent rounded-full mb-20 mx-auto" />
+      <div className="flex flex-col justify-center items-center gap-20">
         <WaterSortShowcase />
         <TimelineShowcase />
         <ItsQuizMeShowcase />
-      </>
+        <IconCreatorShowcase />
+      </div>
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && <ItsBot show={showBot} setShow={setShowBot} />}
       <Footer />
