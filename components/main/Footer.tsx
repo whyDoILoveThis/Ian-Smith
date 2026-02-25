@@ -38,7 +38,7 @@ const Footer = () => {
 
   return (
     <article className="w-full flex justify-center mt-16">
-      <div className="h-44 opacity-0" />
+      <div className="h-40 opacity-0" />
       <footer className="absolute bottom-0 left-0 w-full flex flex-col gap-4 items-center p-4 border-t border-slate-500 bg-slate-200 dark:bg-slate-900">
         <Link className="absolute left-0 top-2 font-bold text-2xl" href={"/"}>
           <ITSLogo />

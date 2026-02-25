@@ -85,7 +85,7 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
     );
 
   return (
-    <article className="col-flex items-center max-w-[600px] sm:flex sm:justify-center md:flex-row md:items-center md:gap-2">
+    <article className="col-flex items-center pt-4 max-w-[600px] sm:flex sm:justify-center md:flex-row md:items-center md:gap-2">
       {imageUrl && (
         <div className="flex items-center gap-1 bg-white dark:bg-opacity-10 bg-opacity-50 p-2 pb-8 m-2 rounded-3xl">
           <div className="relative bg-white dark:bg-opacity-5 bg-opacity-20 translate-y-4 w-[115px] h-[115px] flex items-center justify-center rounded-full">

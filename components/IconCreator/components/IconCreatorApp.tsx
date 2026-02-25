@@ -31,7 +31,7 @@ export function IconCreatorApp() {
   const [activeTab, setActiveTab] = useState<TabId>("about");
 
   return (
-    <div className="min-h-screen pt-16 w-full bg-gradient-to-br from-gray-50 via-orange-50/30 to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-black">
+    <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-orange-50/30 to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-black">
       {/* Decorative background orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-orange-500/10 dark:bg-orange-500/5 blur-3xl" />

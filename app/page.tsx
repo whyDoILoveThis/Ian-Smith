@@ -28,9 +28,7 @@ export default function Home() {
   }, []);
 
   return (
-    <article
-      className={`${!showBot ? "pt-20 pb-48" : ""} w-full col-flex items-center`}
-    >
+    <article className={`w-full col-flex items-center`}>
       <NetworkSpeedMini />
       {!showBot && <Nav />}
       <div className="w-full col-flex items-center mb-6">
@@ -53,6 +51,7 @@ export default function Home() {
       </div>
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && <ItsBot show={showBot} setShow={setShowBot} />}
+      <div className="h-6"/>
       <Footer />
     </article>
   );
