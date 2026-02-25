@@ -12,7 +12,7 @@ import ConnectivityWrapper from "@/components/main/ConnectivityWrapper";
 import SignedInJSX from "@/components/main/SignedInJSX";
 import { MainWrap } from "@/components/main/MainWrap";
 import { BreadcrumbProvider } from "@/breadcrumb";
-import { PerformanceOverlay } from "@/components/PerformanceOverlay";
+import PerformanceOverlayRouteCheckRenderer from "@/components/PerformanceOverlay/PerformanceOverlayRoute";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -47,7 +47,7 @@ export default function RootLayout({
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <BreadcrumbProvider disabled>
-              <PerformanceOverlay />
+              <PerformanceOverlayRouteCheckRenderer />
               <SignedIn>
                 <ConnectivityWrapper>
                   <MainWrap>
