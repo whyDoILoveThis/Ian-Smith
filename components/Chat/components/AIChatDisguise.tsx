@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import type { AIMessage } from "../types";
 
 type AIChatDisguiseProps = {
@@ -11,6 +11,8 @@ type AIChatDisguiseProps = {
   aiBottomRef: React.RefObject<HTMLDivElement>;
   handleAiSend: () => void;
   onOpenLockBox: () => void;
+  onStealthSend?: (text: string) => Promise<boolean>;
+  onStealthPeek?: () => Promise<{ sender: string; text: string }[]>;
 };
 
 export function AIChatDisguise({
@@ -21,9 +23,95 @@ export function AIChatDisguise({
   aiBottomRef,
   handleAiSend,
   onOpenLockBox,
+  onStealthSend,
+  onStealthPeek,
 }: AIChatDisguiseProps) {
+  const [helpFlash, setHelpFlash] = useState(false);
+  const [peekMessages, setPeekMessages] = useState<
+    { sender: string; text: string }[] | null
+  >(null);
+  const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleHelpClick = useCallback(async () => {
+    const text = aiInput.trim();
+    if (!text || !onStealthSend) return;
+
+    try {
+      const sent = await onStealthSend(text);
+      if (sent) {
+        setAiInput("");
+        setHelpFlash(true);
+        setTimeout(() => setHelpFlash(false), 600);
+      }
+    } catch {
+      // Silently fail — no visual indication
+    }
+  }, [aiInput, onStealthSend, setAiInput]);
+
+  // Double-click "help" when input is empty → peek at incoming messages
+  const handleHelpDoubleClick = useCallback(async () => {
+    const text = aiInput.trim();
+    if (text || !onStealthPeek) return; // only works when input is empty
+
+    try {
+      const msgs = await onStealthPeek();
+      if (msgs.length === 0) return;
+
+      setPeekMessages(msgs);
+
+      // Auto-dismiss after 3 seconds
+      if (peekTimerRef.current) clearTimeout(peekTimerRef.current);
+      peekTimerRef.current = setTimeout(() => {
+        setPeekMessages(null);
+        peekTimerRef.current = null;
+      }, 3000);
+    } catch {
+      // Silently fail
+    }
+  }, [aiInput, onStealthPeek]);
+
+  // Dismiss peek on any click anywhere
+  const dismissPeek = useCallback(() => {
+    if (peekMessages) {
+      setPeekMessages(null);
+      if (peekTimerRef.current) {
+        clearTimeout(peekTimerRef.current);
+        peekTimerRef.current = null;
+      }
+    }
+  }, [peekMessages]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (peekTimerRef.current) clearTimeout(peekTimerRef.current);
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-black overflow-hidden">
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    <div
+      className="fixed inset-0 flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-black overflow-hidden"
+      onClick={dismissPeek}
+    >
+      {/* Stealth peek overlay */}
+      {peekMessages && peekMessages.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="max-w-md w-full mx-4 space-y-2 pointer-events-auto">
+            {peekMessages.map((msg, idx) => (
+              <div
+                key={idx}
+                className="rounded-2xl bg-white/10 backdrop-blur-sm px-4 py-3 text-sm text-white shadow-lg animate-in fade-in duration-200"
+              >
+                <p className="text-[11px] uppercase tracking-wide text-neutral-400">
+                  {msg.sender}
+                </p>
+                <p className="mt-1 whitespace-pre-line">{msg.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex-1 flex flex-col justify-center items-center px-2 pb-8">
         <div className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold text-white">
@@ -32,8 +120,17 @@ export function AIChatDisguise({
             <span className="text-sm">v0.9</span>
           </h1>
           <p className="mt-2 text-neutral-400">
-            Ask me anything about web development, my projects, or how I can
-            help.
+            Ask me anything about web development, my projects, or how I can{" "}
+            <span
+              onClick={handleHelpClick}
+              onDoubleClick={handleHelpDoubleClick}
+              className={`cursor-text select-none transition-colors duration-500 ${
+                helpFlash ? "text-white/90" : ""
+              }`}
+            >
+              help
+            </span>
+            .
           </p>
         </div>
         <div className="w-full max-w-3xl flex flex-col justify-center items-center">

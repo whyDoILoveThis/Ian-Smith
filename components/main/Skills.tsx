@@ -1,7 +1,7 @@
 "use client";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
-import { motion, useAnimationControls, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useSkills } from "@/hooks/useSkills";
 
 /* ------------------------------------------------------------------ */
@@ -54,14 +54,62 @@ const SparkleParticle = ({ s }: { s: Sparkle }) => (
 /* ------------------------------------------------------------------ */
 /*  Skill Card (stagger-animated + click spin + sparkle)              */
 /* ------------------------------------------------------------------ */
+const SPIN_IMPULSE = 600; // degrees/s added per click
+const MAX_VELOCITY = 3600; // cap at ~10 rev/s
+const FRICTION = 0.97; // multiplied each frame — smooth decel
+const STOP_THRESHOLD = 8; // deg/s to snap to rest
+
 const SkillCard = ({ skill, index }: { skill: Skill; index: number }) => {
-  const iconControls = useAnimationControls();
-  const [spinning, setSpinning] = useState(false);
   const [sparkles, setSparkles] = useState<Sparkle[]>([]);
+  const [rotation, setRotation] = useState(0);
   const cardRef = useRef<HTMLLIElement>(null);
+  const iconRef = useRef<HTMLDivElement>(null);
   let sparkleId = useRef(0);
 
-  const handleClick = async (e: React.MouseEvent) => {
+  // physics refs (no re-renders)
+  const velocity = useRef(0);
+  const angle = useRef(0);
+  const rafId = useRef<number | null>(null);
+  const lastTime = useRef<number | null>(null);
+
+  const tick = useCallback(() => {
+    const now = performance.now();
+    const dt = lastTime.current ? (now - lastTime.current) / 1000 : 0.016;
+    lastTime.current = now;
+
+    // apply friction
+    velocity.current *= FRICTION;
+
+    // update angle
+    angle.current = (angle.current + velocity.current * dt) % 360;
+
+    // write directly to DOM for 0-lag smoothness
+    if (iconRef.current) {
+      iconRef.current.style.transform = `rotateY(${angle.current}deg)`;
+    }
+
+    if (Math.abs(velocity.current) < STOP_THRESHOLD) {
+      velocity.current = 0;
+      angle.current = 0;
+      if (iconRef.current) {
+        iconRef.current.style.transform = `rotateY(0deg)`;
+      }
+      rafId.current = null;
+      lastTime.current = null;
+      return; // stop loop
+    }
+
+    rafId.current = requestAnimationFrame(tick);
+  }, []);
+
+  // clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
+
+  const handleClick = (e: React.MouseEvent) => {
     // Sparkle burst at click position relative to card
     const rect = cardRef.current?.getBoundingClientRect();
     if (rect) {
@@ -87,14 +135,14 @@ const SkillCard = ({ skill, index }: { skill: Skill; index: number }) => {
       }, 600);
     }
 
-    if (spinning) return;
-    setSpinning(true);
-    await iconControls.start({
-      rotateY: [0, 360],
-      transition: { duration: 0.6, ease: "easeInOut" },
-    });
-    iconControls.set({ rotateY: 0 });
-    setSpinning(false);
+    // add impulse, capped
+    velocity.current = Math.min(velocity.current + SPIN_IMPULSE, MAX_VELOCITY);
+
+    // start loop if not running
+    if (!rafId.current) {
+      lastTime.current = null;
+      rafId.current = requestAnimationFrame(tick);
+    }
   };
 
   return (
@@ -131,7 +179,7 @@ const SkillCard = ({ skill, index }: { skill: Skill; index: number }) => {
         className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300
         bg-gradient-to-br from-purple-400/10 via-transparent to-cyan-400/10 dark:from-purple-400/15 dark:to-cyan-400/15"
       />
-      <motion.div animate={iconControls} style={{ perspective: 600 }}>
+      <div ref={iconRef} style={{ perspective: 600, willChange: "transform" }}>
         <Image
           src={skill.url}
           alt={skill.text}
@@ -139,7 +187,7 @@ const SkillCard = ({ skill, index }: { skill: Skill; index: number }) => {
           height={34}
           className="relative z-10 drop-shadow-sm transition-transform duration-300 group-hover:scale-110"
         />
-      </motion.div>
+      </div>
       <span
         className="relative z-10 text-[13px] font-medium text-neutral-600 dark:text-neutral-300
         transition-colors duration-300 group-hover:text-neutral-900 dark:group-hover:text-white whitespace-nowrap"
