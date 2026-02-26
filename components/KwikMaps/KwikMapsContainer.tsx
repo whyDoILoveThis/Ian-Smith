@@ -33,6 +33,7 @@ interface RouteSnapshot {
   legs: RouteLeg[];
   totalDistanceMiles: number;
   totalDistanceKm: number;
+  coordinates: Coordinate[]; // full coordinates list for undo/redo of add/remove
 }
 
 interface ChatMessage {
@@ -180,6 +181,9 @@ export function KwikMapsContainer() {
       setLegs(msg.previousRoute.legs);
       setTotalDistanceMiles(msg.previousRoute.totalDistanceMiles);
       setTotalDistanceKm(msg.previousRoute.totalDistanceKm);
+      if (msg.previousRoute.coordinates) {
+        setCoordinates(msg.previousRoute.coordinates);
+      }
 
       // Mark this message as undone so the button shows the state
       setChatMessages((prev) =>
@@ -198,6 +202,9 @@ export function KwikMapsContainer() {
       setLegs(msg.newRoute.legs);
       setTotalDistanceMiles(msg.newRoute.totalDistanceMiles);
       setTotalDistanceKm(msg.newRoute.totalDistanceKm);
+      if (msg.newRoute.coordinates) {
+        setCoordinates(msg.newRoute.coordinates);
+      }
 
       setChatMessages((prev) =>
         prev.map((m) => (m.id === messageId ? { ...m, undone: false } : m)),
@@ -266,12 +273,28 @@ export function KwikMapsContainer() {
             legs,
             totalDistanceMiles,
             totalDistanceKm,
+            coordinates: [...coordinates],
           };
+
+          // Compute new coordinates list after add/remove
+          let newCoordinates = [...coordinates];
+          if (data.routeUpdate.removedCoordinateIds) {
+            const removeSet = new Set(data.routeUpdate.removedCoordinateIds);
+            newCoordinates = newCoordinates.filter((c) => !removeSet.has(c.id));
+          }
+          if (data.routeUpdate.addedCoordinates) {
+            newCoordinates = [
+              ...newCoordinates,
+              ...data.routeUpdate.addedCoordinates,
+            ];
+          }
+
           const newSnapshot: RouteSnapshot = {
             optimizedRoute: data.routeUpdate.optimizedRoute,
             legs: data.routeUpdate.legs,
             totalDistanceMiles: data.routeUpdate.totalDistanceMiles,
             totalDistanceKm: data.routeUpdate.totalDistanceKm,
+            coordinates: newCoordinates,
           };
           setChatMessages((prev) =>
             prev.map((m) =>
@@ -289,6 +312,14 @@ export function KwikMapsContainer() {
           setLegs(data.routeUpdate.legs);
           setTotalDistanceMiles(data.routeUpdate.totalDistanceMiles);
           setTotalDistanceKm(data.routeUpdate.totalDistanceKm);
+
+          // Sync coordinates if locations were added or removed
+          if (
+            data.routeUpdate.addedCoordinates ||
+            data.routeUpdate.removedCoordinateIds
+          ) {
+            setCoordinates(newCoordinates);
+          }
         }
       } else {
         const errorMessage: ChatMessage = {
@@ -312,7 +343,7 @@ export function KwikMapsContainer() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-4 md:p-8">
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-4 md:p-8">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
@@ -325,9 +356,9 @@ export function KwikMapsContainer() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500">
+            <span className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500">
               <Navigation2 size={24} className="text-white" />
-            </div>
+            </span>
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-300 to-cyan-300 bg-clip-text text-transparent">
               KwikMaps
             </h1>
@@ -568,9 +599,10 @@ export function KwikMapsContainer() {
                   Chat with AI about your route
                 </h3>
                 <p className="text-white/50 text-xs mb-4">
-                  Suggest changes like &quot;why not put Memphis first?&quot; or
-                  &quot;swap stops 3 and 5&quot; — the AI will evaluate and
-                  update the map if it agrees.
+                  Suggest changes like &quot;why not put Memphis first?&quot;,
+                  &quot;swap stops 3 and 5&quot;, &quot;add a stop in
+                  Atlanta&quot;, or &quot;remove Memphis&quot; — the AI will
+                  evaluate and update the map.
                 </p>
 
                 {/* Chat messages */}

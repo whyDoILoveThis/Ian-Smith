@@ -92,23 +92,39 @@ RULES FOR RESPONDING:
 2. Consider total distance, logical geographic flow, hotel availability, and practical driving concerns.
 3. If the suggestion makes sense or the user insists, agree and provide the new order.
 4. If the suggestion would make the route significantly worse, explain why respectfully but if the user insists, comply.
+5. You can also ADD new locations or REMOVE existing locations from the route when the user requests it.
 
-CRITICAL - WHEN YOU AGREE TO A ROUTE CHANGE:
-You MUST include a special line at the VERY END of your response in this EXACT format:
+--- ROUTE REORDER ---
+When you agree to reorder the route, include at the VERY END of your response:
 ROUTE_UPDATE:[3,1,2,4,5,6,7,8,9,10]
 
-The numbers are STOP NUMBERS referring to the current order above. For example, for ${body.currentRoute.length} stops, list ALL ${body.currentRoute.length} stop numbers in the new desired order. You must include every stop number from 1 to ${body.currentRoute.length} exactly once.
+The numbers are STOP NUMBERS referring to the current order above. For ${body.currentRoute.length} stops, list ALL stop numbers in the new desired order. You must include every stop number from 1 to ${body.currentRoute.length} exactly once.
 
-Example: If the user wants to visit Stop 3 first, then Stop 1, then Stop 2, then the rest in order, write:
-ROUTE_UPDATE:[3,1,2,4,5,6,7,8,9,10]
+--- ADDING LOCATIONS ---
+When the user asks to ADD a new location (e.g., "add Atlanta", "include a stop in Denver"), you MUST know the approximate latitude and longitude of the location. Include at the VERY END of your response:
+ROUTE_ADD:[{"name":"Atlanta Downtown","latitude":33.7490,"longitude":-84.3880,"afterStop":3}]
 
-This line MUST be the very last line of your response with NO text after it. Do NOT use location names or IDs in the ROUTE_UPDATE — only stop numbers.
+afterStop is the current stop number after which the new location should be inserted. Use 0 to insert at the beginning. You can add multiple locations in the array.
+After adding, if you also want to reorder, include a ROUTE_UPDATE line AFTER the ROUTE_ADD line using the NEW stop count (current + added).
 
-If you are NOT changing the route, do NOT include any ROUTE_UPDATE line.
+--- REMOVING LOCATIONS ---
+When the user asks to REMOVE a location (e.g., "remove Memphis", "drop stop 3"), include at the VERY END of your response:
+ROUTE_REMOVE:[3,5]
+
+The numbers are the CURRENT stop numbers to remove. After removing, if you also want to reorder the remaining stops, include a ROUTE_UPDATE line AFTER the ROUTE_REMOVE line using the NEW stop numbers (re-numbered 1 to N after removal).
+
+--- COMBINING OPERATIONS ---
+You can combine ROUTE_REMOVE, ROUTE_ADD, and ROUTE_UPDATE in a single response. They are processed in this order:
+1. ROUTE_REMOVE (remove stops first)
+2. ROUTE_ADD (add new stops)
+3. ROUTE_UPDATE (reorder the resulting list)
+
+All directive lines MUST appear at the very end of your response with NO text after them.
+If you are NOT changing the route, do NOT include any directive lines.
 
 When the user references stops by number, those numbers refer to the current order shown above (Stop 1, Stop 2, etc.).
 When the user references stops by name, map them to the stop numbers above.
-If they only mention a few stops, assume unmentioned stops keep their relative position but are placed after the mentioned ones. You MUST still list ALL ${body.currentRoute.length} stops in the ROUTE_UPDATE.
+If they only mention a few stops for reorder, assume unmentioned stops keep their relative position but are placed after the mentioned ones. You MUST still list ALL stops in the ROUTE_UPDATE.
 
 Keep responses conversational, practical, and concise. Do not use asterisks or markdown code blocks. Use plain text.`;
 
@@ -178,57 +194,121 @@ Keep responses conversational, practical, and concise. Do not use asterisks or m
 
     const replyText = typeof reply === 'string' ? reply.trim() : JSON.stringify(reply);
 
-    // Check if the AI wants to update the route
-    // Flexible regex: handles optional space after colon and various formatting
-    const routeUpdateMatch = replyText.match(/ROUTE_UPDATE:\s*\[([^\]]+)\]/);
-
-    let newRoute: Coordinate[] | null = null;
-    let newLegs: typeof currentStats.legs | null = null;
-    let newTotalDistanceMiles: number | null = null;
-    let newTotalDistanceKm: number | null = null;
+    // ── Parse AI directives ──
     let displayReply = replyText;
+    let workingRoute = [...body.currentRoute];
+    const addedCoordinates: Coordinate[] = [];
+    const removedCoordinateIds: string[] = [];
+    let routeChanged = false;
 
+    // 1. Process ROUTE_REMOVE
+    const routeRemoveMatch = replyText.match(/ROUTE_REMOVE:\s*\[([^\]]+)\]/);
+    if (routeRemoveMatch) {
+      displayReply = displayReply.replace(/\n?ROUTE_REMOVE:\s*\[[^\]]+\]/, '').trim();
+
+      const removeNumbers = routeRemoveMatch[1]
+        .split(',')
+        .map((s: string) => parseInt(s.trim(), 10))
+        .filter((n: number) => !isNaN(n));
+
+      const N = workingRoute.length;
+      const validRemove = removeNumbers.every((n: number) => n >= 1 && n <= N);
+
+      if (validRemove && removeNumbers.length > 0 && removeNumbers.length < N) {
+        const removeSet = new Set(removeNumbers);
+        // Collect IDs of removed coordinates
+        removeNumbers.forEach((n: number) => {
+          removedCoordinateIds.push(workingRoute[n - 1].id);
+        });
+        // Filter out removed stops
+        workingRoute = workingRoute.filter((_: Coordinate, i: number) => !removeSet.has(i + 1));
+        routeChanged = true;
+      }
+    }
+
+    // 2. Process ROUTE_ADD
+    const routeAddMatch = replyText.match(/ROUTE_ADD:\s*(\[\{[\s\S]*?\}\])/);
+    if (routeAddMatch) {
+      displayReply = displayReply.replace(/\n?ROUTE_ADD:\s*\[\{[\s\S]*?\}\]/, '').trim();
+
+      try {
+        const addItems: { name: string; latitude: number; longitude: number; afterStop?: number }[] =
+          JSON.parse(routeAddMatch[1]);
+
+        // Sort by afterStop descending so insertions don't shift indices
+        const sorted = [...addItems].sort(
+          (a, b) => (b.afterStop ?? workingRoute.length) - (a.afterStop ?? workingRoute.length)
+        );
+
+        for (const item of sorted) {
+          if (!item.name || typeof item.latitude !== 'number' || typeof item.longitude !== 'number') {
+            continue;
+          }
+          const { v4: uuidv4 } = await import('uuid');
+          const newCoord: Coordinate = {
+            id: uuidv4(),
+            name: item.name,
+            latitude: item.latitude,
+            longitude: item.longitude,
+          };
+          const insertAt = Math.min(
+            Math.max(item.afterStop ?? workingRoute.length, 0),
+            workingRoute.length
+          );
+          workingRoute.splice(insertAt, 0, newCoord);
+          addedCoordinates.push(newCoord);
+        }
+        routeChanged = addedCoordinates.length > 0 || routeChanged;
+      } catch (e) {
+        console.error('Failed to parse ROUTE_ADD payload:', e);
+      }
+    }
+
+    // 3. Process ROUTE_UPDATE (reorder after add/remove)
+    const routeUpdateMatch = replyText.match(/ROUTE_UPDATE:\s*\[([^\]]+)\]/);
     if (routeUpdateMatch) {
-      // Remove the ROUTE_UPDATE line from the display reply
-      displayReply = replyText.replace(/\n?ROUTE_UPDATE:\s*\[[^\]]+\]/, '').trim();
+      displayReply = displayReply.replace(/\n?ROUTE_UPDATE:\s*\[[^\]]+\]/, '').trim();
 
       const stopNumbers = routeUpdateMatch[1]
         .split(',')
         .map((s: string) => parseInt(s.trim(), 10))
         .filter((n: number) => !isNaN(n));
 
-      // Validate: all stop numbers are in range 1..N and all are present
-      const N = body.currentRoute.length;
+      const N = workingRoute.length;
       const validStops =
         stopNumbers.length === N &&
         stopNumbers.every((n: number) => n >= 1 && n <= N) &&
         new Set(stopNumbers).size === N;
 
       if (validStops) {
-        // Map stop numbers (1-based) back to actual coordinates from currentRoute
-        newRoute = stopNumbers.map((stopNum: number, index: number) => {
-          const coord = body.currentRoute[stopNum - 1]; // 1-based to 0-based
+        workingRoute = stopNumbers.map((stopNum: number, index: number) => {
+          const coord = workingRoute[stopNum - 1];
           return { ...coord, order: index + 1 };
         });
-
-        const stats = computeRouteStats(newRoute);
-        newLegs = stats.legs;
-        newTotalDistanceMiles = stats.totalDistanceMiles;
-        newTotalDistanceKm = stats.totalDistanceKm;
+        routeChanged = true;
       }
+    }
+
+    // Compute final stats if route changed
+    let routeUpdate = null;
+    if (routeChanged) {
+      // Assign final order numbers
+      workingRoute = workingRoute.map((c: Coordinate, i: number) => ({ ...c, order: i + 1 }));
+      const stats = computeRouteStats(workingRoute);
+      routeUpdate = {
+        optimizedRoute: workingRoute,
+        legs: stats.legs,
+        totalDistanceMiles: stats.totalDistanceMiles,
+        totalDistanceKm: stats.totalDistanceKm,
+        addedCoordinates: addedCoordinates.length > 0 ? addedCoordinates : undefined,
+        removedCoordinateIds: removedCoordinateIds.length > 0 ? removedCoordinateIds : undefined,
+      };
     }
 
     return NextResponse.json({
       success: true,
       reply: displayReply,
-      routeUpdate: newRoute
-        ? {
-            optimizedRoute: newRoute,
-            legs: newLegs,
-            totalDistanceMiles: newTotalDistanceMiles,
-            totalDistanceKm: newTotalDistanceKm,
-          }
-        : null,
+      routeUpdate,
     });
   } catch (error) {
     console.error('KwikMaps chat API error:', error);
