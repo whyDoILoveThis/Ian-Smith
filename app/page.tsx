@@ -13,10 +13,12 @@ import Footer from "@/components/main/Footer";
 import PurpleParticleToggle from "@/components/main/PurpleParticleToggle";
 import BrainfTodo from "@/components/sub/BrainfTodo";
 import NetworkSpeedMini from "@/components/main/NetworkSpeedMini";
-import WaterSortShowcase from "@/components/main/WaterSortShowcase";
-import TimelineShowcase from "@/components/main/TimelineShowcase";
-import ItsQuizMeShowcase from "@/components/main/ItsQuizMeShowcase";
-import IconCreatorShowcase from "@/components/main/IconCreatorShowcase";
+import {
+  WaterSortShowcaseCard,
+  TimelineShowcaseCard,
+  ItsQuizMeShowcaseCard,
+  IconCreatorShowcaseCard,
+} from "@/components/main/ShowcaseInstances";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
@@ -44,14 +46,14 @@ export default function Home() {
       </h2>
       <div className="h-1 w-24 bg-gradient-to-r from-indigo-500 via-blue-500 to-transparent rounded-full mb-20 mx-auto" />
       <div className="flex flex-col justify-center items-center gap-20">
-        <WaterSortShowcase />
-        <TimelineShowcase />
-        <ItsQuizMeShowcase />
-        <IconCreatorShowcase />
+        <WaterSortShowcaseCard />
+        <TimelineShowcaseCard />
+        <ItsQuizMeShowcaseCard />
+        <IconCreatorShowcaseCard />
       </div>
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && <ItsBot show={showBot} setShow={setShowBot} />}
-      <div className="h-6"/>
+      <div className="h-6" />
       <Footer />
     </article>
   );
