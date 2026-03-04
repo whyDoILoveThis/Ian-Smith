@@ -514,3 +514,9 @@ input[type="file"]::-webkit-file-upload-button {
   animation: keystroke-pulse 420ms ease-out forwards;
   pointer-events: none;
 }
+
+/* Magic-wand hold-to-toggle ring fill */
+@keyframes magic-ring-fill {
+  0% { stroke-dashoffset: 113.1; }
+  100% { stroke-dashoffset: 0; }
+}

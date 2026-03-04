@@ -1007,6 +1007,8 @@ export default function AIContentSugestions() {
               localPulseKey={chatMessages.localPulseKey}
               keystrokePulse={firebaseWithSlot.keystrokePulse}
               indicatorColors={firebaseWithSlot.indicatorColors}
+              messages={firebaseWithSlot.messages}
+              screenName={screenName}
             />
           </>
         )}

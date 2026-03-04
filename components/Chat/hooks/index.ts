@@ -9,3 +9,4 @@ export { useTouchIndicators } from "./useTouchIndicators";
 export { useDrawing } from "./useDrawing";
 export { useDrawingRecorder } from "./useDrawingRecorder";
 export { useSlots } from "./useSlots";
+export { useMagicWand } from "./useMagicWand";
