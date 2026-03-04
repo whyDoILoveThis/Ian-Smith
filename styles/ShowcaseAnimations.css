@@ -1,0 +1,143 @@
+/* ═══════════════════════════════════════════════════════════
+   Showcase CSS Animations
+   Decorative · Continuous · Non-interactive
+   All use transform & opacity only — no JS animation logic.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Floating rise ────────────────────────────────────────
+   Shared by all showcase floating particles / emojis.
+
+   Per-element CSS custom properties:
+     --sc-float-y        travel distance     (default -500px)
+     --sc-float-rotate   end rotation        (default 360deg)
+     --sc-float-peak     peak opacity @33%   (default 0.25)
+     --sc-float-mid      mid opacity  @67%   (default 0.2)
+
+   Framer Motion source mapping (4-value array → even stops):
+     [0, peak, mid, 0] → 0%, 33.3%, 66.7%, 100%
+   ────────────────────────────────────────────────────────── */
+@keyframes sc-float-rise {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  33.3% {
+    opacity: var(--sc-float-peak, 0.25);
+  }
+  66.7% {
+    opacity: var(--sc-float-mid, 0.2);
+  }
+  100% {
+    transform: translateY(var(--sc-float-y, -500px)) rotate(var(--sc-float-rotate, 360deg));
+    opacity: 0;
+  }
+}
+
+.sc-float {
+  opacity: 0;
+  animation-name: sc-float-rise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  /* animation-duration and animation-delay set via inline style */
+}
+
+/* ── Jar ambient glow pulse ──────────────────────────────
+   Original: opacity [0.3, 0.55, 0.3]
+   Duration: 2.5s · ease-in-out · infinite
+   ──────────────────────────────────────────────────────── */
+@keyframes sc-glow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.55; }
+}
+
+.sc-glow-pulse {
+  animation: sc-glow-pulse 2.5s ease-in-out infinite;
+}
+
+/* ── Liquid surface wave ─────────────────────────────────
+   Original: y [0, -2, 0]
+   Duration: 1.8s · ease-in-out · infinite
+   ──────────────────────────────────────────────────────── */
+@keyframes sc-liquid-wave {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+
+.sc-liquid-wave {
+  animation: sc-liquid-wave 1.8s ease-in-out infinite;
+}
+
+/* ── Wand / arrow nudge ──────────────────────────────────
+   Original: x [0, 4, 0]
+   Duration: 1.5s · ease-in-out · infinite
+   ──────────────────────────────────────────────────────── */
+@keyframes sc-wand-nudge {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(4px); }
+}
+
+.sc-wand-nudge {
+  animation: sc-wand-nudge 1.5s ease-in-out infinite;
+}
+
+/* ── Offscreen pause ─────────────────────────────────────
+   When the showcase section is not intersecting the viewport
+   the parent receives .sc-offscreen. Every continuous CSS
+   animation underneath freezes via animation-play-state,
+   eliminating compositor work for invisible elements.
+   ──────────────────────────────────────────────────────── */
+.sc-offscreen .sc-float,
+.sc-offscreen .sc-glow-pulse,
+.sc-offscreen .sc-liquid-wave,
+.sc-offscreen .sc-wand-nudge,
+.sc-offscreen .animate-pulse {
+  animation-play-state: paused;
+}
+
+/* ── Tube entrance: slide up + fade in ───────────────────
+   Triggered when the parent gets .sc-hero-entered.
+   Uses `animation-fill-mode: both` so the element stays
+   at the "from" state during the delay, then holds the
+   "to" state after finishing.
+   ──────────────────────────────────────────────────────── */
+@keyframes sc-tube-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Liquid fall: drops into tube from above ──────────────
+   Each layer starts positioned above the tube opening
+   and falls down to its natural stacked position.
+   The tube body's overflow:hidden clips the layer
+   while it's above, creating the "pouring in" look.
+   animation-fill-mode: both holds translateY(-140px)
+   during the delay and translateY(0) after.
+   ────────────────────────────────────────────────────── */
+@keyframes sc-liquid-fall {
+  from {
+    transform: translateY(-140px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* ── Jar entrance: scale + fade ──────────────────────────
+   The center jar pops in slightly after the flanking tubes.
+   ──────────────────────────────────────────────────────── */
+@keyframes sc-jar-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
