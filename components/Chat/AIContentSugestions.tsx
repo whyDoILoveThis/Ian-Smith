@@ -82,16 +82,15 @@ export default function AIContentSugestions() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(false);
 
-  // ── Service Worker registration for PWA + Push ─────────────────────
+  // ── Service Worker registration for PWA + Push + FCM ───────────────
+  // Only sw.js is registered — it contains PWA caching, Web Push, AND
+  // Firebase Messaging handlers.  Do NOT register firebase-messaging-sw.js
+  // separately (same scope would replace sw.js).
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")
         .catch((err) => console.warn("SW registration failed:", err));
-      // Also register the FCM-specific service worker for background push
-      navigator.serviceWorker
-        .register("/firebase-messaging-sw.js")
-        .catch((err) => console.warn("FCM SW registration failed:", err));
     }
   }, []);
 
@@ -451,6 +450,24 @@ export default function AIContentSugestions() {
     showToast,
   });
 
+  // ── Auto-restore notification state from localStorage ──────────────
+  useEffect(() => {
+    if (!isUnlocked || !slotId) return;
+    try {
+      const saved = localStorage.getItem("chat-notifications-enabled");
+      if (
+        saved === "true" &&
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
+        setNotificationsEnabled(true);
+        console.log("[Notifications] Auto-restored from localStorage");
+      }
+    } catch {
+      /* */
+    }
+  }, [isUnlocked, slotId]);
+
   // ── Message notifications ──────────────────────────────────────────
   const seenMessageIdsRef = React.useRef<Set<string>>(new Set());
   const notifInitializedRef = React.useRef(false);
@@ -647,11 +664,21 @@ export default function AIContentSugestions() {
       await fcm.enableFCM();
 
       setNotificationsEnabled(true);
+      try {
+        localStorage.setItem("chat-notifications-enabled", "true");
+      } catch {
+        /* */
+      }
     } else {
       // Turning off — unsubscribe from both push systems
       await unsubscribeFromPush();
       await fcm.disableFCM();
       setNotificationsEnabled(false);
+      try {
+        localStorage.setItem("chat-notifications-enabled", "false");
+      } catch {
+        /* */
+      }
     }
   }, [notificationsEnabled, subscribeToPush, unsubscribeFromPush, fcm]);
 
