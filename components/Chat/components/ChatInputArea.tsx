@@ -9,8 +9,142 @@ const DEFAULT_SLOT_COLORS: Record<string, string> = {
   "2": "#9d3dff", // purple
 };
 
-/** How long (ms) the user must hold the button to toggle magic-wand mode */
-const HOLD_TO_TOGGLE_MS = 5_000;
+/** How long (ms) the user must hold the button to open the magic menu */
+const HOLD_TO_MENU_MS = 1_000;
+
+// ── Magic-menu option definitions ────────────────────────────────────
+type MagicOption = {
+  id: string;
+  label: string;
+  icon: string;
+  /** Sent to the API as the `mode` field */
+  mode: string;
+};
+
+type ReplyLength = "short" | "medium" | "long";
+
+const LENGTH_CHIPS: { value: ReplyLength; label: string }[] = [
+  { value: "short", label: "Short" },
+  { value: "medium", label: "Medium" },
+  { value: "long", label: "Long" },
+];
+
+/** Options shown when the input field is empty (generate from scratch) */
+const GENERATE_OPTIONS: MagicOption[] = [
+  { id: "gen-reply", label: "Generate Reply", icon: "✨", mode: "generate" },
+  { id: "gen-funny", label: "Funny Reply", icon: "😂", mode: "generate-funny" },
+  {
+    id: "gen-flirty",
+    label: "Flirty Reply",
+    icon: "😏",
+    mode: "generate-flirty",
+  },
+  {
+    id: "gen-formal",
+    label: "Formal Reply",
+    icon: "🎩",
+    mode: "generate-formal",
+  },
+  {
+    id: "gen-sarcastic",
+    label: "Sarcastic Reply",
+    icon: "🙄",
+    mode: "generate-sarcastic",
+  },
+  {
+    id: "gen-supportive",
+    label: "Supportive Reply",
+    icon: "💪",
+    mode: "generate-supportive",
+  },
+  {
+    id: "gen-mysterious",
+    label: "Mysterious Reply",
+    icon: "🔮",
+    mode: "generate-mysterious",
+  },
+  { id: "gen-bold", label: "Bold Reply", icon: "🔥", mode: "generate-bold" },
+  {
+    id: "gen-poetic",
+    label: "Poetic Reply",
+    icon: "📝",
+    mode: "generate-poetic",
+  },
+  { id: "gen-genz", label: "Gen-Z Reply", icon: "💀", mode: "generate-genz" },
+  {
+    id: "gen-sexy",
+    label: "Sexy Reply",
+    icon: "🥵",
+    mode: "generate-sexy",
+  },
+];
+
+/** Options shown when the input field already has text (rewrite) */
+const REWRITE_OPTIONS: MagicOption[] = [
+  { id: "rw-improve", label: "Improve Wording", icon: "✨", mode: "rewrite" },
+  {
+    id: "rw-expand",
+    label: "Expand & Deepen",
+    icon: "💡",
+    mode: "rewrite-expand",
+  },
+  {
+    id: "rw-funny",
+    label: "Make It Funnier",
+    icon: "😂",
+    mode: "rewrite-funny",
+  },
+  {
+    id: "rw-flirty",
+    label: "Make It Flirty",
+    icon: "😏",
+    mode: "rewrite-flirty",
+  },
+  {
+    id: "rw-formal",
+    label: "Make It Formal",
+    icon: "🎩",
+    mode: "rewrite-formal",
+  },
+  {
+    id: "rw-sarcastic",
+    label: "Make It Sarcastic",
+    icon: "🙄",
+    mode: "rewrite-sarcastic",
+  },
+  {
+    id: "rw-supportive",
+    label: "Make It Supportive",
+    icon: "💪",
+    mode: "rewrite-supportive",
+  },
+  {
+    id: "rw-mysterious",
+    label: "Make It Mysterious",
+    icon: "🔮",
+    mode: "rewrite-mysterious",
+  },
+  { id: "rw-bold", label: "Make It Bolder", icon: "🔥", mode: "rewrite-bold" },
+  {
+    id: "rw-poetic",
+    label: "Make It Poetic",
+    icon: "📝",
+    mode: "rewrite-poetic",
+  },
+  { id: "rw-genz", label: "Gen-Z It", icon: "💀", mode: "rewrite-genz" },
+  {
+    id: "rw-sexy",
+    label: "Make It Sexy",
+    icon: "🥵",
+    mode: "rewrite-sexy",
+  },
+  {
+    id: "rw-shorter",
+    label: "Make It Shorter",
+    icon: "✂️",
+    mode: "rewrite-shorter",
+  },
+];
 
 type ChatInputAreaProps = {
   slotId: "1" | "2" | null;
@@ -57,14 +191,15 @@ export function ChatInputArea({
   const inputRef = useRef<HTMLInputElement>(null);
   const wasSendingRef = useRef(false);
 
-  // ── Magic-wand mode state ──────────────────────────────────────────
-  const [isMagicMode, setIsMagicMode] = useState(false);
+  // ── Magic-menu state ───────────────────────────────────────────────
+  const [showMagicMenu, setShowMagicMenu] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [replyLength, setReplyLength] = useState<ReplyLength>("medium");
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** True while the user is holding the button (for the ring animation) */
   const [isHolding, setIsHolding] = useState(false);
-  /** Suppress the click that fires on pointer-up after a successful hold-toggle */
-  const justToggledRef = useRef(false);
+  /** Suppress the click that fires on pointer-up after a successful hold */
+  const justOpenedMenuRef = useRef(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const clearHoldTimer = useCallback(() => {
     if (holdTimerRef.current) {
@@ -74,14 +209,14 @@ export function ChatInputArea({
   }, []);
 
   const onPointerDown = useCallback(() => {
-    justToggledRef.current = false;
+    justOpenedMenuRef.current = false;
     setIsHolding(true);
     holdTimerRef.current = setTimeout(() => {
-      setIsMagicMode((prev) => !prev);
+      setShowMagicMenu((prev) => !prev);
       holdTimerRef.current = null;
       setIsHolding(false);
-      justToggledRef.current = true;
-    }, HOLD_TO_TOGGLE_MS);
+      justOpenedMenuRef.current = true;
+    }, HOLD_TO_MENU_MS);
   }, []);
 
   const onPointerUpOrLeave = useCallback(() => {
@@ -89,43 +224,78 @@ export function ChatInputArea({
     clearHoldTimer();
   }, [clearHoldTimer]);
 
+  // Close magic menu when clicking outside
+  useEffect(() => {
+    if (!showMagicMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMagicMenu(false);
+      }
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [showMagicMenu]);
+
   // Clean up on unmount
   useEffect(() => clearHoldTimer, [clearHoldTimer]);
 
-  // ── Magic-wand action ──────────────────────────────────────────────
-  const handleMagicWand = useCallback(async () => {
-    if (isGenerating) return;
-
-    const recent = messages
+  // ── Build recent messages for AI (with correct sender tagging) ─────
+  const getRecentForAI = useCallback(() => {
+    return messages
       .filter((m) => !!m.decryptedText)
       .slice(-20)
-      .map((m) => ({ sender: m.sender, text: m.decryptedText! }));
+      .map((m) => ({
+        sender: m.sender,
+        text: m.decryptedText!,
+        isMe: m.slotId === slotId,
+      }));
+  }, [messages, slotId]);
 
-    if (recent.length === 0) return;
+  // ── Fire a magic-menu action ───────────────────────────────────────
+  const handleMagicOption = useCallback(
+    async (mode: string) => {
+      if (isGenerating) return;
 
-    setIsGenerating(true);
-    try {
-      const body: Record<string, unknown> = {
-        recentMessages: recent,
-        myName: screenName,
-      };
-      const currentText = messageText.trim();
-      if (currentText.length > 0) body.currentText = currentText;
+      const recent = getRecentForAI();
+      if (recent.length === 0) return;
 
-      const res = await fetch("/api/chat-magic-reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (data.reply) handleTypingChange(data.reply);
-    } catch {
-      // silently fail
-    } finally {
-      setIsGenerating(false);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [isGenerating, messages, screenName, messageText, handleTypingChange]);
+      setShowMagicMenu(false);
+      setIsGenerating(true);
+      try {
+        const body: Record<string, unknown> = {
+          recentMessages: recent,
+          myName: screenName,
+          mySlotId: slotId,
+          mode,
+          length: replyLength,
+        };
+        const currentText = messageText.trim();
+        if (currentText.length > 0) body.currentText = currentText;
+
+        const res = await fetch("/api/chat-magic-reply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.reply) handleTypingChange(data.reply);
+      } catch {
+        // silently fail
+      } finally {
+        setIsGenerating(false);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
+    },
+    [
+      isGenerating,
+      getRecentForAI,
+      screenName,
+      slotId,
+      messageText,
+      handleTypingChange,
+      replyLength,
+    ],
+  );
 
   // Track remote pulse from the OTHER slot
   const otherSlot = slotId === "1" ? "2" : "1";
@@ -285,113 +455,140 @@ export function ChatInputArea({
             />
           </svg>
         </button>
-        <button
-          onClick={() => {
-            // Suppress the click that fires after a hold-toggle completed
-            if (justToggledRef.current) {
-              justToggledRef.current = false;
-              return;
-            }
-            if (isMagicMode) {
-              handleMagicWand();
-            } else {
-              sendAndRefocus();
-            }
-          }}
-          onPointerDown={onPointerDown}
-          onPointerUp={onPointerUpOrLeave}
-          onPointerLeave={onPointerUpOrLeave}
-          onContextMenu={(e) => e.preventDefault()}
-          disabled={
-            !slotId ||
-            (isMagicMode ? isGenerating : isSending || !messageText.trim())
-          }
-          className={`relative flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${
-            isMagicMode
-              ? "bg-purple-600 text-white hover:bg-purple-500"
-              : `${themeColors.btn} ${themeColors.text}`
-          } hover:opacity-80`}
-          title={
-            isMagicMode
-              ? messageText.trim()
-                ? "Reword with AI (hold 5s to switch back)"
-                : "Generate AI reply (hold 5s to switch back)"
-              : "Send (hold 5s for magic wand)"
-          }
-        >
-          {/* Hold-to-toggle ring animation */}
-          {isHolding && (
-            <svg
-              className="absolute inset-0 h-full w-full -rotate-90 pointer-events-none"
-              viewBox="0 0 40 40"
+        {/* Send / Magic button + popup menu */}
+        <div className="relative">
+          {/* Magic-menu popup (appears above the button) */}
+          {showMagicMenu && (
+            <div
+              ref={menuRef}
+              className="absolute bottom-full right-0 mb-2 w-52 rounded-xl border border-white/15 bg-neutral-900/95 shadow-xl shadow-black/50 backdrop-blur-md overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
             >
-              <circle
-                cx="20"
-                cy="20"
-                r="18"
+              {/* Header */}
+              <div className="px-3 py-2 border-b border-white/10">
+                <p className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider">
+                  {messageText.trim() ? "Rewrite with AI" : "Generate with AI"}
+                </p>
+              </div>
+
+              {/* Length selector */}
+              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
+                {LENGTH_CHIPS.map((chip) => (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    onClick={() => setReplyLength(chip.value)}
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
+                      replyLength === chip.value
+                        ? "bg-purple-600 text-white"
+                        : "bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Scrollable options list */}
+              <div className="max-h-52 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
+                {(messageText.trim() ? REWRITE_OPTIONS : GENERATE_OPTIONS).map(
+                  (opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      disabled={isGenerating}
+                      onClick={() => handleMagicOption(opt.mode)}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-white/90 transition hover:bg-white/10 disabled:opacity-50"
+                    >
+                      <span className="text-base leading-none">{opt.icon}</span>
+                      <span>{opt.label}</span>
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              // Suppress the click that fires after the hold-menu opened
+              if (justOpenedMenuRef.current) {
+                justOpenedMenuRef.current = false;
+                return;
+              }
+              if (!showMagicMenu) sendAndRefocus();
+            }}
+            onPointerDown={onPointerDown}
+            onPointerUp={onPointerUpOrLeave}
+            onPointerLeave={onPointerUpOrLeave}
+            onContextMenu={(e) => e.preventDefault()}
+            disabled={
+              !slotId ||
+              isSending ||
+              isGenerating ||
+              (!showMagicMenu && !messageText.trim())
+            }
+            className={`relative flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${themeColors.btn} ${themeColors.text} hover:opacity-80`}
+            title="Send (hold 5s for AI magic menu)"
+          >
+            {/* Hold-to-open ring animation */}
+            {isHolding && (
+              <svg
+                className="absolute inset-0 h-full w-full -rotate-90 pointer-events-none"
+                viewBox="0 0 40 40"
+              >
+                <circle
+                  cx="20"
+                  cy="20"
+                  r="18"
+                  fill="none"
+                  stroke="#a855f7"
+                  strokeWidth="2.5"
+                  strokeDasharray={`${2 * Math.PI * 18}`}
+                  strokeDashoffset={`${2 * Math.PI * 18}`}
+                  strokeLinecap="round"
+                  style={{
+                    animation: `magic-ring-fill ${HOLD_TO_MENU_MS}ms linear forwards`,
+                  }}
+                />
+              </svg>
+            )}
+            {isSending || isGenerating ? (
+              <svg
+                className="h-5 w-5 animate-spin"
+                viewBox="0 0 24 24"
                 fill="none"
-                stroke={isMagicMode ? "#a855f7" : "#6366f1"}
-                strokeWidth="2.5"
-                strokeDasharray={`${2 * Math.PI * 18}`}
-                strokeDashoffset={`${2 * Math.PI * 18}`}
-                strokeLinecap="round"
-                style={{
-                  animation: `magic-ring-fill ${HOLD_TO_TOGGLE_MS}ms linear forwards`,
-                }}
-              />
-            </svg>
-          )}
-          {isSending || isGenerating ? (
-            <svg
-              className="h-5 w-5 animate-spin"
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="h-5 w-5"
+                fill="none"
                 stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-          ) : isMagicMode ? (
-            /* Magic wand icon */
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
-              />
-            </svg>
-          ) : (
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-              />
-            </svg>
-          )}
-        </button>
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
