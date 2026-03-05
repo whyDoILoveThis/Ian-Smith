@@ -38,6 +38,7 @@ import {
   useDrawing,
   useDrawingRecorder,
   useSlots,
+  useFCMNotifications,
 } from "./hooks";
 import {
   LockBoxScreen,
@@ -87,6 +88,10 @@ export default function AIContentSugestions() {
       navigator.serviceWorker
         .register("/sw.js")
         .catch((err) => console.warn("SW registration failed:", err));
+      // Also register the FCM-specific service worker for background push
+      navigator.serviceWorker
+        .register("/firebase-messaging-sw.js")
+        .catch((err) => console.warn("FCM SW registration failed:", err));
     }
   }, []);
 
@@ -436,6 +441,16 @@ export default function AIContentSugestions() {
     }
   }, [voiceCall.callStatus]);
 
+  // ── Firebase Cloud Messaging (FCM) Push Notifications ──────────────
+  const fcm = useFCMNotifications({
+    isUnlocked,
+    roomPath,
+    slotId,
+    messages: firebaseWithSlot.messages,
+    isChatTabActive: activeTab === "chat" && showRealChat,
+    showToast,
+  });
+
   // ── Message notifications ──────────────────────────────────────────
   const seenMessageIdsRef = React.useRef<Set<string>>(new Set());
   const notifInitializedRef = React.useRef(false);
@@ -502,7 +517,7 @@ export default function AIContentSugestions() {
         /* audio not available */
       }
 
-      // 2. Send push notification via API (works even when tab is closed)
+      // 2. Send push notification via Web Push VAPID (works even when tab is closed)
       fetch("/api/push-send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -516,7 +531,23 @@ export default function AIContentSugestions() {
         /* silently fail — push is best effort */
       });
 
-      // 3. Local notification fallback (for when tab is in background but SW push not available)
+      // 3. Send FCM push notification (better Android PWA + iOS Safari support)
+      fetch("/api/fcm-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomPath,
+          senderSlotId: slotId,
+          senderName: msg.sender || "",
+          title: msg.sender || "New message",
+          body,
+          messageId: msg.id,
+        }),
+      }).catch(() => {
+        /* silently fail — FCM is best effort */
+      });
+
+      // 4. Local notification fallback (for when tab is in background but SW push not available)
       if (
         typeof Notification !== "undefined" &&
         Notification.permission === "granted"
@@ -606,19 +637,23 @@ export default function AIContentSugestions() {
         return; // can't enable, browser blocked it
       }
 
-      // Subscribe to push notifications
+      // Subscribe to Web Push (VAPID) notifications
       if ("serviceWorker" in navigator) {
         const reg = await navigator.serviceWorker.ready;
         await subscribeToPush(reg);
       }
 
+      // Also enable FCM push notifications
+      await fcm.enableFCM();
+
       setNotificationsEnabled(true);
     } else {
-      // Turning off — unsubscribe from push
+      // Turning off — unsubscribe from both push systems
       await unsubscribeFromPush();
+      await fcm.disableFCM();
       setNotificationsEnabled(false);
     }
-  }, [notificationsEnabled, subscribeToPush, unsubscribeFromPush]);
+  }, [notificationsEnabled, subscribeToPush, unsubscribeFromPush, fcm]);
 
   // Touch Indicators
   const touchIndicators = useTouchIndicators(slotId, roomPath);

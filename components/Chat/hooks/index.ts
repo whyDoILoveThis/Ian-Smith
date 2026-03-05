@@ -10,3 +10,4 @@ export { useDrawing } from "./useDrawing";
 export { useDrawingRecorder } from "./useDrawingRecorder";
 export { useSlots } from "./useSlots";
 export { useMagicWand } from "./useMagicWand";
+export { useFCMNotifications } from "./useFCMNotifications";
