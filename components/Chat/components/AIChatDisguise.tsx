@@ -13,6 +13,12 @@ type AIChatDisguiseProps = {
   onOpenLockBox: () => void;
   onStealthSend?: (text: string) => Promise<boolean>;
   onStealthPeek?: () => Promise<{ sender: string; text: string }[]>;
+  /** The passphrase saved in the parent (from a previous unlock or room entry) */
+  savedPassphrase?: string | null;
+  /** Called when the user enters a passphrase through the "Ask" gate */
+  onPassphraseUnlock?: (passphrase: string) => void;
+  /** Whether a combo has been set via the lockbox */
+  hasCombo?: boolean;
 };
 
 export function AIChatDisguise({
@@ -25,6 +31,9 @@ export function AIChatDisguise({
   onOpenLockBox,
   onStealthSend,
   onStealthPeek,
+  savedPassphrase,
+  onPassphraseUnlock,
+  hasCombo = false,
 }: AIChatDisguiseProps) {
   const [helpFlash, setHelpFlash] = useState(false);
   const [peekMessages, setPeekMessages] = useState<
@@ -32,7 +41,43 @@ export function AIChatDisguise({
   >(null);
   const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── "Ask" passphrase gate ──────────────────────────────────────────
+  const [showPassphraseInput, setShowPassphraseInput] = useState(false);
+  const [passphraseValue, setPassphraseValue] = useState("");
+  const [stealthUnlocked, setStealthUnlocked] = useState(false);
+  const passphraseInputRef = useRef<HTMLInputElement>(null);
+
+  // If the parent already has a saved passphrase, auto-unlock
+  useEffect(() => {
+    if (savedPassphrase && hasCombo) {
+      setStealthUnlocked(true);
+    }
+  }, [savedPassphrase, hasCombo]);
+
+  const handleAskClick = useCallback(() => {
+    if (stealthUnlocked) return; // already unlocked, no-op
+    setShowPassphraseInput((prev) => !prev);
+    // Focus input on next frame
+    requestAnimationFrame(() => passphraseInputRef.current?.focus());
+  }, [stealthUnlocked]);
+
+  const handlePassphraseSubmit = useCallback(() => {
+    const phrase = passphraseValue.trim();
+    if (!phrase) return;
+    if (!hasCombo) return; // need combo set first
+
+    // Propagate passphrase to parent so stealth functions target the
+    // correct room path. This only calls setPassphrase — it does NOT
+    // trigger setShowRealChat, so the disguise stays visible.
+    onPassphraseUnlock?.(phrase);
+    setStealthUnlocked(true);
+    setShowPassphraseInput(false);
+    setPassphraseValue("");
+  }, [passphraseValue, hasCombo, onPassphraseUnlock]);
+
+  // ── Stealth send (gated) ───────────────────────────────────────────
   const handleHelpClick = useCallback(async () => {
+    if (!stealthUnlocked) return; // gate
     const text = aiInput.trim();
     if (!text || !onStealthSend) return;
 
@@ -46,12 +91,13 @@ export function AIChatDisguise({
     } catch {
       // Silently fail — no visual indication
     }
-  }, [aiInput, onStealthSend, setAiInput]);
+  }, [stealthUnlocked, aiInput, onStealthSend, setAiInput]);
 
-  // Double-click "help" when input is empty → peek at incoming messages
+  // ── Stealth peek (gated) ───────────────────────────────────────────
   const handleHelpDoubleClick = useCallback(async () => {
+    if (!stealthUnlocked) return; // gate
     const text = aiInput.trim();
-    if (text || !onStealthPeek) return; // only works when input is empty
+    if (text || !onStealthPeek) return;
 
     try {
       const msgs = await onStealthPeek();
@@ -59,7 +105,6 @@ export function AIChatDisguise({
 
       setPeekMessages(msgs);
 
-      // Auto-dismiss after 3 seconds
       if (peekTimerRef.current) clearTimeout(peekTimerRef.current);
       peekTimerRef.current = setTimeout(() => {
         setPeekMessages(null);
@@ -68,7 +113,7 @@ export function AIChatDisguise({
     } catch {
       // Silently fail
     }
-  }, [aiInput, onStealthPeek]);
+  }, [stealthUnlocked, aiInput, onStealthPeek]);
 
   // Dismiss peek on any click anywhere
   const dismissPeek = useCallback(() => {
@@ -117,10 +162,17 @@ export function AIChatDisguise({
           <h1 className="text-3xl md:text-4xl font-bold text-white">
             Ian
             <span onClick={onOpenLockBox}>&apos;</span>s AI Assistant{" "}
-            <span className="text-sm">v0.9</span>
+            <span className="text-sm">v1.0</span>
           </h1>
           <p className="mt-2 text-neutral-400">
-            Ask me anything about web development, my projects, or how I can{" "}
+            <span
+              onClick={handleAskClick}
+              className={`cursor-text select-none transition-colors duration-300
+               `}
+            >
+              Ask
+            </span>{" "}
+            me anything about web development, my projects, or how I can{" "}
             <span
               onClick={handleHelpClick}
               onDoubleClick={handleHelpDoubleClick}
@@ -132,6 +184,34 @@ export function AIChatDisguise({
             </span>
             .
           </p>
+          {/* Passphrase gate input */}
+          {showPassphraseInput && !stealthUnlocked && (
+            <div className="mt-2 flex items-center gap-2 justify-center animate-in fade-in slide-in-from-top-1 duration-200">
+              <input
+                ref={passphraseInputRef}
+                type="password"
+                placeholder={hasCombo ? "Enter passphrase…" : "Set combo first"}
+                value={passphraseValue}
+                onChange={(e) => setPassphraseValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handlePassphraseSubmit();
+                  if (e.key === "Escape") {
+                    setShowPassphraseInput(false);
+                    setPassphraseValue("");
+                  }
+                }}
+                disabled={!hasCombo}
+                className="rounded-full border border-white/10 bg-black/40 px-4 py-1.5 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-emerald-400/40 disabled:opacity-40 w-56"
+              />
+              <button
+                onClick={handlePassphraseSubmit}
+                disabled={!hasCombo || !passphraseValue.trim()}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                →
+              </button>
+            </div>
+          )}
         </div>
         <div className="w-full max-w-3xl flex flex-col justify-center items-center">
           <div className="flex min-h-[520px] flex-col rounded-3xl border border-white/10 bg-white/5 backdrop-blur w-full">

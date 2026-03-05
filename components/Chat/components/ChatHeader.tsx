@@ -63,7 +63,9 @@ export function ChatHeader({
 
   // Search state
   const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // instant typing
+  const [searchQuery, setSearchQuery] = useState(""); // debounced for filtering
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [userFilter, setUserFilter] = useState<Set<"1" | "2">>(
     new Set<"1" | "2">(["1", "2"]),
   );
@@ -71,9 +73,68 @@ export function ChatHeader({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchPanelRef = useRef<HTMLDivElement>(null);
 
+  // Debounce: update the actual search query 250ms after the user stops typing
+  const handleSearchInputChange = useCallback((value: string) => {
+    setSearchInput(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setSearchQuery(value);
+    }, 250);
+  }, []);
+
+  // Cleanup debounce timer
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
+
   // Get unique sender names from slots
   const slot1Name = slots?.["1"]?.name || "User 1";
   const slot2Name = slots?.["2"]?.name || "User 2";
+
+  // Cache for date search strings — computed once per message, reused across searches
+  const dateSearchCacheRef = useRef<Map<string, string>>(new Map());
+
+  // Lazily build the date search string for a message
+  const getDateSearchString = useCallback((msg: Message): string => {
+    const cache = dateSearchCacheRef.current;
+    const cached = cache.get(msg.id);
+    if (cached !== undefined) return cached;
+
+    if (typeof msg.createdAt !== "number") {
+      cache.set(msg.id, "");
+      return "";
+    }
+    const date = new Date(msg.createdAt);
+    if (Number.isNaN(date.getTime())) {
+      cache.set(msg.id, "");
+      return "";
+    }
+    // Combine all date formats into one searchable string
+    const str = [
+      date.toLocaleDateString([], { month: "short", day: "numeric" }),
+      date.toLocaleDateString([], { month: "long", day: "numeric" }),
+      date.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      date.toLocaleDateString([], { month: "numeric", day: "numeric" }),
+      date.toLocaleDateString([], {
+        month: "numeric",
+        day: "numeric",
+        year: "numeric",
+      }),
+      date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    cache.set(msg.id, str);
+    return str;
+  }, []);
 
   // Search results
   const searchResults = useMemo(() => {
@@ -85,34 +146,12 @@ export function ChatHeader({
       // Filter by text content
       const text = msg.decryptedText?.toLowerCase() || "";
       if (text.includes(query)) return true;
-      // Filter by date/time
-      if (typeof msg.createdAt === "number") {
-        const date = new Date(msg.createdAt);
-        if (!Number.isNaN(date.getTime())) {
-          // Match against multiple date formats so users can type naturally
-          const formats = [
-            date.toLocaleDateString([], { month: "short", day: "numeric" }), // "Feb 10"
-            date.toLocaleDateString([], { month: "long", day: "numeric" }), // "February 10"
-            date.toLocaleDateString([], {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }), // "Feb 10, 2026"
-            date.toLocaleDateString([], { month: "numeric", day: "numeric" }), // "2/10"
-            date.toLocaleDateString([], {
-              month: "numeric",
-              day: "numeric",
-              year: "numeric",
-            }), // "2/10/2026"
-            date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), // "10:30 AM"
-            date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), // "10:30 AM"
-          ].map((s) => s.toLowerCase());
-          if (formats.some((f) => f.includes(query))) return true;
-        }
-      }
+      // Filter by date/time via cached string
+      const dateStr = getDateSearchString(msg);
+      if (dateStr && dateStr.includes(query)) return true;
       return false;
     });
-  }, [messages, searchQuery, userFilter]);
+  }, [messages, searchQuery, userFilter, getDateSearchString]);
 
   // Reset result index when results change
   useEffect(() => {
@@ -124,6 +163,7 @@ export function ChatHeader({
     if (showSearch) {
       setTimeout(() => searchInputRef.current?.focus(), 100);
     } else {
+      setSearchInput("");
       setSearchQuery("");
       setCurrentResultIndex(0);
       setUserFilter(new Set<"1" | "2">(["1", "2"]));
@@ -469,8 +509,8 @@ export function ChatHeader({
               <input
                 ref={searchInputRef}
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => handleSearchInputChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     if (e.shiftKey) {
@@ -487,7 +527,7 @@ export function ChatHeader({
               />
             </div>
             {/* Result count + nav arrows */}
-            {searchQuery.trim() && (
+            {searchInput.trim() && (
               <div className="flex items-center gap-1">
                 <span className="text-[11px] text-neutral-400 whitespace-nowrap min-w-[3rem] text-center">
                   {searchResults.length === 0

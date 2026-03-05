@@ -251,20 +251,25 @@ export default function AIContentSugestions() {
   // AI Chat hook for disguise
   const aiChat = useAIChat(combo, setShowRealChat, handlePassphraseDetected);
 
-  // Stealth send: secretly push a message to the legacy conversation
+  // Stealth send: secretly push a message to the conversation
   // from the AI disguise screen without entering the chat.
-  // Requires: combo set, user in slot 1 of the legacy room (per localStorage).
+  // Requires: combo set, passphrase set, user in slot 1 of the room (per localStorage).
   const handleStealthSend = useCallback(
     async (text: string): Promise<boolean> => {
       if (!combo) return false;
 
       try {
-        // Only works for the legacy conversation
-        const legacyRoomPath = comboToRoomPath(combo, SECRET_PHRASE);
-        const legacyKey = roomStorageKey(legacyRoomPath);
+        // Use the current passphrase if set, otherwise fall back to the
+        // original SECRET_PHRASE so stealth always targets the legacy room
+        // the user actually has session data for.
+        const stealthRoomPath = comboToRoomPath(
+          combo,
+          passphrase || SECRET_PHRASE,
+        );
+        const stealthKey = roomStorageKey(stealthRoomPath);
 
-        // Verify the user is in slot 1 of the legacy room
-        const raw = window.localStorage.getItem(legacyKey);
+        // Verify the user is in slot 1 of the room
+        const raw = window.localStorage.getItem(stealthKey);
         if (!raw) return false;
 
         const stored = JSON.parse(raw) as { slotId: string; name: string };
@@ -275,7 +280,7 @@ export default function AIContentSugestions() {
         const encrypted = await encryptMessage(text, key);
 
         // Push to Firebase RTDB
-        const msgRef = ref(rtdb, `${legacyRoomPath}/messages`);
+        const msgRef = ref(rtdb, `${stealthRoomPath}/messages`);
         await push(msgRef, {
           slotId: "1",
           sender: stored.name.trim(),
@@ -288,29 +293,32 @@ export default function AIContentSugestions() {
         return false;
       }
     },
-    [combo],
+    [combo, passphrase],
   );
 
   // Stealth peek: read recent messages sent to me (slot 2 msgs since my last slot 1 msg)
-  // from the legacy conversation, decrypt them, and return for temporary display.
+  // from the conversation, decrypt them, and return for temporary display.
   const handleStealthPeek = useCallback(async (): Promise<
     { sender: string; text: string }[]
   > => {
     if (!combo) return [];
 
     try {
-      const legacyRoomPath = comboToRoomPath(combo, SECRET_PHRASE);
-      const legacyKey = roomStorageKey(legacyRoomPath);
+      const stealthRoomPath = comboToRoomPath(
+        combo,
+        passphrase || SECRET_PHRASE,
+      );
+      const stealthKey = roomStorageKey(stealthRoomPath);
 
-      // Must be slot 1 in the legacy room
-      const raw = window.localStorage.getItem(legacyKey);
+      // Must be slot 1 in the room
+      const raw = window.localStorage.getItem(stealthKey);
       if (!raw) return [];
       const stored = JSON.parse(raw) as { slotId: string; name: string };
       if (stored?.slotId !== "1") return [];
 
       // Fetch last 50 messages
       const msgQuery = query(
-        ref(rtdb, `${legacyRoomPath}/messages`),
+        ref(rtdb, `${stealthRoomPath}/messages`),
         orderByKey(),
         limitToLast(50),
       );
@@ -359,7 +367,7 @@ export default function AIContentSugestions() {
     } catch {
       return [];
     }
-  }, [combo]);
+  }, [combo, passphrase]);
 
   // Compute the room path from the combo + passphrase
   const roomPath = useMemo(
@@ -787,6 +795,9 @@ export default function AIContentSugestions() {
         onOpenLockBox={() => setShowLockBox(true)}
         onStealthSend={handleStealthSend}
         onStealthPeek={handleStealthPeek}
+        savedPassphrase={passphrase}
+        onPassphraseUnlock={handlePassphraseDetected}
+        hasCombo={!!combo}
       />
     );
   }

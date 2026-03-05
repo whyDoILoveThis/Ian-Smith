@@ -102,8 +102,9 @@ export function ChatMessagesView({
       // so the user keeps seeing the same messages.
       const shift = messages.length - prevMsgLenRef.current;
       setWinStart((prev) => prev + shift);
-    } else if (grew) {
-      // New messages at the end — always pin to newest
+    } else if (grew && isNearBottomRef.current) {
+      // New messages at the end AND user is near the bottom — pin to newest.
+      // If the user is scrolled far up, leave them where they are.
       setWinStart(Math.max(0, messages.length - MESSAGES_PER_PAGE));
     }
 

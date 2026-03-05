@@ -55,6 +55,20 @@ export function useChatFirebase(
   // Structural digest — tracks message IDs + text to detect metadata-only updates
   const prevDigestRef = useRef("");
 
+  // Pre-sorted array of older msgs — avoids re-sorting the full set on each live update
+  const sortedOlderArrayRef = useRef<Message[]>([]);
+
+  // Track the oldest key we hold so loadOlderFromServer doesn't need to sort all IDs
+  const oldestKeyRef = useRef<string | null>(null);
+
+  // Version counter for older messages — bumped each time loadOlderFromServer adds data
+  // so onValue knows when to rebuild the full array vs. only process the live tail.
+  const olderVersionRef = useRef(0);
+  const prevOlderVersionRef = useRef(0);
+
+  // Cache the last merged array from onValue to avoid recreating it if only live tail changed
+  const prevMergedRef = useRef<Message[]>([]);
+
   // Track the current roomPath in a ref so async work can detect stale rooms
   const roomPathRef = useRef(roomPath);
   roomPathRef.current = roomPath;
@@ -73,6 +87,11 @@ export function useChatFirebase(
     setIsOtherTyping(false);
     setTttState(null);
     olderMsgsRef.current.clear();
+    sortedOlderArrayRef.current = [];
+    oldestKeyRef.current = null;
+    olderVersionRef.current = 0;
+    prevOlderVersionRef.current = 0;
+    prevMergedRef.current = [];
     setHasMoreOnServer(true);
     prevDigestRef.current = "";
     prevDecryptedRef.current = new Map();
@@ -87,6 +106,11 @@ export function useChatFirebase(
       setMessages([]);
       setRawMessages([]);
       olderMsgsRef.current.clear();
+      sortedOlderArrayRef.current = [];
+      oldestKeyRef.current = null;
+      olderVersionRef.current = 0;
+      prevOlderVersionRef.current = 0;
+      prevMergedRef.current = [];
       setHasMoreOnServer(true);
       prevDigestRef.current = "";
       return;
@@ -135,53 +159,105 @@ export function useChatFirebase(
       const liveMsgs = Object.entries(val)
         .map(([id, data]) => ({ id, ...data }));
 
-      // If the live tail returned fewer than SERVER_PAGE, there are no older messages
-      if (liveMsgs.length < SERVER_PAGE) {
-        setHasMoreOnServer(false);
-      }
-
-      // Merge with on-demand older pages (older pages keyed by ID in ref)
-      const merged = new Map<string, Message>();
-      olderMsgsRef.current.forEach((msg, id) => merged.set(id, msg));
-      for (const msg of liveMsgs) merged.set(msg.id, msg); // live overrides stale
-
-      const msgs = Array.from(merged.values()).sort((a, b) => {
+      // Sort only the live tail (at most SERVER_PAGE = 200, always fast).
+      liveMsgs.sort((a, b) => {
         const aTime = typeof a.createdAt === "number" ? a.createdAt : 0;
         const bTime = typeof b.createdAt === "number" ? b.createdAt : 0;
         return aTime - bTime;
       });
 
-      // Build a lightweight digest of message IDs + text lengths.
-      // When only metadata changes (readBy, reactions, seenReceiptBy),
-      // the digest stays the same and we can skip the full decrypt pipeline.
-      const digest =
-        msgs.length +
-        ":" +
-        msgs.map((m) => m.id + ":" + (m.text?.length ?? 0)).join(",");
+      // Update oldestKeyRef from live tail if it's the very first load
+      if (!oldestKeyRef.current && liveMsgs.length > 0) {
+        const sortedLiveIds = liveMsgs.map((m) => m.id).sort();
+        oldestKeyRef.current = sortedLiveIds[0];
+      }
 
-      if (digest === prevDigestRef.current && msgs.length > 0) {
-        // Metadata-only update — merge directly into decrypted messages
-        const freshMap = new Map(msgs.map((m) => [m.id, m]));
-        setMessages((prev) =>
-          prev.map((existing) => {
+      // Digest only over the live tail (max 200 msgs — always fast).
+      // The older portion is immutable between loadOlderFromServer calls,
+      // so we track its version separately.
+      let textHash = 0;
+      for (let i = 0; i < liveMsgs.length; i++) {
+        textHash = ((textHash << 5) - textHash + (liveMsgs[i].text?.length ?? 0)) | 0;
+      }
+      const curOlderVer = olderVersionRef.current;
+      const digest = `${curOlderVer}:${liveMsgs.length}:${liveMsgs[0]?.id ?? ""}:${liveMsgs[liveMsgs.length - 1]?.id ?? ""}:${textHash}`;
+
+      if (digest === prevDigestRef.current && prevMergedRef.current.length > 0) {
+        // Metadata-only update — patch metadata fields only in the live tail.
+        const freshMap = new Map(liveMsgs.map((m) => [m.id, m]));
+        setMessages((prev) => {
+          // Live msgs are at the end of the array. Only scan the tail.
+          const tailStart = Math.max(0, prev.length - liveMsgs.length);
+          let changed = false;
+          let patchedTail: Message[] | null = null;
+          for (let i = tailStart; i < prev.length; i++) {
+            const existing = prev[i];
             const fresh = freshMap.get(existing.id);
-            if (!fresh) return existing;
-            return {
-              ...existing,
-              readBy: fresh.readBy,
-              seenReceiptBy: fresh.seenReceiptBy,
-              reactions: fresh.reactions,
-              viewedBy: fresh.viewedBy,
-              disappearedFor: fresh.disappearedFor,
-            };
-          }),
-        );
+            if (fresh && (
+              existing.readBy !== fresh.readBy ||
+              existing.seenReceiptBy !== fresh.seenReceiptBy ||
+              existing.reactions !== fresh.reactions ||
+              existing.viewedBy !== fresh.viewedBy ||
+              existing.disappearedFor !== fresh.disappearedFor
+            )) {
+              if (!patchedTail) {
+                // Lazily copy just the tail
+                patchedTail = prev.slice(tailStart);
+              }
+              patchedTail[i - tailStart] = {
+                ...existing,
+                readBy: fresh.readBy,
+                seenReceiptBy: fresh.seenReceiptBy,
+                reactions: fresh.reactions,
+                viewedBy: fresh.viewedBy,
+                disappearedFor: fresh.disappearedFor,
+              };
+              changed = true;
+            }
+          }
+          if (!changed || !patchedTail) return prev;
+          // Splice the patched tail back onto the unchanged older portion
+          const olderPortion = prev.slice(0, tailStart);
+          return [...olderPortion, ...patchedTail];
+        });
         messagesLoaded = true;
         checkLoaded();
         return;
       }
 
       prevDigestRef.current = digest;
+
+      // Build the merged array. If olderVersion hasn't changed, reuse
+      // the older portion from prevMergedRef to avoid re-iterating 4k msgs.
+      let msgs: Message[];
+      const olderArr = sortedOlderArrayRef.current;
+
+      if (curOlderVer === prevOlderVersionRef.current && prevMergedRef.current.length > 0 && olderArr.length > 0) {
+        // Older portion unchanged — just replace the live tail at the end.
+        // The older portion in prevMergedRef is everything up to the live tail.
+        const olderCount = prevMergedRef.current.length - liveMsgs.length;
+        // Safeguard: if counts don't line up (shouldn't happen), fall back to full rebuild
+        if (olderCount >= 0 && olderCount <= prevMergedRef.current.length) {
+          const olderSlice = prevMergedRef.current.slice(0, olderCount);
+          msgs = [...olderSlice, ...liveMsgs];
+        } else {
+          // Fallback: full rebuild
+          const liveIdSet = new Set(liveMsgs.map((m) => m.id));
+          const filteredOlder = olderArr.filter((m) => !liveIdSet.has(m.id));
+          msgs = [...filteredOlder, ...liveMsgs];
+        }
+      } else if (olderArr.length > 0) {
+        // Older version changed (new page loaded) — rebuild once
+        const liveIdSet = new Set(liveMsgs.map((m) => m.id));
+        const filteredOlder = olderArr.filter((m) => !liveIdSet.has(m.id));
+        msgs = [...filteredOlder, ...liveMsgs];
+        prevOlderVersionRef.current = curOlderVer;
+      } else {
+        // No older messages — just live tail
+        msgs = liveMsgs;
+      }
+
+      prevMergedRef.current = msgs;
       setRawMessages(msgs);
       messagesLoaded = true;
       checkLoaded();
@@ -515,12 +591,8 @@ export function useChatFirebase(
   const loadOlderFromServer = useCallback(async () => {
     if (!isUnlocked || isLoadingOlder || !hasMoreOnServer) return;
 
-    // Find the oldest message key we currently hold
-    const allIds = [
-      ...Array.from(olderMsgsRef.current.keys()),
-      ...rawMessages.map((m) => m.id),
-    ].sort();
-    const oldestKey = allIds[0];
+    // Use the tracked oldest key — no need to sort all IDs
+    const oldestKey = oldestKeyRef.current;
     if (!oldestKey) return;
 
     setIsLoadingOlder(true);
@@ -536,26 +608,43 @@ export function useChatFirebase(
       const val = (snap.val() || {}) as Record<string, Omit<Message, "id">>;
       const fetched = Object.entries(val).map(([id, data]) => ({ id, ...data }));
 
-      if (fetched.length < SERVER_PAGE) {
+      // Only stop pagination when we get zero results — that means
+      // we've truly reached the very first message in the DB.
+      if (fetched.length === 0) {
         setHasMoreOnServer(false);
       }
 
       if (fetched.length > 0) {
-        // Add to the older-messages ref
-        for (const msg of fetched) {
-          olderMsgsRef.current.set(msg.id, msg);
-        }
-
-        // Re-merge everything and push through the pipeline
-        const merged = new Map<string, Message>();
-        olderMsgsRef.current.forEach((msg, id) => merged.set(id, msg));
-        for (const msg of rawMessages) merged.set(msg.id, msg);
-
-        const sorted = Array.from(merged.values()).sort((a, b) => {
+        // Sort the freshly fetched page (at most SERVER_PAGE = 200, fast)
+        fetched.sort((a, b) => {
           const aTime = typeof a.createdAt === "number" ? a.createdAt : 0;
           const bTime = typeof b.createdAt === "number" ? b.createdAt : 0;
           return aTime - bTime;
         });
+
+        // Add to the older-messages Map (for dedup in onValue)
+        for (const msg of fetched) {
+          olderMsgsRef.current.set(msg.id, msg);
+        }
+
+        // Prepend to the pre-sorted older array
+        sortedOlderArrayRef.current = [...fetched, ...sortedOlderArrayRef.current];
+
+        // Update oldest key ref
+        const fetchedIds = fetched.map((m) => m.id).sort();
+        oldestKeyRef.current = fetchedIds[0];
+
+        // Bump older version so onValue knows to rebuild the merged array
+        olderVersionRef.current++;
+
+        // Re-merge with live tail. Extract live portion from current rawMessages
+        // (messages not in olderMsgsRef are the live tail).
+        const livePortion: Message[] = [];
+        for (const msg of rawMessages) {
+          if (!olderMsgsRef.current.has(msg.id)) livePortion.push(msg);
+        }
+        const sorted = [...sortedOlderArrayRef.current, ...livePortion];
+        prevMergedRef.current = sorted;
 
         prevDigestRef.current = ""; // force full pipeline on next merge
         setRawMessages(sorted);
