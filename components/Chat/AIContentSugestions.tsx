@@ -80,6 +80,7 @@ export default function AIContentSugestions() {
     null,
   );
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [togglingNotifications, setTogglingNotifications] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(false);
 
   // ── Service Worker registration for PWA + Push + FCM ───────────────
@@ -654,41 +655,46 @@ export default function AIContentSugestions() {
   }, [roomPath, slotId]);
 
   const handleToggleNotifications = useCallback(async () => {
-    if (!notificationsEnabled) {
-      // Turning on — request permission if needed
-      if (typeof Notification === "undefined") return;
-      if (Notification.permission === "default") {
-        const result = await Notification.requestPermission();
-        if (result !== "granted") return;
-      } else if (Notification.permission === "denied") {
-        return; // can't enable, browser blocked it
-      }
+    setTogglingNotifications(true);
+    try {
+      if (!notificationsEnabled) {
+        // Turning on — request permission if needed
+        if (typeof Notification === "undefined") return;
+        if (Notification.permission === "default") {
+          const result = await Notification.requestPermission();
+          if (result !== "granted") return;
+        } else if (Notification.permission === "denied") {
+          return; // can't enable, browser blocked it
+        }
 
-      // Subscribe to Web Push (VAPID) notifications
-      if ("serviceWorker" in navigator) {
-        const reg = await navigator.serviceWorker.ready;
-        await subscribeToPush(reg);
-      }
+        // Subscribe to Web Push (VAPID) notifications
+        if ("serviceWorker" in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          await subscribeToPush(reg);
+        }
 
-      // Also enable FCM push notifications
-      await fcm.enableFCM();
+        // Also enable FCM push notifications
+        await fcm.enableFCM();
 
-      setNotificationsEnabled(true);
-      try {
-        localStorage.setItem("chat-notifications-enabled", "true");
-      } catch {
-        /* */
+        setNotificationsEnabled(true);
+        try {
+          localStorage.setItem("chat-notifications-enabled", "true");
+        } catch {
+          /* */
+        }
+      } else {
+        // Turning off — unsubscribe from both push systems
+        await unsubscribeFromPush();
+        await fcm.disableFCM();
+        setNotificationsEnabled(false);
+        try {
+          localStorage.setItem("chat-notifications-enabled", "false");
+        } catch {
+          /* */
+        }
       }
-    } else {
-      // Turning off — unsubscribe from both push systems
-      await unsubscribeFromPush();
-      await fcm.disableFCM();
-      setNotificationsEnabled(false);
-      try {
-        localStorage.setItem("chat-notifications-enabled", "false");
-      } catch {
-        /* */
-      }
+    } finally {
+      setTogglingNotifications(false);
     }
   }, [notificationsEnabled, subscribeToPush, unsubscribeFromPush, fcm]);
 
@@ -1046,6 +1052,7 @@ export default function AIContentSugestions() {
             roomPath={roomPath}
             messages={firebaseWithSlot.messages}
             notificationsEnabled={notificationsEnabled}
+            togglingNotifications={togglingNotifications}
             onToggleNotifications={handleToggleNotifications}
             onSetSpotPasskey={session.setSpotPasskey}
             onKickSpot={session.kickSpot}

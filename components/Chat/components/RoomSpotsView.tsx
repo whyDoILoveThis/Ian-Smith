@@ -123,6 +123,7 @@ type RoomSpotsViewProps = {
   roomPath: string;
   messages: Message[];
   notificationsEnabled: boolean;
+  togglingNotifications?: boolean;
   onToggleNotifications: () => void;
   onSetSpotPasskey: (slot: "1" | "2", passkey: string) => Promise<void>;
   onKickSpot: (slot: "1" | "2", passkey: string) => Promise<boolean>;
@@ -159,6 +160,7 @@ export function RoomSpotsView({
   roomPath,
   messages,
   notificationsEnabled,
+  togglingNotifications,
   onToggleNotifications,
   onSetSpotPasskey,
   onKickSpot,
@@ -789,15 +791,38 @@ export function RoomSpotsView({
             <button
               type="button"
               onClick={onToggleNotifications}
+              disabled={togglingNotifications}
               className={`flex items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs active:scale-[0.98] transition-all ${
                 notificationsEnabled
                   ? "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-300"
                   : "border-white/[0.08] bg-white/[0.02] text-neutral-400"
-              }`}
+              } ${togglingNotifications ? "opacity-60 pointer-events-none" : ""}`}
             >
-              <span className="text-base">
-                {notificationsEnabled ? "🔔" : "🔕"}
-              </span>
+              {togglingNotifications ? (
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              ) : (
+                <span className="text-base">
+                  {notificationsEnabled ? "🔔" : "🔕"}
+                </span>
+              )}
               <span>{notificationsEnabled ? "Notifs" : "Muted"}</span>
             </button>
             <button
