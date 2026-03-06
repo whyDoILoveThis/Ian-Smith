@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       title: title || "New message",
       body: msgBody || "You have a new message",
       tag: `msg-${Date.now()}`,
-      url: "/",
+      url: "/about",
     });
 
     try {

@@ -469,22 +469,31 @@ export default function AIContentSugestions() {
   }, [isUnlocked, slotId]);
 
   // ── Message notifications ──────────────────────────────────────────
+  //
+  // Two separate concerns:
+  //
+  //   A) When I SEND a message → push/FCM notify the OTHER user
+  //      (they might have the app closed).
+  //      This must ALWAYS run regardless of my notification preference.
+  //
+  //   B) When I RECEIVE a message → beep + local notification for ME.
+  //      This only runs when I've enabled notifications.
+  //
   const seenMessageIdsRef = React.useRef<Set<string>>(new Set());
   const notifInitializedRef = React.useRef(false);
 
   useEffect(() => {
     const msgs = firebaseWithSlot.messages;
 
-    // First run or notifications off: just seed the seen set so we don't
-    // blast the user with old messages when they turn notifications on.
-    if (!notificationsEnabled || !slotId) {
+    // Need a slot to know which messages are mine
+    if (!slotId) {
       seenMessageIdsRef.current = new Set(msgs.map((m) => m.id));
       notifInitializedRef.current = false;
       return;
     }
 
-    // If we just turned notifications on, seed the set and mark as
-    // initialized so that only FUTURE messages trigger a notification.
+    // First run: seed the seen set with ALL existing messages so we
+    // don't blast pushes for old history.
     if (!notifInitializedRef.current) {
       seenMessageIdsRef.current = new Set(msgs.map((m) => m.id));
       notifInitializedRef.current = true;
@@ -497,9 +506,6 @@ export default function AIContentSugestions() {
       if (seen.has(msg.id)) continue; // already processed
       seen.add(msg.id);
 
-      // Only notify for messages from the OTHER user
-      if (msg.slotId === slotId) continue;
-
       const body =
         msg.decryptedText ||
         (msg.imageUrl
@@ -510,83 +516,97 @@ export default function AIContentSugestions() {
               ? "Sent a video"
               : "New message");
 
-      // 1. Play an audio notification beep (works everywhere)
-      try {
-        const audioCtx = new (
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext })
-            .webkitAudioContext
-        )();
-        const oscillator = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        oscillator.connect(gain);
-        gain.connect(audioCtx.destination);
-        oscillator.frequency.value = 880;
-        oscillator.type = "sine";
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(
-          0.001,
-          audioCtx.currentTime + 0.3,
-        );
-        oscillator.start(audioCtx.currentTime);
-        oscillator.stop(audioCtx.currentTime + 0.3);
-      } catch {
-        /* audio not available */
-      }
+      if (msg.slotId === slotId) {
+        // ── (A) MY message → notify the OTHER user via push/FCM ──
+        // senderSlotId = my slot, so the server sends to the OTHER slot.
 
-      // 2. Send push notification via Web Push VAPID (works even when tab is closed)
-      fetch("/api/push-send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomPath,
-          senderSlotId: slotId,
-          title: msg.sender || "New message",
-          body,
-        }),
-      }).catch(() => {
-        /* silently fail — push is best effort */
-      });
+        // Web Push VAPID (works when other user's browser is closed)
+        fetch("/api/push-send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomPath,
+            senderSlotId: slotId,
+            title: msg.sender || "New message",
+            body,
+          }),
+        }).catch(() => {
+          /* silently fail — push is best effort */
+        });
 
-      // 3. Send FCM push notification (better Android PWA + iOS Safari support)
-      fetch("/api/fcm-send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomPath,
-          senderSlotId: slotId,
-          senderName: msg.sender || "",
-          title: msg.sender || "New message",
-          body,
-          messageId: msg.id,
-        }),
-      }).catch(() => {
-        /* silently fail — FCM is best effort */
-      });
+        // FCM push (better Android PWA + iOS Safari support)
+        fetch("/api/fcm-send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomPath,
+            senderSlotId: slotId,
+            senderName: msg.sender || "",
+            title: msg.sender || "New message",
+            body,
+            messageId: msg.id,
+          }),
+        }).catch(() => {
+          /* silently fail — FCM is best effort */
+        });
+      } else {
+        // ── (B) OTHER user's message → local alerts for ME ──
+        // Only if I've opted into notifications.
+        if (!notificationsEnabled) continue;
 
-      // 4. Local notification fallback (for when tab is in background but SW push not available)
-      if (
-        typeof Notification !== "undefined" &&
-        Notification.permission === "granted"
-      ) {
-        const title = msg.sender || "New message";
-        const options = { body, tag: msg.id, icon: "/icons/icon-192x192.png" };
+        // 1. Play an audio notification beep
+        try {
+          const audioCtx = new (
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext: typeof AudioContext })
+              .webkitAudioContext
+          )();
+          const oscillator = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          oscillator.connect(gain);
+          gain.connect(audioCtx.destination);
+          oscillator.frequency.value = 880;
+          oscillator.type = "sine";
+          gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(
+            0.001,
+            audioCtx.currentTime + 0.3,
+          );
+          oscillator.start(audioCtx.currentTime);
+          oscillator.stop(audioCtx.currentTime + 0.3);
+        } catch {
+          /* audio not available */
+        }
 
-        if (navigator.serviceWorker?.controller) {
-          navigator.serviceWorker.ready
-            .then((reg) => reg.showNotification(title, options))
-            .catch(() => {
-              try {
-                new Notification(title, options);
-              } catch {
-                /* */
-              }
-            });
-        } else {
-          try {
-            new Notification(title, options);
-          } catch {
-            /* */
+        // 2. Local notification (for when in background but SW push not yet arrived)
+        if (
+          typeof Notification !== "undefined" &&
+          Notification.permission === "granted"
+        ) {
+          const title = msg.sender || "New message";
+          const options = {
+            body,
+            tag: msg.id,
+            icon: "/icons/icon-192x192.png",
+            data: { url: "/about" },
+          };
+
+          if (navigator.serviceWorker?.controller) {
+            navigator.serviceWorker.ready
+              .then((reg) => reg.showNotification(title, options))
+              .catch(() => {
+                try {
+                  new Notification(title, options);
+                } catch {
+                  /* */
+                }
+              });
+          } else {
+            try {
+              new Notification(title, options);
+            } catch {
+              /* */
+            }
           }
         }
       }
