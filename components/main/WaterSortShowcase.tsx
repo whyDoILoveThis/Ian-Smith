@@ -604,7 +604,7 @@ export default function WaterSortShowcase() {
               mobile-friendly
             </motion.p>
 
-            <Link href="/water-sort">
+            <Link href="/watersort">
               <motion.button
                 className="group relative px-8 py-3.5 rounded-2xl text-sm font-bold
                   bg-gradient-to-r from-purple-500 to-pink-500

@@ -89,7 +89,7 @@ export function WaterSortShowcaseCard() {
           "shadow-xl shadow-purple-500/25 transition-shadow hover:shadow-purple-500/40",
       }}
       ctaLabel="Play Now"
-      ctaHref="/water-sort"
+      ctaHref="/watersort"
       techNote="Built with React, Framer Motion & SVG — fully responsive & mobile-friendly"
       heroSlot={<WaterSortHero />}
       backgroundSlot={
