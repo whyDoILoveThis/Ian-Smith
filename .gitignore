@@ -31,7 +31,6 @@ yarn-error.log*
 
 # service account keys — NEVER commit these
 its-portfolio-*.json
-its-portfolio-*.rar
 *-service-account*.json
 
 # vercel
