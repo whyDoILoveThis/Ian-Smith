@@ -30,7 +30,7 @@ async function fbDelete(path: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { roomPath, senderSlotId, title, body: msgBody } = body;
+    const { roomPath, senderSlotId, title, body: msgBody, tag } = body;
 
     if (!roomPath || !senderSlotId) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     const payload = JSON.stringify({
       title: title || "New message",
       body: msgBody || "You have a new message",
-      tag: `msg-${Date.now()}`,
+      tag: tag || `msg-${Date.now()}`,
       url: "/about",
     });
 

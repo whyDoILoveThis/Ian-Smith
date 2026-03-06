@@ -519,22 +519,10 @@ export default function AIContentSugestions() {
       if (msg.slotId === slotId) {
         // ── (A) MY message → notify the OTHER user via push/FCM ──
         // senderSlotId = my slot, so the server sends to the OTHER slot.
+        // Try FCM first. Only fall back to Web Push VAPID if the other
+        // user has no FCM token (avoids sending both → duplicate notifs).
+        const notifTag = `chat-${msg.id}`;
 
-        // Web Push VAPID (works when other user's browser is closed)
-        fetch("/api/push-send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            roomPath,
-            senderSlotId: slotId,
-            title: msg.sender || "New message",
-            body,
-          }),
-        }).catch(() => {
-          /* silently fail — push is best effort */
-        });
-
-        // FCM push (better Android PWA + iOS Safari support)
         fetch("/api/fcm-send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -544,17 +532,47 @@ export default function AIContentSugestions() {
             senderName: msg.sender || "",
             title: msg.sender || "New message",
             body,
+            tag: notifTag,
             messageId: msg.id,
           }),
-        }).catch(() => {
-          /* silently fail — FCM is best effort */
-        });
+        })
+          .then((r) => r.json())
+          .then((result) => {
+            // FCM had no token for the other user → fall back to VAPID
+            if (!result.sent) {
+              fetch("/api/push-send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  roomPath,
+                  senderSlotId: slotId,
+                  title: msg.sender || "New message",
+                  body,
+                  tag: notifTag,
+                }),
+              }).catch(() => {});
+            }
+          })
+          .catch(() => {
+            // FCM call itself failed → try VAPID as fallback
+            fetch("/api/push-send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                roomPath,
+                senderSlotId: slotId,
+                title: msg.sender || "New message",
+                body,
+                tag: notifTag,
+              }),
+            }).catch(() => {});
+          });
       } else {
         // ── (B) OTHER user's message → local alerts for ME ──
         // Only if I've opted into notifications.
         if (!notificationsEnabled) continue;
 
-        // 1. Play an audio notification beep
+        // Play an audio notification beep
         try {
           const audioCtx = new (
             window.AudioContext ||
@@ -578,37 +596,9 @@ export default function AIContentSugestions() {
           /* audio not available */
         }
 
-        // 2. Local notification (for when in background but SW push not yet arrived)
-        if (
-          typeof Notification !== "undefined" &&
-          Notification.permission === "granted"
-        ) {
-          const title = msg.sender || "New message";
-          const options = {
-            body,
-            tag: msg.id,
-            icon: "/icons/icon-192x192.png",
-            data: { url: "/about" },
-          };
-
-          if (navigator.serviceWorker?.controller) {
-            navigator.serviceWorker.ready
-              .then((reg) => reg.showNotification(title, options))
-              .catch(() => {
-                try {
-                  new Notification(title, options);
-                } catch {
-                  /* */
-                }
-              });
-          } else {
-            try {
-              new Notification(title, options);
-            } catch {
-              /* */
-            }
-          }
-        }
+        // NOTE: We do NOT show a local Notification here.
+        // The push/FCM delivered by the service worker already shows one.
+        // Adding another here would cause a duplicate.
       }
     }
   }, [firebaseWithSlot.messages, notificationsEnabled, slotId, roomPath]);

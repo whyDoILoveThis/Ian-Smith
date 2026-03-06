@@ -155,13 +155,16 @@ async function fbDelete(path: string) {
 async function sendFCMMessage(
   token: string,
   data: Record<string, string>,
-  notification: { title: string; body: string },
 ): Promise<{ success: boolean; reason?: string }> {
   const accessToken = await getAccessToken();
   if (!accessToken) {
     return { success: false, reason: "no_service_account" };
   }
 
+  // DATA-ONLY message — no top-level `notification` key.
+  // This prevents FCM from auto-displaying a generic notification.
+  // Our sw.js onBackgroundMessage handler reads `data` and shows
+  // exactly one notification with the correct title/body/tag.
   const res = await fetch(
     `https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`,
     {
@@ -173,23 +176,14 @@ async function sendFCMMessage(
       body: JSON.stringify({
         message: {
           token,
-          notification,
           data,
-          // Android: high priority for timely delivery
+          // Android: high priority so device wakes for data-only msg
           android: {
             priority: "high",
           },
-          // Web push: custom notification options
+          // Web push: high urgency so browser wakes
           webpush: {
             headers: { Urgency: "high" },
-            notification: {
-              ...notification,
-              icon: "/icons/icon-192x192.png",
-              badge: "/icons/icon-192x192.png",
-              vibrate: [100, 50, 100],
-              renotify: true,
-              tag: data.tag,
-            },
             fcm_options: {
               link: "/about",
             },
@@ -261,19 +255,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: "No FCM token" });
     }
 
+    const tag = body.tag;
     const data: Record<string, string> = {
       title: title || "New message",
       body: msgBody || "You have a new message",
       senderName: senderName || "",
-      tag: `fcm-${messageId || Date.now()}`,
+      tag: tag || `chat-${messageId || Date.now()}`,
       url: "/about",
     };
     if (messageId) data.messageId = messageId;
 
-    const result = await sendFCMMessage(token, data, {
-      title: data.title,
-      body: data.body,
-    });
+    const result = await sendFCMMessage(token, data);
 
     if (!result.success && result.reason === "invalid_token") {
       // Clean up stale token

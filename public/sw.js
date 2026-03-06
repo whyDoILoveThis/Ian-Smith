@@ -60,7 +60,7 @@ messaging.onBackgroundMessage((payload) => {
 
 // ── PWA Caching ──────────────────────────────────────────────────────
 
-const CACHE_NAME = "pwa-cache-v2"; // bumped to force install of merged SW
+const CACHE_NAME = "pwa-cache-v3"; // bumped to install notification dedup fix
 const OFFLINE_URLS = ["/"];
 
 // Install — cache the offline shell
@@ -143,7 +143,18 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "New Message", options)
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        var hasFocused = clients.some(
+          function(c) { return c.visibilityState === "visible" && c.focused; }
+        );
+        if (hasFocused) return; // app is in foreground, skip push notif
+        return self.registration.showNotification(
+          data.title || "New Message",
+          options
+        );
+      })
   );
 });
 
