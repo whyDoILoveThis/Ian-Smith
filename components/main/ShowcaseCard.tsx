@@ -156,16 +156,17 @@ export default function ShowcaseCard({
 
         {/* Card — ONE parent motion container per showcase */}
         <motion.div
-          className={`relative z-10 rounded-3xl overflow-hidden border border-white/10
+          className={`relative rounded-sm border border-white/10
           bg-gradient-to-b from-white/[0.06] to-white/[0.02]
           backdrop-blur-xl shadow-2xl ${theme.cardShadow}`}
+          style={centerSlot ? { overflow: "visible" } : { overflow: "hidden" }}
           variants={cardVariants}
           initial="hidden"
           animate={hasEntered ? "visible" : "hidden"}
         >
           {/* Top accent bar */}
           <div
-            className="h-1 w-full"
+            className="h-1 w-full z-0 rounded-t-3xl overflow-hidden"
             style={{ background: theme.accentBarBg }}
           />
 

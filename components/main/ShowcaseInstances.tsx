@@ -4,6 +4,7 @@ import ShowcaseCard from "@/components/main/ShowcaseCard";
 import WaterSortHero from "@/components/main/showcase-visuals/WaterSortHero";
 import IconCreatorHero from "@/components/main/showcase-visuals/IconCreatorHero";
 import FloatingParticles from "@/components/main/showcase-visuals/FloatingParticles";
+import TimelineHero from "@/components/main/showcase-visuals/TimelineHero";
 
 /* ═══════════════════════════════════════════════════════════
    Emoji / icon lists for floating backgrounds
@@ -273,6 +274,7 @@ export function TimelineShowcaseCard() {
       ctaLabel="Explore Timeline"
       ctaHref="/timeline"
       techNote="Built with React, Framer Motion & Pointer Lock API — real-time persistence via Appwrite"
+      centerSlot={<TimelineHero />}
       backgroundSlot={
         <FloatingParticles
           dotColorRgb="6,182,212"
