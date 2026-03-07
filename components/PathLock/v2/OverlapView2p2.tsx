@@ -178,7 +178,7 @@ export default function OverlapView({
         topAzInstant: number,
         topElInstant: number,
         otherAzInstant: number,
-        otherElInstant: number
+        otherElInstant: number,
       ) {
         // Clear background
         ctx.fillStyle = "#03061a";
@@ -187,11 +187,11 @@ export default function OverlapView({
         // Top boresight vector in 3D (unit)
         const topBoresight = boresightVectorFromAzEl(
           topAzInstant,
-          topElInstant
+          topElInstant,
         );
         const otherBoresight = boresightVectorFromAzEl(
           otherAzInstant,
-          otherElInstant
+          otherElInstant,
         );
 
         // Which LOS applies here?
@@ -208,7 +208,7 @@ export default function OverlapView({
         const rainLossDb = rainAttenuationApprox(
           distanceMeters,
           rainRateMmPerHour,
-          frequencyGHz
+          frequencyGHz,
         );
 
         // For normalization, compute peak theoretical Pr (both boresights aligned to LOS)
@@ -224,7 +224,7 @@ export default function OverlapView({
         // Precompute the rx off-axis angle for the other dish relative to true LOS (constant across pixels)
         const otherRxOffAxisDeg = angleBetweenVectors(
           otherBoresight,
-          losFromOtherToTop
+          losFromOtherToTop,
         );
 
         // Loop through pixel grid and compute per-pixel received power (dBm)
@@ -247,7 +247,7 @@ export default function OverlapView({
             // --- CORRECT PHYSICS: angles computed RELATIVE TO TRUE LOS BETWEEN FIXED POSITIONS
             const perPixelTxOffAxisDeg = angleBetweenVectors(
               approxDirection,
-              losFromTopToOther
+              losFromTopToOther,
             );
             const perPixelRxOffAxisDeg = otherRxOffAxisDeg;
 
@@ -256,7 +256,7 @@ export default function OverlapView({
               perPixelTxOffAxisDeg,
               perPixelRxOffAxisDeg,
               distanceMeters,
-              { useRainRateMmPerHour: rainRateMmPerHour }
+              { useRainRateMmPerHour: rainRateMmPerHour },
             );
             const perPixelReceivedDbm = perPixelResult.receivedPowerDbm;
 
@@ -264,11 +264,11 @@ export default function OverlapView({
             const normalizedForColor = clamp(
               (perPixelReceivedDbm - minShownDbm) / (peakPrDbm - minShownDbm),
               0,
-              1
+              1,
             );
 
             ctx.fillStyle = heatmapColorForNormalizedValue(
-              Math.sqrt(normalizedForColor)
+              Math.sqrt(normalizedForColor),
             );
             ctx.fillRect(px, py, step, step);
           }
@@ -287,18 +287,18 @@ export default function OverlapView({
         // compute and return boresight one-way Rx power (what the tech's meter should read for center)
         const boresightTxOffAxisDeg = angleBetweenVectors(
           topBoresight,
-          losFromTopToOther
+          losFromTopToOther,
         );
         const boresightRxOffAxisDeg = angleBetweenVectors(
           otherBoresight,
-          losFromOtherToTop
+          losFromOtherToTop,
         );
 
         const boresightRxObj = computeOneWayRxPowerDbm(
           boresightTxOffAxisDeg,
           boresightRxOffAxisDeg,
           distanceMeters,
-          { useRainRateMmPerHour: rainRateMmPerHour }
+          { useRainRateMmPerHour: rainRateMmPerHour },
         );
 
         return boresightRxObj;
@@ -312,7 +312,7 @@ export default function OverlapView({
         instantDish1Az,
         instantDish1El,
         instantDish2Az,
-        instantDish2El
+        instantDish2El,
       );
       const boresightRxForRight = renderCanvasForTopDish(
         rightCtx,
@@ -320,7 +320,7 @@ export default function OverlapView({
         instantDish2Az,
         instantDish2El,
         instantDish1Az,
-        instantDish1El
+        instantDish1El,
       );
 
       // Update latest actual (physics)
@@ -376,11 +376,11 @@ export default function OverlapView({
   const losBtoA = norm(subtract(dish1Pos, dish2Pos));
   const boresightA = boresightVectorFromAzEl(
     dish1AzimuthDeg,
-    dish1ElevationDeg
+    dish1ElevationDeg,
   );
   const boresightB = boresightVectorFromAzEl(
     dish2AzimuthDeg,
-    dish2ElevationDeg
+    dish2ElevationDeg,
   );
   const thetaAtoB = angleBetweenVectors(boresightA, losAtoB);
   const thetaBtoA = angleBetweenVectors(boresightB, losBtoA);
@@ -388,86 +388,101 @@ export default function OverlapView({
     thetaAtoB,
     thetaBtoA,
     distanceMeters,
-    { useRainRateMmPerHour: rainRateMmPerHour }
+    { useRainRateMmPerHour: rainRateMmPerHour },
   );
   const bToAObj = computeOneWayRxPowerDbm(
     thetaBtoA,
     thetaAtoB,
     distanceMeters,
-    { useRainRateMmPerHour: rainRateMmPerHour }
+    { useRainRateMmPerHour: rainRateMmPerHour },
   );
   const snrForA = computeSnrDb(
     bToAObj.receivedPowerDbm,
     RF_CONSTANTS.bandwidthMHz,
-    RF_CONSTANTS.noiseFigureDb
+    RF_CONSTANTS.noiseFigureDb,
   ).snrDb;
   const snrForB = computeSnrDb(
     aToBObj.receivedPowerDbm,
     RF_CONSTANTS.bandwidthMHz,
-    RF_CONSTANTS.noiseFigureDb
+    RF_CONSTANTS.noiseFigureDb,
   ).snrDb;
   const mcsForA = mapSnrToMcsRecommendation(snrForA);
   const mcsForB = mapSnrToMcsRecommendation(snrForB);
 
   // UI rendering (two canvases + metrics)
   return (
-    <div className="bg-zinc-900 p-3 rounded-xl border border-sky-800 text-sky-100 flex flex-col gap-3">
-      <div className="flex gap-4">
+    <div className="backdrop-blur-xl bg-white/[0.04] p-4 rounded-2xl border border-white/[0.08] text-sky-100 flex flex-col gap-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      <div className="flex flex-col sm:flex-row gap-4">
         {/* Left: Tech A (Dish 1) canvas and meter */}
-        <div className="flex flex-col items-center">
-          <div className="text-sm mb-2 font-semibold">Tech A — Dish 1 View</div>
+        <div className="flex flex-col items-center flex-1 min-w-0">
+          <div className="text-xs sm:text-sm mb-2 font-semibold text-sky-300 tracking-wide uppercase">
+            Tech A — Dish 1 View
+          </div>
           <canvas
             ref={leftCanvasRef}
             style={{
-              width: canvasPixelSize,
-              height: canvasPixelSize,
-              borderRadius: 8,
-              border: "1px solid #123a55",
+              width: "100%",
+              maxWidth: canvasPixelSize,
+              height: "auto",
+              aspectRatio: "1 / 1",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.08)",
             }}
           />
-          <div className="mt-2 w-[320px] p-2 bg-zinc-800 rounded text-xs">
-            <div>
+          <div className="mt-2 w-full max-w-[320px] p-2.5 backdrop-blur-sm bg-white/[0.03] rounded-xl text-xs border border-white/[0.06]">
+            <div className="text-sky-200/80">
               📟 <strong>Db (smoothed):</strong>{" "}
-              <span className="font-mono">{dbDishA.toFixed(3)} dBm</span>
+              <span className="font-mono text-sky-100">
+                {dbDishA.toFixed(3)} dBm
+              </span>
             </div>
-            <div>
+            <div className="text-sky-200/80 mt-1">
               🔊 <strong>SNR:</strong> {snrForA.toFixed(2)} dB •{" "}
-              {mcsForA.mcsName} • {mcsForA.comment}
+              <span className="text-cyan-300">{mcsForA.mcsName}</span> •{" "}
+              {mcsForA.comment}
             </div>
           </div>
         </div>
 
         {/* Right: Tech B (Dish 2) canvas and meter */}
-        <div className="flex flex-col items-center">
-          <div className="text-sm mb-2 font-semibold">Tech B — Dish 2 View</div>
+        <div className="flex flex-col items-center flex-1 min-w-0">
+          <div className="text-xs sm:text-sm mb-2 font-semibold text-sky-300 tracking-wide uppercase">
+            Tech B — Dish 2 View
+          </div>
           <canvas
             ref={rightCanvasRef}
             style={{
-              width: canvasPixelSize,
-              height: canvasPixelSize,
-              borderRadius: 8,
-              border: "1px solid #123a55",
+              width: "100%",
+              maxWidth: canvasPixelSize,
+              height: "auto",
+              aspectRatio: "1 / 1",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.08)",
             }}
           />
-          <div className="mt-2 w-[320px] p-2 bg-zinc-800 rounded text-xs">
-            <div>
+          <div className="mt-2 w-full max-w-[320px] p-2.5 backdrop-blur-sm bg-white/[0.03] rounded-xl text-xs border border-white/[0.06]">
+            <div className="text-sky-200/80">
               📟 <strong>Db (smoothed):</strong>{" "}
-              <span className="font-mono">{dbDishB.toFixed(3)} dBm</span>
+              <span className="font-mono text-sky-100">
+                {dbDishB.toFixed(3)} dBm
+              </span>
             </div>
-            <div>
+            <div className="text-sky-200/80 mt-1">
               🔊 <strong>SNR:</strong> {snrForB.toFixed(2)} dB •{" "}
-              {mcsForB.mcsName} • {mcsForB.comment}
+              <span className="text-cyan-300">{mcsForB.mcsName}</span> •{" "}
+              {mcsForB.comment}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-2 text-xs text-zinc-400">
+      <div className="mt-1 text-[10px] sm:text-xs text-sky-400/40 leading-relaxed">
         Notes:
-        <ul className="list-disc ml-5 mt-1">
+        <ul className="list-disc ml-5 mt-1 space-y-0.5">
           <li>
-            Heatmaps now use the <strong>true LOS</strong> between fixed dish
-            positions; moving one dish off the true LOS cannot be magically
+            Heatmaps now use the{" "}
+            <strong className="text-sky-400/60">true LOS</strong> between fixed
+            dish positions; moving one dish off the true LOS cannot be magically
             recovered by rotating the other.
           </li>
           <li>
@@ -492,7 +507,7 @@ function angleBetweenVectors(a: number[], b: number[]) {
 function rainAttenuationApprox(
   distanceMeters: number,
   rainRateMmPerHour: number,
-  frequencyGigahertz: number
+  frequencyGigahertz: number,
 ) {
   if (rainRateMmPerHour <= 0) return 0;
   const distanceKilometers = Math.max(distanceMeters / 1000.0, 1e-6);

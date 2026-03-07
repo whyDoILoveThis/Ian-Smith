@@ -39,9 +39,9 @@ export default function RfSimPage() {
   const overlayKey = useMemo(
     () =>
       `${dish1AzimuthDeg.toFixed(4)}_${dish1ElevationDeg.toFixed(
-        4
+        4,
       )}_${dish2AzimuthDeg.toFixed(4)}_${dish2ElevationDeg.toFixed(
-        4
+        4,
       )}_${distanceMiles.toFixed(4)}`,
     [
       dish1AzimuthDeg,
@@ -49,7 +49,7 @@ export default function RfSimPage() {
       dish2AzimuthDeg,
       dish2ElevationDeg,
       distanceMiles,
-    ]
+    ],
   );
 
   // Prevent arrow keys from scrolling the page
@@ -70,17 +70,26 @@ export default function RfSimPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-black text-white p-8 flex flex-col items-center gap-8">
-      <h1 className="text-4xl font-extrabold">
-        📡 INSANE RF TRAINER — Real Tower Mode
-      </h1>
+    <main className="min-h-screen overflow-x-hidden bg-gradient-to-br from-[#030712] via-[#0a1628] to-[#06101f] text-white px-3 py-5 sm:px-6 sm:py-8 lg:px-8 flex flex-col items-center gap-5 lg:gap-8">
+      <div className="text-center">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 via-cyan-300 to-blue-500 bg-clip-text text-transparent drop-shadow-lg">
+          📡 INSANE RF TRAINER
+        </h1>
+        <p className="text-xs sm:text-sm text-sky-400/60 mt-1 tracking-widest uppercase font-medium">
+          Real Tower Mode
+        </p>
+      </div>
 
-      <div className="w-full max-w-6xl grid grid-cols-2 gap-6">
+      <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
         {/* Dish 1 controls */}
-        <div className="bg-zinc-900 rounded-xl p-4 border border-sky-800">
+        <div className="backdrop-blur-xl bg-white/[0.04] rounded-2xl p-4 lg:p-5 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <div className="flex justify-between items-center">
-            <h2 className="font-bold">Dish 1 — Tech A</h2>
-            <div className="text-xs text-zinc-400">Left-side tech</div>
+            <h2 className="font-bold text-sky-200 tracking-wide">
+              Dish 1 — Tech A
+            </h2>
+            <div className="text-[10px] sm:text-xs text-sky-500/60 uppercase tracking-wider font-medium">
+              Left-side
+            </div>
           </div>
 
           <RotatorControl
@@ -103,10 +112,14 @@ export default function RfSimPage() {
         </div>
 
         {/* Dish 2 controls */}
-        <div className="bg-zinc-900 rounded-xl p-4 border border-sky-800">
+        <div className="backdrop-blur-xl bg-white/[0.04] rounded-2xl p-4 lg:p-5 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <div className="flex justify-between items-center">
-            <h2 className="font-bold">Dish 2 — Tech B</h2>
-            <div className="text-xs text-zinc-400">Right-side tech</div>
+            <h2 className="font-bold text-sky-200 tracking-wide">
+              Dish 2 — Tech B
+            </h2>
+            <div className="text-[10px] sm:text-xs text-sky-500/60 uppercase tracking-wider font-medium">
+              Right-side
+            </div>
           </div>
 
           <RotatorControl
@@ -129,10 +142,12 @@ export default function RfSimPage() {
         </div>
 
         {/* Distance + environment controls */}
-        <div className="col-span-2 bg-zinc-900 rounded-xl p-4 border border-sky-800">
-          <div className="flex items-center gap-6">
-            <div style={{ flex: 1 }}>
-              <div className="text-sm text-zinc-400">Path Distance (miles)</div>
+        <div className="col-span-1 md:col-span-2 backdrop-blur-xl bg-white/[0.04] rounded-2xl p-4 lg:p-5 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 items-start">
+            <div className="sm:col-span-2 lg:col-span-1">
+              <div className="text-[11px] sm:text-sm text-sky-400/60 uppercase tracking-wider font-medium mb-1">
+                Path Distance (miles)
+              </div>
               <input
                 type="range"
                 min={0.1}
@@ -140,16 +155,18 @@ export default function RfSimPage() {
                 step={0.01}
                 value={distanceMiles}
                 onChange={(e) => setDistanceMiles(Number(e.target.value))}
-                className="w-full"
+                className="w-full accent-sky-500"
                 title="Distance between dish locations in miles"
               />
-              <div className="font-mono mt-1">
+              <div className="font-mono mt-1 text-sm text-sky-100">
                 {distanceMiles.toFixed(2)} mi
               </div>
             </div>
 
-            <div style={{ width: 220 }}>
-              <div className="text-sm text-zinc-400">Rain Rate (mm/hr)</div>
+            <div>
+              <div className="text-[11px] sm:text-sm text-sky-400/60 uppercase tracking-wider font-medium mb-1">
+                Rain Rate (mm/hr)
+              </div>
               <input
                 type="range"
                 min={0}
@@ -158,16 +175,16 @@ export default function RfSimPage() {
                 value={rainRateMmPerHour}
                 onChange={() => undefined}
                 title="Simulated rain intensity; higher = more attenuation"
-                className="w-full"
+                className="w-full accent-sky-500"
                 disabled
               />
-              <div className="font-mono mt-1">
+              <div className="font-mono mt-1 text-sm text-sky-100/40">
                 {rainRateMmPerHour.toFixed(1)} mm/hr
               </div>
             </div>
 
-            <div style={{ width: 220 }}>
-              <div className="text-sm text-zinc-400">
+            <div>
+              <div className="text-[11px] sm:text-sm text-sky-400/60 uppercase tracking-wider font-medium mb-1">
                 Wind Strength (deg sway)
               </div>
               <input
@@ -178,16 +195,18 @@ export default function RfSimPage() {
                 value={windStrengthDeg}
                 onChange={() => undefined}
                 title="Simulates tower sway causing angular oscillation"
-                className="w-full"
+                className="w-full accent-sky-500"
                 disabled
               />
-              <div className="font-mono mt-1">
+              <div className="font-mono mt-1 text-sm text-sky-100/40">
                 {windStrengthDeg.toFixed(3)}°
               </div>
             </div>
 
-            <div style={{ width: 220 }}>
-              <div className="text-sm text-zinc-400">AGC / Meter Response</div>
+            <div>
+              <div className="text-[11px] sm:text-sm text-sky-400/60 uppercase tracking-wider font-medium mb-1">
+                AGC / Meter Response
+              </div>
               <input
                 type="range"
                 min={0.01}
@@ -196,16 +215,18 @@ export default function RfSimPage() {
                 value={agcResponse}
                 onChange={() => undefined}
                 title="How quickly the meter responds to changes (higher = faster)"
-                className="w-full"
+                className="w-full accent-sky-500"
                 disabled
               />
-              <div className="font-mono mt-1">{agcResponse.toFixed(2)}</div>
+              <div className="font-mono mt-1 text-sm text-sky-100/40">
+                {agcResponse.toFixed(2)}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Overlay visualizer (LearningLobeOverlay handles its own UI + learning) */}
-        <div className="col-span-2">
+        <div className="col-span-1 md:col-span-2">
           <LearningLobeOverlay
             key={overlayKey}
             initialDish1AzimuthDeg={dish1AzimuthDeg}
@@ -220,13 +241,14 @@ export default function RfSimPage() {
         </div>
       </div>
 
-      <div className="text-xs text-zinc-400 max-w-3xl">
-        <strong>Pro tip:</strong> Use coarse buttons for rough movement (1°) and
-        sliders + fine-step buttons for micro-adjusts (0.05°). The Learning
-        overlay contains its own controls (arrow keys, toggle active dish,
-        reset). If you&apos;d like these external controls to remain interactive
-        with the overlay (without remounting), I can update the overlay to
-        accept controlled props instead of initial-only props.
+      <div className="text-[10px] sm:text-xs text-sky-400/40 max-w-3xl text-center leading-relaxed backdrop-blur-sm bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.05]">
+        <strong className="text-sky-400/60">Pro tip:</strong> Use coarse buttons
+        for rough movement (1°) and sliders + fine-step buttons for
+        micro-adjusts (0.05°). The Learning overlay contains its own controls
+        (arrow keys, toggle active dish, reset). If you&apos;d like these
+        external controls to remain interactive with the overlay (without
+        remounting), I can update the overlay to accept controlled props instead
+        of initial-only props.
       </div>
     </main>
   );
@@ -249,15 +271,19 @@ function RotatorControl({
   tooltip?: string;
 }) {
   return (
-    <div className="mt-3">
-      <div className="flex justify-between items-center">
-        <div className="text-xs text-zinc-400">{label}</div>
-        <div className="font-mono text-sm">{value.toFixed(3)}°</div>
+    <div className="mt-4">
+      <div className="flex justify-between items-center mb-1.5">
+        <div className="text-[10px] sm:text-xs text-sky-400/60 uppercase tracking-wider font-medium">
+          {label}
+        </div>
+        <div className="font-mono text-sm text-sky-100 tabular-nums">
+          {value.toFixed(3)}°
+        </div>
       </div>
 
-      <div className="flex gap-2 items-center mt-2">
+      <div className="flex gap-1.5 sm:gap-2 items-center">
         <button
-          className="px-3 py-1 rounded bg-zinc-800 border border-sky-700"
+          className="px-2 sm:px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.1] text-sky-300 hover:bg-sky-500/20 hover:border-sky-500/30 active:scale-95 transition-all duration-150 text-xs sm:text-sm"
           onClick={() => setValue(value - coarseStep)}
           title={`Rotate -${coarseStep}° (coarse)`}
         >
@@ -265,7 +291,7 @@ function RotatorControl({
         </button>
 
         <button
-          className="px-2 py-1 rounded bg-zinc-800 border border-sky-700"
+          className="px-1.5 sm:px-2 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.1] text-sky-300 hover:bg-sky-500/20 hover:border-sky-500/30 active:scale-95 transition-all duration-150 text-xs sm:text-sm"
           onClick={() => setValue(value - fineStep)}
           title={`Rotate -${fineStep}° (fine)`}
         >
@@ -280,11 +306,11 @@ function RotatorControl({
           value={value}
           onChange={(e) => setValue(Number(e.target.value))}
           title={tooltip}
-          className="flex-1"
+          className="flex-1 accent-sky-500"
         />
 
         <button
-          className="px-2 py-1 rounded bg-zinc-800 border border-sky-700"
+          className="px-1.5 sm:px-2 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.1] text-sky-300 hover:bg-sky-500/20 hover:border-sky-500/30 active:scale-95 transition-all duration-150 text-xs sm:text-sm"
           onClick={() => setValue(value + fineStep)}
           title={`Rotate +${fineStep}° (fine)`}
         >
@@ -292,7 +318,7 @@ function RotatorControl({
         </button>
 
         <button
-          className="px-3 py-1 rounded bg-zinc-800 border border-sky-700"
+          className="px-2 sm:px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.1] text-sky-300 hover:bg-sky-500/20 hover:border-sky-500/30 active:scale-95 transition-all duration-150 text-xs sm:text-sm"
           onClick={() => setValue(value + coarseStep)}
           title={`Rotate +${coarseStep}° (coarse)`}
         >

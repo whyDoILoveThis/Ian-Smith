@@ -1,18 +1,28 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import OverlapView2p2 from "@/components/PathLock/v2/OverlapView2p2";
 import {
   computeOneWayRxPowerDbm,
   boresightVectorFromAzEl,
 } from "@/components/PathLock/v2/rfEnginev2";
+import { useGyroscope } from "@/hooks/useGyroscope";
 
 /**
- * LearningLobeOverlay — fixed vertical responsiveness
+ * LearningLobeOverlay — true observational learning system
  *
- * - Computes proper off-axis angles from az/el using boresight vectors
- * - Uses computeOneWayRxPowerDbm(txOffAxisDeg, rxOffAxisDeg, distanceMeters)
- * - Everything else (EMA, gaussian smoothing, moves, scroll-lock) retained
+ * Architecture: Two separate layers with a strict information boundary.
+ *
+ * SIMULATION LAYER (this component):
+ *   - Manages dish state (az/el) and calls rfEnginev2 to compute received power.
+ *   - This is the "real world" — it knows everything about the RF environment.
+ *
+ * LEARNING LAYER (LearningLobeEngine class):
+ *   - Receives ONLY: movement direction (up/down/left/right) + resulting signal (dBm).
+ *   - Does NOT know: absolute azimuth, elevation, LOS direction, or RF model params.
+ *   - Tracks a cursor in relative grid space (starting at center).
+ *   - Builds a heatmap of observed signal strength from cumulative movement + observations.
+ *   - Computes gradient at the cursor for movement suggestions.
  */
 
 // ---------- helpers ----------
@@ -73,52 +83,34 @@ const DEFAULT_OPTIONS: LearningEngineOptions = {
   degreesPerCell: 0.1,
   emaAlpha: 0.6,
   confidenceGain: 1.0,
-  confidenceDecay: 0.0005,
+  confidenceDecay: 0.08,
 };
 
 class LearningLobeEngine {
   grid: LobeCell[][];
   centerIndex: number;
   options: LearningEngineOptions;
-  centerAzDeg: number;
-  centerElDeg: number;
+  /** Cursor tracks current position in grid space — starts at center, moves with each step */
+  cursorX: number;
+  cursorY: number;
 
-  constructor(
-    centerAzDeg: number,
-    centerElDeg: number,
-    opts?: Partial<LearningEngineOptions>
-  ) {
+  constructor(opts?: Partial<LearningEngineOptions>) {
     this.options = { ...DEFAULT_OPTIONS, ...(opts ?? {}) };
     this.centerIndex = Math.floor(this.options.gridSize / 2);
-    this.centerAzDeg = centerAzDeg;
-    this.centerElDeg = centerElDeg;
+    this.cursorX = this.centerIndex;
+    this.cursorY = this.centerIndex;
     this.grid = Array.from({ length: this.options.gridSize }, () =>
       Array.from({ length: this.options.gridSize }, () => ({
         estimatedDbm: NaN,
         confidence: 0,
-      }))
+      })),
     );
   }
 
-  addAbsoluteSample(
-    sampleAzDeg: number,
-    sampleElDeg: number,
-    measuredDbm: number
-  ) {
-    // map offsets relative to initial boresight center (az wraps handled)
-    // az offset: smallest signed difference
-    let azOffset = sampleAzDeg - this.centerAzDeg;
-    while (azOffset <= -180) azOffset += 360;
-    while (azOffset > 180) azOffset -= 360;
-
-    const elOffset = sampleElDeg - this.centerElDeg;
-    const ix = Math.round(
-      this.centerIndex + azOffset / this.options.degreesPerCell
-    );
-    const iy = Math.round(
-      this.centerIndex - elOffset / this.options.degreesPerCell
-    ); // y inverted for canvas
-
+  /** Record a signal observation at the current cursor position */
+  recordObservation(measuredDbm: number) {
+    const ix = Math.round(this.cursorX);
+    const iy = Math.round(this.cursorY);
     if (
       ix < 0 ||
       ix >= this.options.gridSize ||
@@ -134,6 +126,77 @@ class LearningLobeEngine {
         cell.estimatedDbm +
         (measuredDbm - cell.estimatedDbm) * this.options.emaAlpha;
     cell.confidence += this.options.confidenceGain;
+  }
+
+  /** Move cursor one grid cell in the given direction, then record the observation */
+  moveAndRecord(direction: MoveDirection, measuredDbm: number) {
+    switch (direction) {
+      case "left":
+        this.cursorX -= 1;
+        break;
+      case "right":
+        this.cursorX += 1;
+        break;
+      case "up":
+        this.cursorY -= 1;
+        break;
+      case "down":
+        this.cursorY += 1;
+        break;
+    }
+    this.cursorX = clamp(this.cursorX, 0, this.options.gridSize - 1);
+    this.cursorY = clamp(this.cursorY, 0, this.options.gridSize - 1);
+    this.recordObservation(measuredDbm);
+    this.decayConfidence();
+  }
+
+  /** Finite-difference gradient at the current cursor position */
+  getGradientAtCursor(): { dx: number; dy: number } | null {
+    const ix = Math.round(this.cursorX);
+    const iy = Math.round(this.cursorY);
+    const N = this.options.gridSize;
+    const valAt = (x: number, y: number): number => {
+      if (x < 0 || x >= N || y < 0 || y >= N) return NaN;
+      const c = this.grid[y][x];
+      return c.confidence > 0 && isFinite(c.estimatedDbm)
+        ? c.estimatedDbm
+        : NaN;
+    };
+
+    const right = valAt(ix + 1, iy);
+    const left = valAt(ix - 1, iy);
+    const up = valAt(ix, iy - 1);
+    const down = valAt(ix, iy + 1);
+    const center = valAt(ix, iy);
+    let dx = 0,
+      dy = 0,
+      hasDx = false,
+      hasDy = false;
+
+    if (isFinite(right) && isFinite(left)) {
+      dx = right - left;
+      hasDx = true;
+    } else if (isFinite(right) && isFinite(center)) {
+      dx = right - center;
+      hasDx = true;
+    } else if (isFinite(center) && isFinite(left)) {
+      dx = center - left;
+      hasDx = true;
+    }
+
+    if (isFinite(down) && isFinite(up)) {
+      dy = down - up;
+      hasDy = true;
+    } else if (isFinite(down) && isFinite(center)) {
+      dy = down - center;
+      hasDy = true;
+    } else if (isFinite(center) && isFinite(up)) {
+      dy = center - up;
+      hasDy = true;
+    }
+
+    if (!hasDx && !hasDy) return null;
+    return { dx: hasDx ? dx : 0, dy: hasDy ? dy : 0 };
   }
 
   decayConfidence() {
@@ -180,6 +243,8 @@ class LearningLobeEngine {
       maxDbm,
       totalConf,
       centerIndex: this.centerIndex,
+      cursorX: this.cursorX,
+      cursorY: this.cursorY,
       degreesPerCell: this.options.degreesPerCell,
     };
   }
@@ -191,6 +256,8 @@ class LearningLobeEngine {
         this.grid[y][x].confidence = 0;
       }
     }
+    this.cursorX = this.centerIndex;
+    this.cursorY = this.centerIndex;
   }
 }
 
@@ -221,6 +288,15 @@ export default function LearningLobeOverlay({
 
   const [activeDish, setActiveDish] = useState<"A" | "B">("A");
 
+  // Gyro mode state
+  const [gyroMode, setGyroMode] = useState(false);
+  const [gyroMoveCount, setGyroMoveCount] = useState(0);
+
+  // Stable ref for performMove so the gyro hook always calls the latest version
+  const performMoveRef = useRef<
+    (dir: "up" | "down" | "left" | "right") => void
+  >(() => {});
+
   const learnerARef = useRef<LearningLobeEngine | null>(null);
   const learnerBRef = useRef<LearningLobeEngine | null>(null);
 
@@ -239,12 +315,27 @@ export default function LearningLobeOverlay({
     maxV: number;
   } | null>(null);
 
+  // Gyro hook — quantizes phone rotation into discrete steps matching degreesPerCell
+  const gyroStepCallback = useCallback(
+    (dir: "up" | "down" | "left" | "right") => {
+      performMoveRef.current(dir);
+      setGyroMoveCount((c) => c + 1);
+    },
+    [],
+  );
+
+  const gyro = useGyroscope({
+    stepDeg: degreesPerCell,
+    onStep: gyroStepCallback,
+    enabled: gyroMode,
+  });
+
   // helper: compute both directions properly using boresight vectors and computeOneWayRxPowerDbm
   function computeTwoWayReadings(
     aAz: number,
     aEl: number,
     bAz: number,
-    bEl: number
+    bEl: number,
   ) {
     // boresight vectors
     const aBoresight = boresightVectorFromAzEl(aAz, aEl);
@@ -269,14 +360,14 @@ export default function LearningLobeOverlay({
       bToA_txOffAxisDeg,
       a_rxOffAxisDeg,
       distanceMeters,
-      { useRainRateMmPerHour: 0 }
+      { useRainRateMmPerHour: 0 },
     );
     // For B receives (A->B): tx=A's off-axis, rx=B's off-axis
     const aToB = computeOneWayRxPowerDbm(
       aToB_txOffAxisDeg,
       b_rxOffAxisDeg,
       distanceMeters,
-      { useRainRateMmPerHour: 0 }
+      { useRainRateMmPerHour: 0 },
     );
 
     // Return numeric received dBm values along with objects if needed
@@ -285,34 +376,27 @@ export default function LearningLobeOverlay({
 
   // init learners and seed with initial readings
   useEffect(() => {
-    learnerARef.current = new LearningLobeEngine(
-      initialDish1AzimuthDeg,
-      initialDish1ElevationDeg,
-      {
-        gridSize,
-        degreesPerCell,
-        emaAlpha: 0.6,
-        confidenceGain: 1.0,
-        confidenceDecay: 0.0005,
-      }
-    );
-    learnerBRef.current = new LearningLobeEngine(
-      initialDish2AzimuthDeg,
-      initialDish2ElevationDeg,
-      {
-        gridSize,
-        degreesPerCell,
-        emaAlpha: 0.6,
-        confidenceGain: 1.0,
-        confidenceDecay: 0.0005,
-      }
-    );
+    learnerARef.current = new LearningLobeEngine({
+      gridSize,
+      degreesPerCell,
+      emaAlpha: 0.6,
+      confidenceGain: 1.0,
+      confidenceDecay: 0.0005,
+    });
+    learnerBRef.current = new LearningLobeEngine({
+      gridSize,
+      degreesPerCell,
+      emaAlpha: 0.6,
+      confidenceGain: 1.0,
+      confidenceDecay: 0.0005,
+    });
 
+    // Seed learners with the initial signal reading (observation at starting position)
     const two = computeTwoWayReadings(
       initialDish1AzimuthDeg,
       initialDish1ElevationDeg,
       initialDish2AzimuthDeg,
-      initialDish2ElevationDeg
+      initialDish2ElevationDeg,
     );
     const initialA = two.bToA.receivedPowerDbm;
     const initialB = two.aToB.receivedPowerDbm;
@@ -320,16 +404,9 @@ export default function LearningLobeOverlay({
     smoothedARef.current = initialA;
     smoothedBRef.current = initialB;
 
-    learnerARef.current.addAbsoluteSample(
-      initialDish1AzimuthDeg,
-      initialDish1ElevationDeg,
-      initialA
-    );
-    learnerBRef.current.addAbsoluteSample(
-      initialDish2AzimuthDeg,
-      initialDish2ElevationDeg,
-      initialB
-    );
+    // Learner only receives the scalar dBm reading — no coordinates
+    learnerARef.current.recordObservation(initialA);
+    learnerBRef.current.recordObservation(initialB);
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -345,7 +422,7 @@ export default function LearningLobeOverlay({
     aAz = dish1Az,
     aEl = dish1El,
     bAz = dish2Az,
-    bEl = dish2El
+    bEl = dish2El,
   ) {
     const two = computeTwoWayReadings(aAz, aEl, bAz, bEl);
     if (dish === "A") return two.bToA.receivedPowerDbm;
@@ -370,9 +447,6 @@ export default function LearningLobeOverlay({
       else
         smoothedBRef.current =
           smoothedBRef.current + (instB - smoothedBRef.current) * smoothedAlpha;
-
-      learnerARef.current?.decayConfidence();
-      learnerBRef.current?.decayConfidence();
 
       drawHeatmapSmoothed(g);
 
@@ -404,14 +478,14 @@ export default function LearningLobeOverlay({
         dir === "left"
           ? dish1Az - stepDeg
           : dir === "right"
-          ? dish1Az + stepDeg
-          : dish1Az;
+            ? dish1Az + stepDeg
+            : dish1Az;
       newAel =
         dir === "up"
           ? dish1El + stepDeg
           : dir === "down"
-          ? dish1El - stepDeg
-          : dish1El;
+            ? dish1El - stepDeg
+            : dish1El;
       setDish1Az(newAaz);
       setDish1El(newAel);
     } else {
@@ -419,14 +493,14 @@ export default function LearningLobeOverlay({
         dir === "left"
           ? dish2Az - stepDeg
           : dir === "right"
-          ? dish2Az + stepDeg
-          : dish2Az;
+            ? dish2Az + stepDeg
+            : dish2Az;
       newBel =
         dir === "up"
           ? dish2El + stepDeg
           : dir === "down"
-          ? dish2El - stepDeg
-          : dish2El;
+            ? dish2El - stepDeg
+            : dish2El;
       setDish2Az(newBaz);
       setDish2El(newBel);
     }
@@ -436,29 +510,26 @@ export default function LearningLobeOverlay({
     const afterAinst = twoAfter.bToA.receivedPowerDbm;
     const afterBinst = twoAfter.aToB.receivedPowerDbm;
 
-    // quick EMA update for the changed dish (so sample used is the smoothed value)
+    // EMA smooth the signal, then pass ONLY direction + dBm to the learner
     if (activeDish === "A") {
       smoothedARef.current = isFinite(smoothedARef.current!)
         ? smoothedARef.current! +
           (afterAinst - smoothedARef.current!) * smoothedAlpha
         : afterAinst;
-      learnerARef.current?.addAbsoluteSample(
-        newAaz,
-        newAel,
-        smoothedARef.current!
-      );
+      // Learner receives only: movement direction + resulting signal
+      learnerARef.current?.moveAndRecord(dir, smoothedARef.current!);
     } else {
       smoothedBRef.current = isFinite(smoothedBRef.current!)
         ? smoothedBRef.current! +
           (afterBinst - smoothedBRef.current!) * smoothedAlpha
         : afterBinst;
-      learnerBRef.current?.addAbsoluteSample(
-        newBaz,
-        newBel,
-        smoothedBRef.current!
-      );
+      // Learner receives only: movement direction + resulting signal
+      learnerBRef.current?.moveAndRecord(dir, smoothedBRef.current!);
     }
   }
+
+  // Keep performMoveRef current so gyro callback always calls latest version
+  performMoveRef.current = performMove;
 
   // prevent page scroll on arrow keys and use arrows for moves
   useEffect(() => {
@@ -568,7 +639,7 @@ export default function LearningLobeOverlay({
           x * pxPerCellX,
           y * pxPerCellY,
           Math.ceil(pxPerCellX),
-          Math.ceil(pxPerCellY)
+          Math.ceil(pxPerCellY),
         );
       }
     }
@@ -608,35 +679,49 @@ export default function LearningLobeOverlay({
       peakX * pxPerCellX,
       peakY * pxPerCellY,
       pxPerCellX,
-      pxPerCellY
+      pxPerCellY,
     );
 
-    // center crosshair & arrow to peak
-    const centerX = learner.centerIndex * pxPerCellX + pxPerCellX / 2,
-      centerY = learner.centerIndex * pxPerCellY + pxPerCellY / 2;
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    // Start position crosshair (dim white — where the dish started)
+    const startPxX = learner.centerIndex * pxPerCellX + pxPerCellX / 2,
+      startPxY = learner.centerIndex * pxPerCellY + pxPerCellY / 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(centerX - 8, centerY);
-    ctx.lineTo(centerX + 8, centerY);
-    ctx.moveTo(centerX, centerY - 8);
-    ctx.lineTo(centerX, centerY + 8);
+    ctx.moveTo(startPxX - 6, startPxY);
+    ctx.lineTo(startPxX + 6, startPxY);
+    ctx.moveTo(startPxX, startPxY - 6);
+    ctx.lineTo(startPxX, startPxY + 6);
     ctx.stroke();
 
+    // Current cursor crosshair (green — where the dish is NOW)
+    const curPxX = learner.cursorX * pxPerCellX + pxPerCellX / 2,
+      curPxY = learner.cursorY * pxPerCellY + pxPerCellY / 2;
+    ctx.strokeStyle = "rgba(0,255,128,0.95)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(curPxX - 8, curPxY);
+    ctx.lineTo(curPxX + 8, curPxY);
+    ctx.moveTo(curPxX, curPxY - 8);
+    ctx.lineTo(curPxX, curPxY + 8);
+    ctx.stroke();
+
+    // Arrow from cursor to peak
     const peakCenterX = peakX * pxPerCellX + pxPerCellX / 2,
       peakCenterY = peakY * pxPerCellY + pxPerCellY / 2;
-    const dx = peakCenterX - centerX,
-      dy = peakCenterY - centerY;
+    const dx = peakCenterX - curPxX,
+      dy = peakCenterY - curPxY;
     const dist = Math.hypot(dx, dy);
     if (dist > 2) {
       ctx.strokeStyle = "rgba(0,255,255,0.95)";
       ctx.fillStyle = "rgba(0,255,255,0.95)";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
+      ctx.moveTo(curPxX, curPxY);
       const arrowToX =
-        centerX + (dx * (dist - Math.max(pxPerCellX, pxPerCellY) * 0.5)) / dist;
+        curPxX + (dx * (dist - Math.max(pxPerCellX, pxPerCellY) * 0.5)) / dist;
       const arrowToY =
-        centerY + (dy * (dist - Math.max(pxPerCellX, pxPerCellY) * 0.5)) / dist;
+        curPxY + (dy * (dist - Math.max(pxPerCellX, pxPerCellY) * 0.5)) / dist;
       ctx.lineTo(arrowToX, arrowToY);
       ctx.stroke();
       const angle = Math.atan2(dy, dx);
@@ -645,11 +730,11 @@ export default function LearningLobeOverlay({
       ctx.moveTo(arrowToX, arrowToY);
       ctx.lineTo(
         arrowToX - headSize * Math.cos(angle - Math.PI / 6),
-        arrowToY - headSize * Math.sin(angle - Math.PI / 6)
+        arrowToY - headSize * Math.sin(angle - Math.PI / 6),
       );
       ctx.lineTo(
         arrowToX - headSize * Math.cos(angle + Math.PI / 6),
-        arrowToY - headSize * Math.sin(angle + Math.PI / 6)
+        arrowToY - headSize * Math.sin(angle + Math.PI / 6),
       );
       ctx.closePath();
       ctx.fill();
@@ -659,45 +744,47 @@ export default function LearningLobeOverlay({
     ctx.font = "12px ui-monospace, monospace";
     ctx.fillText(`Peak: ${peakVal.toFixed(2)} dBm`, 8, 16);
     ctx.fillText(`Active: Dish ${activeDish}`, 8, 32);
+    const curRelAz = (
+      (learner.cursorX - learner.centerIndex) *
+      learner.options.degreesPerCell
+    ).toFixed(2);
+    const curRelEl = (
+      (learner.centerIndex - learner.cursorY) *
+      learner.options.degreesPerCell
+    ).toFixed(2);
+    ctx.fillText(
+      `Cursor: \u0394az ${curRelAz}\u00B0 \u0394el ${curRelEl}\u00B0`,
+      8,
+      48,
+    );
 
     lastSmoothedOutRef.current = { out, N, minV, maxV };
   }
 
-  // recommended move uses local gradient around center of last smoothed map
+  // Recommended move: gradient at cursor position using only learned observations
   function recommendedMoveForActive(): MoveDirection | null {
-    const snapRef = lastSmoothedOutRef.current;
-    if (!snapRef || !snapRef.out) return null;
-    const { out, N } = snapRef;
-    const cx = Math.floor(N / 2),
-      cy = Math.floor(N / 2);
-    const valAt = (x: number, y: number) => {
-      const xi = Math.max(0, Math.min(N - 1, x));
-      const yi = Math.max(0, Math.min(N - 1, y));
-      return out[yi * N + xi];
-    };
-    const right = valAt(cx + 1, cy),
-      left = valAt(cx - 1, cy),
-      up = valAt(cx, cy - 1),
-      down = valAt(cx, cy + 1);
-    const dx =
-      (isFinite(right) ? right : -Infinity) -
-      (isFinite(left) ? left : -Infinity);
-    const dy =
-      (isFinite(down) ? down : -Infinity) - (isFinite(up) ? up : -Infinity);
-    if (!isFinite(dx) && !isFinite(dy)) {
-      const learner =
-        activeDish === "A" ? learnerARef.current : learnerBRef.current;
-      if (!learner) return null;
+    const learner =
+      activeDish === "A" ? learnerARef.current : learnerBRef.current;
+    if (!learner) return null;
+
+    const grad = learner.getGradientAtCursor();
+    if (!grad) {
+      // No gradient data at cursor — try pointing toward peak if known
       const snap = learner.getSnapshot();
-      const ddx = snap.peakX - learner.centerIndex;
-      const ddy = snap.peakY - learner.centerIndex;
-      if (Math.abs(ddx) < 1 && Math.abs(ddy) < 1) return null;
-      if (Math.abs(ddx) > Math.abs(ddy)) return ddx > 0 ? "right" : "left";
-      return ddy > 0 ? "down" : "up";
+      if (isFinite(snap.peakDbm)) {
+        const ddx = snap.peakX - learner.cursorX;
+        const ddy = snap.peakY - learner.cursorY;
+        if (Math.abs(ddx) < 1 && Math.abs(ddy) < 1) return null;
+        if (Math.abs(ddx) > Math.abs(ddy)) return ddx > 0 ? "right" : "left";
+        return ddy > 0 ? "down" : "up";
+      }
+      return null;
     }
-    const absDx = Math.abs(isFinite(dx) ? dx : 0),
-      absDy = Math.abs(isFinite(dy) ? dy : 0);
-    if (absDx < 0.05 && absDy < 0.05) return null;
+
+    const { dx, dy } = grad;
+    const absDx = Math.abs(dx),
+      absDy = Math.abs(dy);
+    if (absDx < 0.05 && absDy < 0.05) return null; // plateau
     if (absDx > absDy) return dx > 0 ? "right" : "left";
     return dy > 0 ? "down" : "up";
   }
@@ -707,40 +794,79 @@ export default function LearningLobeOverlay({
   function resetLearners() {
     learnerARef.current?.reset();
     learnerBRef.current?.reset();
-    smoothedARef.current = null;
-    smoothedBRef.current = null;
+    // Reset dish angles back to initial positions
+    setDish1Az(initialDish1AzimuthDeg);
+    setDish1El(initialDish1ElevationDeg);
+    setDish2Az(initialDish2AzimuthDeg);
+    setDish2El(initialDish2ElevationDeg);
+    // Re-seed with initial signal reading
+    const two = computeTwoWayReadings(
+      initialDish1AzimuthDeg,
+      initialDish1ElevationDeg,
+      initialDish2AzimuthDeg,
+      initialDish2ElevationDeg,
+    );
+    smoothedARef.current = two.bToA.receivedPowerDbm;
+    smoothedBRef.current = two.aToB.receivedPowerDbm;
+    learnerARef.current?.recordObservation(smoothedARef.current);
+    learnerBRef.current?.recordObservation(smoothedBRef.current);
     lastSmoothedOutRef.current = null;
   }
 
   return (
-    <div className="p-3 rounded-xl bg-zinc-900 border border-sky-700 text-sky-100 w-full max-w-5xl">
-      <div className="flex items-center justify-between mb-3">
+    <div className="p-4 lg:p-5 rounded-2xl backdrop-blur-xl bg-white/[0.04] border border-white/[0.08] text-sky-100 w-full max-w-7xl shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
         <div>
-          <h2 className="text-lg font-bold">🎯 Learning Lobe Overlay</h2>
-          <div className="text-xs text-zinc-400">
-            Active dish: <strong>{activeDish}</strong> • Grid: {gridSize} •
-            Δ°/cell: {degreesPerCell}
+          <h2 className="text-base sm:text-lg font-bold tracking-wide bg-gradient-to-r from-sky-300 to-cyan-400 bg-clip-text text-transparent">
+            🎯 Learning Lobe Overlay
+          </h2>
+          <div className="text-[10px] sm:text-xs text-sky-400/50 mt-0.5">
+            Active dish: <strong className="text-sky-300">{activeDish}</strong>{" "}
+            • Grid: {gridSize} • Δ°/cell: {degreesPerCell}
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setActiveDish((d) => (d === "A" ? "B" : "A"))}
-            className="px-2 py-1 bg-sky-700 rounded text-xs"
+            className="px-3 py-1.5 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sky-300 text-xs font-medium hover:bg-sky-500/25 hover:border-sky-400/40 active:scale-95 transition-all duration-150"
           >
             Toggle Active Dish
           </button>
           <button
+            onClick={async () => {
+              if (!gyroMode) {
+                // Turning ON — request permission if needed (iOS)
+                if (gyro.needsPermission && !gyro.permissionGranted) {
+                  const ok = await gyro.requestPermission();
+                  if (!ok) return;
+                }
+                gyro.resetZero();
+                setGyroMoveCount(0);
+                setGyroMode(true);
+              } else {
+                setGyroMode(false);
+              }
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium active:scale-95 transition-all duration-150 ${
+              gyroMode
+                ? "bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30"
+                : "bg-amber-500/15 border border-amber-500/25 text-amber-300 hover:bg-amber-500/25 hover:border-amber-400/40"
+            }`}
+          >
+            {gyroMode ? "📱 Gyro ON" : "📱 Gyro Mode"}
+          </button>
+          <button
             onClick={() => resetLearners()}
-            className="px-2 py-1 bg-red-700 rounded text-xs"
+            className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/25 text-red-300 text-xs font-medium hover:bg-red-500/25 hover:border-red-400/40 active:scale-95 transition-all duration-150"
           >
             Reset Learners
           </button>
         </div>
       </div>
 
-      <div className="flex gap-4">
-        <div>
+      <div className="flex flex-col gap-4">
+        <div className="w-full">
           <OverlapView2p2
             dish1AzimuthDeg={dish1Az}
             dish1ElevationDeg={dish1El}
@@ -755,91 +881,174 @@ export default function LearningLobeOverlay({
           />
         </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-4">
-            <div>
-              <div className="text-xs">Active Dish</div>
-              <div className="font-mono text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 backdrop-blur-sm bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
+            <div className="min-w-0">
+              <div className="text-[10px] sm:text-xs text-sky-400/50 uppercase tracking-wider font-medium">
+                Active Dish (sim angles)
+              </div>
+              <div className="font-mono text-xs sm:text-sm text-sky-100 mt-0.5">
                 {activeDish === "A"
                   ? `Dish A — az ${dish1Az.toFixed(3)}° / el ${dish1El.toFixed(
-                      3
+                      3,
                     )}°`
                   : `Dish B — az ${dish2Az.toFixed(3)}° / el ${dish2El.toFixed(
-                      3
+                      3,
                     )}°`}
+              </div>
+              <div className="font-mono text-[10px] sm:text-xs text-emerald-400/80 mt-0.5">
+                {(() => {
+                  const l =
+                    activeDish === "A"
+                      ? learnerARef.current
+                      : learnerBRef.current;
+                  if (!l) return "";
+                  const dAz = (
+                    (l.cursorX - l.centerIndex) *
+                    l.options.degreesPerCell
+                  ).toFixed(2);
+                  const dEl = (
+                    (l.centerIndex - l.cursorY) *
+                    l.options.degreesPerCell
+                  ).toFixed(2);
+                  return `Learner sees: \u0394az ${dAz}\u00B0 / \u0394el ${dEl}\u00B0 from start`;
+                })()}
               </div>
             </div>
 
-            <div>
-              <div className="text-xs">Smoothed Rx</div>
-              <div className="font-mono text-sm">
+            <div className="min-w-0">
+              <div className="text-[10px] sm:text-xs text-sky-400/50 uppercase tracking-wider font-medium">
+                Smoothed Rx
+              </div>
+              <div className="font-mono text-xs sm:text-sm text-sky-100 mt-0.5">
                 {activeDish === "A"
                   ? `${(smoothedARef.current ?? instantReading("A")).toFixed(
-                      3
+                      3,
                     )} dBm`
                   : `${(smoothedBRef.current ?? instantReading("B")).toFixed(
-                      3
+                      3,
                     )} dBm`}
               </div>
             </div>
 
-            <div>
-              <div className="text-xs">Suggested move</div>
-              <div className="text-sm font-bold">
+            <div className="min-w-0">
+              <div className="text-[10px] sm:text-xs text-sky-400/50 uppercase tracking-wider font-medium">
+                Suggested move
+              </div>
+              <div className="text-sm font-bold mt-0.5">
                 {recMove
                   ? recMove === "up"
                     ? "⬆️ Up"
                     : recMove === "down"
-                    ? "⬇️ Down"
-                    : recMove === "left"
-                    ? "⬅️ Left"
-                    : "➡️ Right"
+                      ? "⬇️ Down"
+                      : recMove === "left"
+                        ? "⬅️ Left"
+                        : "➡️ Right"
                   : "—"}
               </div>
             </div>
           </div>
 
-          <div className="p-2 bg-zinc-800 rounded">
-            <div className="flex flex-col items-center gap-2">
-              <div className="grid grid-cols-3 gap-1 items-center">
-                <div></div>
-                <button
-                  onClick={() => performMove("up")}
-                  className="px-3 py-1 bg-sky-600 rounded"
-                >
-                  ⬆️
-                </button>
-                <div></div>
+          <div className="backdrop-blur-sm bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
+            {gyroMode ? (
+              <div className="flex flex-col gap-3">
+                <div className="text-[10px] sm:text-xs text-sky-400/50 uppercase tracking-wider font-medium">
+                  Gyro Input
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="rounded-lg bg-sky-500/10 border border-sky-500/20 p-2">
+                    <div className="text-[10px] text-sky-400/50 uppercase">
+                      Δ Azimuth
+                    </div>
+                    <div className="text-sm font-mono font-bold text-sky-200 mt-0.5">
+                      {gyro.deltaAz.toFixed(2)}°
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-sky-500/10 border border-sky-500/20 p-2">
+                    <div className="text-[10px] text-sky-400/50 uppercase">
+                      Δ Elevation
+                    </div>
+                    <div className="text-sm font-mono font-bold text-sky-200 mt-0.5">
+                      {gyro.deltaEl.toFixed(2)}°
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-sky-300/60">
+                  <span>
+                    Moves:{" "}
+                    <span className="font-mono font-bold text-sky-200">
+                      {gyroMoveCount}
+                    </span>
+                  </span>
+                  <span
+                    className={`flex items-center gap-1 ${gyro.active ? "text-emerald-400" : "text-amber-400"}`}
+                  >
+                    <span
+                      className={`inline-block w-1.5 h-1.5 rounded-full ${gyro.active ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}
+                    />
+                    {gyro.active ? "Tracking" : "Waiting…"}
+                  </span>
+                </div>
 
                 <button
-                  onClick={() => performMove("left")}
-                  className="px-3 py-1 bg-sky-600 rounded"
+                  onClick={() => {
+                    gyro.resetZero();
+                    setGyroMoveCount(0);
+                  }}
+                  className="w-full px-3 py-2 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sky-200 hover:bg-sky-500/30 hover:border-sky-400/40 active:scale-95 transition-all duration-150 text-xs font-medium"
                 >
-                  ⬅️
+                  Re-zero &amp; Reset
                 </button>
-                <button
-                  onClick={() => performMove("down")}
-                  className="px-3 py-1 bg-sky-600 rounded"
-                >
-                  ⬇️
-                </button>
-                <button
-                  onClick={() => performMove("right")}
-                  className="px-3 py-1 bg-sky-600 rounded"
-                >
-                  ➡️
-                </button>
-              </div>
 
-              <div className="text-xs text-zinc-400 mt-2">
-                Tip: use your keyboard arrows to move the active dish. Arrow
-                keys will not scroll the page while in the sim.
+                <div className="text-[10px] text-sky-400/30 text-center leading-relaxed">
+                  Mount phone to dish bracket — tilt to sweep. Keyboard arrows
+                  still work as fallback.
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <div className="grid grid-cols-3 gap-1.5 items-center">
+                  <div></div>
+                  <button
+                    onClick={() => performMove("up")}
+                    className="px-4 py-2 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sky-200 hover:bg-sky-500/30 hover:border-sky-400/40 active:scale-90 transition-all duration-150 text-lg"
+                  >
+                    ⬆️
+                  </button>
+                  <div></div>
+
+                  <button
+                    onClick={() => performMove("left")}
+                    className="px-4 py-2 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sky-200 hover:bg-sky-500/30 hover:border-sky-400/40 active:scale-90 transition-all duration-150 text-lg"
+                  >
+                    ⬅️
+                  </button>
+                  <button
+                    onClick={() => performMove("down")}
+                    className="px-4 py-2 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sky-200 hover:bg-sky-500/30 hover:border-sky-400/40 active:scale-90 transition-all duration-150 text-lg"
+                  >
+                    ⬇️
+                  </button>
+                  <button
+                    onClick={() => performMove("right")}
+                    className="px-4 py-2 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sky-200 hover:bg-sky-500/30 hover:border-sky-400/40 active:scale-90 transition-all duration-150 text-lg"
+                  >
+                    ➡️
+                  </button>
+                </div>
+
+                <div className="text-[10px] sm:text-xs text-sky-400/40 mt-2 text-center">
+                  Tip: use your keyboard arrows to move the active dish. Arrow
+                  keys will not scroll the page while in the sim.
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="bg-zinc-800 p-2 rounded">
-            <div className="text-xs text-zinc-400 mb-1">
+          <div className="backdrop-blur-sm bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
+            <div className="text-[10px] sm:text-xs text-sky-400/50 uppercase tracking-wider font-medium mb-2">
               Learned Lobe Map (active)
             </div>
             <canvas
@@ -847,17 +1056,20 @@ export default function LearningLobeOverlay({
               width={canvasSize}
               height={canvasSize}
               style={{
-                width: canvasSize,
-                height: canvasSize,
-                borderRadius: 8,
-                border: "1px solid #123a55",
+                width: "100%",
+                maxWidth: canvasSize,
+                height: "auto",
+                aspectRatio: "1 / 1",
+                borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.08)",
               }}
             />
           </div>
 
-          <div className="text-xs text-zinc-400">
-            Legend: color = estimated received power (smoothed), white box =
-            peak cell, cyan arrow = direction to peak from initial boresight.
+          <div className="md:col-span-2 text-[10px] sm:text-xs text-sky-400/40 leading-relaxed">
+            Legend: green crosshair = current cursor, dim white crosshair =
+            starting position, white box = peak cell, cyan arrow = direction to
+            peak from cursor.
           </div>
         </div>
       </div>

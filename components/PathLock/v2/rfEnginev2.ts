@@ -69,10 +69,40 @@ export function peakDishGainDb(
 }
 
 // -----------------------------
-// AIRY-LIKE RADIATION PATTERN (returns dBi at off-axis angle thetaDeg)
-// - This is a practical envelope approximation (fast & contains main-lobe shape)
-// - For small x we avoid divide-by-zero and return near-peak.
-// - Keep explicit variable names so readers understand the mapping.
+// BESSEL J1 function (Abramowitz & Stegun / Numerical Recipes rational approx)
+// Needed for the correct Airy radiation pattern of a circular dish aperture.
+// Accurate to ~1e-7 across the full range.
+// -----------------------------
+function besselJ1(x: number): number {
+  const ax = Math.abs(x);
+  if (ax < 8.0) {
+    const y = x * x;
+    const num = x * (72362614232.0 + y * (-7895059235.0 + y * (242396853.1
+      + y * (-2972611.439 + y * (15704.48260 + y * (-30.16036606))))));
+    const den = 144725228442.0 + y * (2300535178.0 + y * (18583304.74
+      + y * (99447.43394 + y * (376.9991397 + y * 1.0))));
+    return num / den;
+  } else {
+    const z = 8.0 / ax;
+    const y = z * z;
+    const xx = ax - 2.356194491; // ax - 3π/4
+    const p = 1.0 + y * (0.183105e-2 + y * (-0.3516396496e-4
+      + y * (0.2457520174e-5 + y * (-0.240337019e-6))));
+    const q = 0.04687499995 + y * (-0.2002690873e-3 + y * (0.8449199096e-5
+      + y * (-0.88228987e-6 + y * 0.105787412e-6)));
+    const ans = Math.sqrt(0.636619772 / ax) * (Math.cos(xx) * p - z * Math.sin(xx) * q);
+    return x < 0.0 ? -ans : ans;
+  }
+}
+
+// -----------------------------
+// AIRY RADIATION PATTERN (returns dBi at off-axis angle thetaDeg)
+// Correct pattern for a circular aperture dish:
+//   G(θ) = G_peak × [2·J₁(u)/u]²    where u = π·D·sin(θ)/λ
+// - At u=0: lim [2·J₁(u)/u] = 1 → peak gain
+// - First null at u ≈ 3.832 (first zero of J₁)
+// - First sidelobe at u ≈ 5.14, level ≈ -17.6 dB (matches real dishes)
+// - Enforces a sidelobe floor for engineering realism.
 // -----------------------------
 export function dishGainDb(
   thetaDeg: number,
@@ -83,21 +113,19 @@ export function dishGainDb(
   const apertureEfficiency = options?.apertureEfficiency ?? RF_CONSTANTS.apertureEfficiency;
 
   // convert to radians
-  const thetaRad = Math.max(Math.abs(thetaDeg) * DEG2RAD, 1e-12);
+  const thetaRad = Math.abs(thetaDeg) * DEG2RAD;
 
-  // k*a = π * D / λ ; x = k*a * sin(theta)   (surrogate variable for J1 argument)
+  // u = π·D·sin(θ)/λ  (Airy pattern argument)
   const wavelengthMeters = wavelengthMetersFromGHz(frequencyGigahertz);
-  const ka = (Math.PI * dishDiameterMeters) / wavelengthMeters; // unitless
-  const x = ka * Math.sin(thetaRad);
+  const u = (Math.PI * dishDiameterMeters * Math.sin(Math.max(thetaRad, 0))) / wavelengthMeters;
 
-  // For speed we use surrogate function that models main-lobe envelope:
-  // patternLinear ≈ (2 * sin(x) / x)^2  (captures main lobe shape & first null behavior)
+  // Airy pattern: [2·J₁(u)/u]² — correct for circular aperture
   let patternLinear: number;
-  if (Math.abs(x) < 1e-6) {
-    patternLinear = 1.0;
+  if (u < 1e-10) {
+    patternLinear = 1.0; // lim_{u→0} [2·J₁(u)/u] = 1
   } else {
-    const twoSinOverX = (2.0 * Math.sin(x)) / x;
-    patternLinear = Math.max(twoSinOverX * twoSinOverX, 1e-12);
+    const envelope = (2.0 * besselJ1(u)) / u;
+    patternLinear = Math.max(envelope * envelope, 1e-12);
   }
 
   const peakDb = peakDishGainDb(dishDiameterMeters, frequencyGigahertz, apertureEfficiency);
@@ -105,8 +133,8 @@ export function dishGainDb(
 
   // --- engineering realism: enforce a sidelobe floor so off-axis gain doesn't
   // drop to machine-noise levels. Typical real antennas have sidelobes ~ -40..-60 dB.
-  const SIDEL_OBE_FLOOR_DB = -60.0;
-  const clampedPatternDb = Math.max(patternDb, SIDEL_OBE_FLOOR_DB);
+  const SIDELOBE_FLOOR_DB = -60.0;
+  const clampedPatternDb = Math.max(patternDb, SIDELOBE_FLOOR_DB);
 
   // Return absolute gain in dBi at this off-axis angle
   return peakDb + clampedPatternDb;
