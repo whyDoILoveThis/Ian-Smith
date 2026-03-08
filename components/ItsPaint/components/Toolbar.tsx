@@ -54,12 +54,15 @@ function ToolButton({
 }
 
 export default function Toolbar() {
-  const { state, dispatch } = usePaintState();
+  const { state, dispatch, performUndo, performRedo } = usePaintState();
 
   const selectTools = TOOLS.filter((t) => t.category === "select");
   const drawTools = TOOLS.filter((t) => t.category === "draw");
   const shapeTools = TOOLS.filter((t) => t.category === "shape");
   const utilityTools = TOOLS.filter((t) => t.category === "utility");
+
+  const canUndo = state.historyIndex >= 0;
+  const canRedo = state.historyIndex < state.history.length - 1;
 
   const renderGroup = (tools: ToolDef[], label: string, accent: string) => (
     <div key={label} className="flex flex-col gap-1">
@@ -85,6 +88,28 @@ export default function Toolbar() {
 
   return (
     <div className="w-full md:w-[84px] backdrop-blur-xl bg-white/[0.04] md:border-r border-white/[0.06] flex flex-col gap-3 p-2 overflow-y-auto select-none">
+      {/* Undo / Redo */}
+      <div className="flex gap-1">
+        <button
+          onClick={performUndo}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+          className={`flex-1 h-8 flex items-center justify-center rounded-xl text-sm transition-all duration-200
+            ${canUndo ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.12] hover:text-white active:scale-95" : "bg-white/[0.03] text-white/15 cursor-default"}`}
+        >
+          ↩
+        </button>
+        <button
+          onClick={performRedo}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Y)"
+          className={`flex-1 h-8 flex items-center justify-center rounded-xl text-sm transition-all duration-200
+            ${canRedo ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.12] hover:text-white active:scale-95" : "bg-white/[0.03] text-white/15 cursor-default"}`}
+        >
+          ↪
+        </button>
+      </div>
+      <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
       {renderGroup(selectTools, "Select", "text-indigo-400/70")}
       <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
       {renderGroup(drawTools, "Draw", "text-pink-400/70")}

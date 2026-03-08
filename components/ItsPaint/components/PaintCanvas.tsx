@@ -28,6 +28,8 @@ export default function PaintCanvas() {
         shiftKey: e.shiftKey,
         ctrlKey: e.ctrlKey || e.metaKey,
         altKey: e.altKey,
+        movementX: e.movementX,
+        movementY: e.movementY,
       };
     },
     [screenToCanvas],
@@ -37,10 +39,13 @@ export default function PaintCanvas() {
     (e: React.PointerEvent) => {
       e.preventDefault();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      if (state.activeTool === "pan") {
+        canvasRef.current?.requestPointerLock();
+      }
       const ev = makeEvent(e);
       if (ev) handlePointerDown(ev);
     },
-    [makeEvent, handlePointerDown],
+    [makeEvent, handlePointerDown, state.activeTool],
   );
 
   const onPointerMove = useCallback(
@@ -63,6 +68,9 @@ export default function PaintCanvas() {
   const onPointerUp = useCallback(
     (e: React.PointerEvent) => {
       (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
       const ev = makeEvent(e);
       if (ev) handlePointerUp(ev);
     },
@@ -108,6 +116,8 @@ export default function PaintCanvas() {
       case "colorPicker":
         return "crosshair";
       case "move":
+        return state.isDrawing ? "grabbing" : "grab";
+      case "pan":
         return state.isDrawing ? "grabbing" : "grab";
       case "zoom":
         return "zoom-in";

@@ -46,6 +46,7 @@ export interface ToolDef {
 
 export const TOOLS: ToolDef[] = [
   { type: 'move', label: 'Move', icon: '✥', shortcut: 'V', category: 'utility' },
+  { type: 'pan', label: 'Pan', icon: '🤚', shortcut: 'Q', category: 'utility' },
   { type: 'rectSelect', label: 'Rectangle Select', icon: '⬜', shortcut: 'S', category: 'select' },
   { type: 'ellipseSelect', label: 'Ellipse Select', icon: '⬭', shortcut: 'S', category: 'select' },
   { type: 'lassoSelect', label: 'Lasso Select', icon: '⛶', shortcut: 'L', category: 'select' },

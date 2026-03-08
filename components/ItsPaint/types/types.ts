@@ -15,6 +15,7 @@ export interface HSLColor {
 // ─── Tool Types ────────────────────────────────────────────────────────────
 export type ToolType =
   | 'move'
+  | 'pan'
   | 'rectSelect'
   | 'ellipseSelect'
   | 'lassoSelect'
@@ -100,6 +101,8 @@ export interface CanvasPointerEvent {
   shiftKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
+  movementX: number;
+  movementY: number;
 }
 
 // ─── Tool Context (passed to tool handlers) ────────────────────────────────

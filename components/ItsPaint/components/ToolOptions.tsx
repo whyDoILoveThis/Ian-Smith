@@ -6,14 +6,14 @@ import { ToolType } from "../types/types";
 
 /* ── Shared styled building blocks ──────────────────────────────────────── */
 const pillCls =
-  "bg-white/[0.07] backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-2 text-[11px] text-white/80 border border-white/[0.06]";
+  "bg-white/[0.07] backdrop-blur-sm rounded-full px-3 py-1.5 md:py-1 flex items-center gap-2 text-[12px] md:text-[11px] text-white/80 border border-white/[0.06]";
 const rangeCls =
-  "appearance-none h-1 rounded-full bg-white/10 accent-violet-400 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-violet-400 [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(139,92,246,0.6)]";
+  "appearance-none h-2 md:h-1 rounded-full bg-white/10 accent-violet-400 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 md:[&::-webkit-slider-thumb]:w-3 md:[&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-violet-400 [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(139,92,246,0.6)]";
 const selCls =
-  "bg-white/[0.08] text-white/80 text-[11px] rounded-full px-2 py-0.5 border border-white/[0.06] outline-none cursor-pointer";
-const checkCls = "accent-violet-400 rounded";
+  "bg-white/[0.08] text-white/80 text-[12px] md:text-[11px] rounded-full px-2 py-1 md:py-0.5 border border-white/[0.06] outline-none cursor-pointer";
+const checkCls = "accent-violet-400 rounded w-5 h-5 md:w-4 md:h-4";
 const numCls =
-  "w-12 bg-white/[0.08] text-white/80 text-[11px] rounded-full px-2 py-0.5 border border-white/[0.06] outline-none text-center tabular-nums";
+  "w-14 md:w-12 bg-white/[0.08] text-white/80 text-[12px] md:text-[11px] rounded-full px-2 py-1 md:py-0.5 border border-white/[0.06] outline-none text-center tabular-nums";
 
 export default function ToolOptions() {
   const { state, dispatch } = usePaintState();
@@ -33,7 +33,7 @@ export default function ToolOptions() {
           max={200}
           value={toolOptions.brushSize}
           onChange={(e) => setOpt({ brushSize: +e.target.value })}
-          className={`w-20 ${rangeCls}`}
+          className={`flex-1 min-w-[80px] md:min-w-0 md:w-20 md:flex-none ${rangeCls}`}
         />
         <span className="w-6 text-right tabular-nums text-white/60">
           {toolOptions.brushSize}
@@ -47,7 +47,7 @@ export default function ToolOptions() {
           max={100}
           value={toolOptions.brushHardness}
           onChange={(e) => setOpt({ brushHardness: +e.target.value })}
-          className={`w-14 ${rangeCls}`}
+          className={`flex-1 min-w-[60px] md:min-w-0 md:w-14 md:flex-none ${rangeCls}`}
         />
         <span className="w-8 text-right tabular-nums text-white/60">
           {toolOptions.brushHardness}%
@@ -65,7 +65,7 @@ export default function ToolOptions() {
         max={100}
         value={toolOptions.opacity}
         onChange={(e) => setOpt({ opacity: +e.target.value })}
-        className={`w-16 ${rangeCls}`}
+        className={`flex-1 min-w-[70px] md:min-w-0 md:w-16 md:flex-none ${rangeCls}`}
       />
       <span className="w-8 text-right tabular-nums text-white/60">
         {toolOptions.opacity}%
@@ -82,7 +82,7 @@ export default function ToolOptions() {
         max={255}
         value={toolOptions.tolerance}
         onChange={(e) => setOpt({ tolerance: +e.target.value })}
-        className={`w-20 ${rangeCls}`}
+        className={`flex-1 min-w-[80px] md:min-w-0 md:w-20 md:flex-none ${rangeCls}`}
       />
       <span className="w-6 text-right tabular-nums text-white/60">
         {toolOptions.tolerance}
@@ -150,7 +150,7 @@ export default function ToolOptions() {
           max={50}
           value={toolOptions.strokeWidth}
           onChange={(e) => setOpt({ strokeWidth: +e.target.value })}
-          className={`w-14 ${rangeCls}`}
+          className={`flex-1 min-w-[60px] md:min-w-0 md:w-14 md:flex-none ${rangeCls}`}
         />
         <span className="w-5 text-right tabular-nums text-white/60">
           {toolOptions.strokeWidth}

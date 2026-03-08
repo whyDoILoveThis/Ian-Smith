@@ -173,7 +173,8 @@ export function useToolHandler(
           break;
         }
 
-        case 'move': {
+        case 'move':
+        case 'pan': {
           // Will handle moving on mousemove
           break;
         }
@@ -375,6 +376,10 @@ export function useToolHandler(
           const dx = cx - ts.lastX;
           const dy = cy - ts.lastY;
           dispatch({ type: 'SET_PAN', x: state.panX + dx * state.zoom, y: state.panY + dy * state.zoom });
+          break;
+        }
+        case 'pan': {
+          dispatch({ type: 'SET_PAN', x: state.panX + e.movementX, y: state.panY + e.movementY });
           break;
         }
       }

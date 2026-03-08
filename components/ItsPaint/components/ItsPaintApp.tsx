@@ -302,6 +302,7 @@ export default function ItsPaintApp() {
     activeId: "project-1",
   });
   const [dragOver, setDragOver] = useState(false);
+  const [confirmClose, setConfirmClose] = useState<string | null>(null);
   const dragCounter = useRef(0);
 
   const addProject = useCallback((name: string, file?: File) => {
@@ -339,6 +340,10 @@ export default function ItsPaintApp() {
         projects: prev.projects.map((p) => (p.id === id ? { ...p, name } : p)),
       };
     });
+  }, []);
+
+  const requestClose = useCallback((id: string) => {
+    setConfirmClose(id);
   }, []);
 
   // Drag-and-drop handlers
@@ -399,7 +404,7 @@ export default function ItsPaintApp() {
           projects={tabState.projects}
           activeId={tabState.activeId}
           onSelect={selectProject}
-          onClose={removeProject}
+          onClose={requestClose}
           onNew={() => addProject("Untitled")}
         />
 
@@ -416,6 +421,42 @@ export default function ItsPaintApp() {
           </PaintProvider>
         ))}
       </div>
+
+      {/* Confirm close tab modal */}
+      {confirmClose && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="backdrop-blur-2xl bg-white/[0.06] border border-white/[0.1] rounded-2xl p-6 shadow-2xl w-[90vw] max-w-[320px]">
+            <h3 className="text-sm font-bold bg-gradient-to-r from-rose-400 to-orange-400 bg-clip-text text-transparent mb-2">
+              Close Project?
+            </h3>
+            <p className="text-[12px] text-white/50 mb-5">
+              Are you sure you want to close{" "}
+              <span className="text-white/80 font-medium">
+                {tabState.projects.find((p) => p.id === confirmClose)?.name ??
+                  "this project"}
+              </span>
+              ? Any unsaved changes will be lost.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmClose(null)}
+                className="px-4 py-1.5 text-[11px] text-white/50 hover:text-white/80 bg-white/[0.06] hover:bg-white/[0.1] rounded-full border border-white/[0.06] transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  removeProject(confirmClose);
+                  setConfirmClose(null);
+                }}
+                className="px-4 py-1.5 text-[11px] text-white font-medium bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 rounded-full shadow-[0_0_16px_rgba(244,63,94,0.3)] transition-all active:scale-95"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Drag-and-drop overlay */}
       {dragOver && (
