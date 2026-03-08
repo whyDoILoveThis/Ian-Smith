@@ -158,7 +158,7 @@ export default function ShowcaseCard({
         <motion.div
           className={`relative rounded-sm border border-white/10
           bg-gradient-to-b from-white/[0.06] to-white/[0.02]
-          backdrop-blur-xl shadow-2xl ${theme.cardShadow}`}
+           shadow-2xl ${theme.cardShadow}`}
           style={centerSlot ? { overflow: "visible" } : { overflow: "hidden" }}
           variants={cardVariants}
           initial="hidden"
@@ -201,7 +201,7 @@ export default function ShowcaseCard({
                   {features.map((f) => (
                     <div
                       key={f.label}
-                      className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.05] border border-white/10 backdrop-blur-sm"
+                      className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.05] border border-white/10"
                     >
                       <span className="text-base">{f.icon}</span>
                       <span className="text-sm font-medium text-white/70">

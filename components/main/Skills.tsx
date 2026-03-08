@@ -160,7 +160,7 @@ const SkillCard = ({ skill, index }: { skill: Skill; index: number }) => {
       className="group relative flex flex-col items-center gap-1.5 rounded-2xl px-5 py-3.5
         bg-white/60 dark:bg-white/[0.06]
         border border-neutral-200/60 dark:border-white/[0.08]
-        backdrop-blur-md shadow-sm
+        shadow-sm
         transition-[box-shadow,border-color,background-color] duration-300 ease-out
         hover:shadow-lg hover:shadow-purple-500/10 dark:hover:shadow-purple-400/15
         hover:border-purple-300/50 dark:hover:border-purple-500/30

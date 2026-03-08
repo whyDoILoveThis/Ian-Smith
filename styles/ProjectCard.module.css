@@ -167,8 +167,6 @@
   position: absolute;
   inset: 0;
   background-color: rgba(20, 20, 30, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border-radius: 50%;
   z-index: -1;
 }
@@ -259,7 +257,6 @@
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: all 0.2s ease;
-  backdrop-filter: blur(8px);
 }
 
 .btn:hover,
@@ -288,7 +285,6 @@
   font-size: 0.875rem;
   line-height: 1.7;
   color: rgba(200, 215, 245, 0.72);
-  backdrop-filter: blur(6px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
@@ -305,7 +301,6 @@
   font-size: 0.875rem;
   line-height: 1.7;
   color: rgba(200, 215, 245, 0.72);
-  backdrop-filter: blur(6px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
@@ -321,8 +316,6 @@
   bottom: 0.5rem;
   left: 0.5rem;
   border-radius: 20px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
