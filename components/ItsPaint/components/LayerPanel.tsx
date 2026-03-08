@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useState } from "react";
+import { Eye, EyeOff, Lock, Unlock } from "lucide-react";
 import { usePaintState } from "../hooks/usePaintState";
 import { BLEND_MODES } from "../lib/constants";
 import { BlendMode, LayerMeta } from "../types/types";
@@ -54,7 +55,7 @@ function LayerItem({
             ${layer.visible ? "text-cyan-400 bg-cyan-400/10" : "text-white/20 bg-white/[0.03]"}`}
           title={layer.visible ? "Hide layer" : "Show layer"}
         >
-          {layer.visible ? "👁" : "—"}
+          {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
         </button>
 
         {/* Layer name */}
@@ -98,7 +99,7 @@ function LayerItem({
             ${layer.locked ? "text-amber-400 bg-amber-400/10" : "text-white/20 bg-white/[0.03]"}`}
           title={layer.locked ? "Unlock" : "Lock"}
         >
-          {layer.locked ? "🔒" : "🔓"}
+          {layer.locked ? <Lock size={10} /> : <Unlock size={10} />}
         </button>
       </div>
 

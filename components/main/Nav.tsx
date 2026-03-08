@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import ITSLogo from "../sub/ItsLogo";
-import { LINK_MY_BLOGS } from "@/lib/globals";
 import LinkUnderlineAnim from "../sub/LinkUnderlineAnim";
 import ItsDropdown from "@/components/ui/its-dropdown";
 import { Menu, X } from "lucide-react";
+import { LINKS } from "@/lib/Links";
 
 const Nav = () => {
   const pathname = usePathname();
@@ -34,10 +34,14 @@ const Nav = () => {
           </Link>
           {/* DESKTOP LINKS */}
           <div className="hidden md:flex gap-6 items-center relative z-10">
-            <span className="flex gap-6 items-center translate-y-2">
-              <LinkUnderlineAnim linkText="About Me" linkHref="/about-me" />
-              <LinkUnderlineAnim linkText="Blogs" linkHref={LINK_MY_BLOGS} />
-              <LinkUnderlineAnim linkText="C++ Zone" linkHref="/its-cpp" />
+            <span className="flex gap-6 max-w-[280px] overflow-x-scroll chat-scroll left-0 items-center">
+              {LINKS.map((link) => (
+                <LinkUnderlineAnim
+                  key={link.name}
+                  linkText={link.name}
+                  linkHref={link.href}
+                />
+              ))}
             </span>
             <ThemeToggler isMobile={false} />
           </div>
@@ -54,42 +58,11 @@ const Nav = () => {
             >
               {/* BACKDROP LAYER */}
               <div className="relative z-[40] w-56 p-3 rounded-2xl flex flex-col gap-2">
-                <Link
-                  href="/about-me"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                >
-                  About Me
-                </Link>
-                <Link
-                  href={LINK_MY_BLOGS}
-                  className="px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                >
-                  Blogs
-                </Link>
-                <Link
-                  href="/its-cpp"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                >
-                  C++ Zone
-                </Link>
-                <Link
-                  href="/about"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                >
-                  Chat
-                </Link>
-                <Link
-                  href="/itspaint"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                >
-                  ItsPaint
-                </Link>
-                <Link
-                  href="/pathlockv2/2p1"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                >
-                  Pathlock v2
-                </Link>
+                {LINKS.map((link) => (
+                  <Link key={link.name} href={link.href}>
+                    {link.name}
+                  </Link>
+                ))}
               </div>
               <span className="z-[40] relative">
                 <ThemeToggler isMobile={true} />

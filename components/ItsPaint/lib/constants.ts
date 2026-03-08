@@ -1,4 +1,10 @@
 import { BlendMode, PaintState, RGBAColor, ToolOptions, ToolType } from '../types/types';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Move, Hand, BoxSelect, CircleDashed, Lasso, Wand2, PaintBucket, Pipette,
+  Pencil, Paintbrush, Eraser, Slash, RectangleHorizontal, Circle, Type,
+  Blend, Crop, ZoomIn,
+} from 'lucide-react';
 
 // ─── Default Colors ────────────────────────────────────────────────────────
 export const DEFAULT_PRIMARY: RGBAColor = { r: 0, g: 0, b: 0, a: 1 };
@@ -39,30 +45,30 @@ export const CHECKER_SIZE = 8;
 export interface ToolDef {
   type: ToolType;
   label: string;
-  icon: string; // We'll use simple text/emoji icons
+  icon: LucideIcon;
   shortcut: string;
   category: 'select' | 'draw' | 'shape' | 'utility';
 }
 
 export const TOOLS: ToolDef[] = [
-  { type: 'move', label: 'Move', icon: '✥', shortcut: 'V', category: 'utility' },
-  { type: 'pan', label: 'Pan', icon: '🤚', shortcut: 'Q', category: 'utility' },
-  { type: 'rectSelect', label: 'Rectangle Select', icon: '⬜', shortcut: 'S', category: 'select' },
-  { type: 'ellipseSelect', label: 'Ellipse Select', icon: '⬭', shortcut: 'S', category: 'select' },
-  { type: 'lassoSelect', label: 'Lasso Select', icon: '⛶', shortcut: 'L', category: 'select' },
-  { type: 'magicWand', label: 'Magic Wand', icon: '✦', shortcut: 'W', category: 'select' },
-  { type: 'paintBucket', label: 'Paint Bucket', icon: '⬛', shortcut: 'G', category: 'draw' },
-  { type: 'colorPicker', label: 'Color Picker', icon: '💧', shortcut: 'I', category: 'utility' },
-  { type: 'pencil', label: 'Pencil', icon: '✏', shortcut: 'P', category: 'draw' },
-  { type: 'brush', label: 'Brush', icon: '🖌', shortcut: 'B', category: 'draw' },
-  { type: 'eraser', label: 'Eraser', icon: '🧹', shortcut: 'E', category: 'draw' },
-  { type: 'line', label: 'Line', icon: '╱', shortcut: 'N', category: 'shape' },
-  { type: 'rectangle', label: 'Rectangle', icon: '▭', shortcut: 'R', category: 'shape' },
-  { type: 'ellipse', label: 'Ellipse', icon: '◯', shortcut: 'O', category: 'shape' },
-  { type: 'text', label: 'Text', icon: 'T', shortcut: 'T', category: 'shape' },
-  { type: 'gradient', label: 'Gradient', icon: '▦', shortcut: 'H', category: 'draw' },
-  { type: 'crop', label: 'Crop', icon: '⬒', shortcut: 'C', category: 'utility' },
-  { type: 'zoom', label: 'Zoom', icon: '🔍', shortcut: 'Z', category: 'utility' },
+  { type: 'move', label: 'Move', icon: Move, shortcut: 'V', category: 'utility' },
+  { type: 'pan', label: 'Pan', icon: Hand, shortcut: 'Q', category: 'utility' },
+  { type: 'rectSelect', label: 'Rectangle Select', icon: BoxSelect, shortcut: 'S', category: 'select' },
+  { type: 'ellipseSelect', label: 'Ellipse Select', icon: CircleDashed, shortcut: 'S', category: 'select' },
+  { type: 'lassoSelect', label: 'Lasso Select', icon: Lasso, shortcut: 'L', category: 'select' },
+  { type: 'magicWand', label: 'Magic Wand', icon: Wand2, shortcut: 'W', category: 'select' },
+  { type: 'paintBucket', label: 'Paint Bucket', icon: PaintBucket, shortcut: 'G', category: 'draw' },
+  { type: 'colorPicker', label: 'Color Picker', icon: Pipette, shortcut: 'I', category: 'utility' },
+  { type: 'pencil', label: 'Pencil', icon: Pencil, shortcut: 'P', category: 'draw' },
+  { type: 'brush', label: 'Brush', icon: Paintbrush, shortcut: 'B', category: 'draw' },
+  { type: 'eraser', label: 'Eraser', icon: Eraser, shortcut: 'E', category: 'draw' },
+  { type: 'line', label: 'Line', icon: Slash, shortcut: 'N', category: 'shape' },
+  { type: 'rectangle', label: 'Rectangle', icon: RectangleHorizontal, shortcut: 'R', category: 'shape' },
+  { type: 'ellipse', label: 'Ellipse', icon: Circle, shortcut: 'O', category: 'shape' },
+  { type: 'text', label: 'Text', icon: Type, shortcut: 'T', category: 'shape' },
+  { type: 'gradient', label: 'Gradient', icon: Blend, shortcut: 'H', category: 'draw' },
+  { type: 'crop', label: 'Crop', icon: Crop, shortcut: 'C', category: 'utility' },
+  { type: 'zoom', label: 'Zoom', icon: ZoomIn, shortcut: 'Z', category: 'utility' },
 ];
 
 // ─── Blend Modes ───────────────────────────────────────────────────────────

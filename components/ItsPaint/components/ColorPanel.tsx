@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeftRight } from "lucide-react";
 import { usePaintState } from "../hooks/usePaintState";
 import { RGBAColor, HSLColor } from "../types/types";
 import {
@@ -283,7 +284,7 @@ export default function ColorPanel() {
             className="text-[10px] text-white/50 hover:text-white/80 bg-white/[0.06] hover:bg-white/[0.1] rounded-full px-3 py-1 border border-white/[0.06] transition-all active:scale-95"
             title="Swap colors (X)"
           >
-            ⇄ Swap
+            <ArrowLeftRight size={12} className="inline" /> Swap
           </button>
         </div>
 

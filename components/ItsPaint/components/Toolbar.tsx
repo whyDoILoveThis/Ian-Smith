@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Undo2, Redo2 } from "lucide-react";
 import { usePaintState } from "../hooks/usePaintState";
 import { TOOLS, ToolDef } from "../lib/constants";
 import { ToolType } from "../types/types";
@@ -48,7 +49,7 @@ function ToolButton({
         active ? { boxShadow: `0 0 14px ${glow}, 0 0 4px ${glow}` } : undefined
       }
     >
-      <span className="drop-shadow-sm">{tool.icon}</span>
+      <tool.icon size={16} className="drop-shadow-sm" />
     </button>
   );
 }
@@ -97,7 +98,7 @@ export default function Toolbar() {
           className={`flex-1 h-8 flex items-center justify-center rounded-xl text-sm transition-all duration-200
             ${canUndo ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.12] hover:text-white active:scale-95" : "bg-white/[0.03] text-white/15 cursor-default"}`}
         >
-          ↩
+          <Undo2 size={14} />
         </button>
         <button
           onClick={performRedo}
@@ -106,7 +107,7 @@ export default function Toolbar() {
           className={`flex-1 h-8 flex items-center justify-center rounded-xl text-sm transition-all duration-200
             ${canRedo ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.12] hover:text-white active:scale-95" : "bg-white/[0.03] text-white/15 cursor-default"}`}
         >
-          ↪
+          <Redo2 size={14} />
         </button>
       </div>
       <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />

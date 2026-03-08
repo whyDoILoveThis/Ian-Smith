@@ -8,10 +8,10 @@ import { SignInButton } from "@clerk/nextjs";
 import DoubleSecretLogin from "../sub/Secret/DoubleSecretLogin";
 import ITSLogo from "../sub/ItsLogo";
 import LinkUnderlineAnim from "../sub/LinkUnderlineAnim";
-import { LINK_MY_BLOGS } from "@/lib/globals";
 import { appwrGetSecurityFlag } from "@/appwrite/appwrUpdateSecurity";
 import { SecurityToggle } from "../CMS/CMS";
 import RunningPuppy from "../sub/RunningPuppy";
+import { LINKS } from "@/lib/Links";
 
 const Footer = () => {
   const [isSecurityMaxed, setIsSecurityMaxed] = useState(true);
@@ -44,10 +44,13 @@ const Footer = () => {
           <ITSLogo />
         </Link>
         <div className="flex items-center gap-6 flex-wrap mb-8 mt-10">
-          <LinkUnderlineAnim linkText="About Me" linkHref="/about-me" />
-          <LinkUnderlineAnim linkText="Blogs" linkHref={LINK_MY_BLOGS} />
-          <LinkUnderlineAnim linkText="C++ Zone" linkHref="/its-cpp" />
-          <LinkUnderlineAnim linkText="Time" linkHref="/its-time" />
+          {LINKS.map((link) => (
+            <LinkUnderlineAnim
+              key={link.name}
+              linkText={link.name}
+              linkHref={link.href}
+            />
+          ))}
         </div>
         <div className="flex items-center gap-4 mb-2">
           <Link className="text-[28px]" href={"https://facebook.com"}>

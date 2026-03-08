@@ -36,7 +36,7 @@ export default function RootLayout({
   const AdminsUserId = process.env.NEXT_PUBLIC_IANS_CLERK_USERID;
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html className="chat-scroll" lang="en">
         <head>
           <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
           <meta name="mobile-web-app-capable" content="yes" />

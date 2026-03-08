@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Paintbrush, Layers, Palette } from "lucide-react";
 import { PaintProvider, usePaintState } from "../hooks/usePaintState";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import MenuBar from "./MenuBar";
@@ -266,27 +267,30 @@ function PaintAppInner({
           </div>
         )}
 
+        {/* Mobile status bar */}
+        <StatusBar />
+
         {/* Mobile bottom bar */}
         <div className="h-12 backdrop-blur-xl bg-[#0e0e1a]/95 border-t border-white/[0.06] flex items-center justify-around select-none shrink-0 px-2 gap-1 z-20">
           <button
             onClick={() => toggleMobilePanel("tools")}
             className={`flex-1 h-10 flex flex-col items-center justify-center rounded-xl text-[10px] transition-all ${mobilePanel === "tools" ? "bg-violet-500/20 text-violet-400" : "text-white/40 hover:text-white/70"}`}
           >
-            <span className="text-base">🖌</span>
+            <Paintbrush size={18} />
             <span>Tools</span>
           </button>
           <button
             onClick={() => toggleMobilePanel("layers")}
             className={`flex-1 h-10 flex flex-col items-center justify-center rounded-xl text-[10px] transition-all ${mobilePanel === "layers" ? "bg-cyan-500/20 text-cyan-400" : "text-white/40 hover:text-white/70"}`}
           >
-            <span className="text-base">📑</span>
+            <Layers size={18} />
             <span>Layers</span>
           </button>
           <button
             onClick={() => toggleMobilePanel("colors")}
             className={`flex-1 h-10 flex flex-col items-center justify-center rounded-xl text-[10px] transition-all ${mobilePanel === "colors" ? "bg-fuchsia-500/20 text-fuchsia-400" : "text-white/40 hover:text-white/70"}`}
           >
-            <span className="text-base">🎨</span>
+            <Palette size={18} />
             <span>Colors</span>
           </button>
         </div>

@@ -11,7 +11,7 @@ const LinkUnderlineAnim = ({ linkText, linkHref }: Props) => {
     <Link
       href={linkHref}
       target="_blank"
-      className="text-lg place-self-start mb-4 font-semibold tracking-wide dark:text-slate-200 
+      className="text-lg place-self-start font-semibold tracking-wide dark:text-slate-200 
               text-slate-800     relative group"
     >
       <span className="relative z-10 transition-colors text-nowrap duration-300 group-hover:dark:text-white group-hover:text-slate-500">

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from "react";
+import { Menu } from "lucide-react";
 import { usePaintState } from "../hooks/usePaintState";
 import { ZOOM_STEP } from "../lib/constants";
 import {
@@ -504,7 +505,7 @@ export default function MenuBar() {
       },
       { label: "─", action: () => {}, disabled: true },
       {
-        label: `${state.showGrid ? "✓ " : ""}Pixel Grid`,
+        label: `${state.showGrid ? "\u2713 " : ""}Pixel Grid`,
         action: () => {
           dispatch({ type: "TOGGLE_GRID" });
           closeMenu();
@@ -585,10 +586,10 @@ export default function MenuBar() {
 
         {/* Mobile hamburger */}
         <button
-          className="md:hidden px-2 py-1 text-white/60 hover:text-white/90 text-lg"
+          className="md:hidden px-2 py-1 text-white/60 hover:text-white/90"
           onClick={() => toggleMenu("_mobile")}
         >
-          ☰
+          <Menu size={20} />
         </button>
 
         {/* Mobile full-width menu */}
