@@ -78,6 +78,18 @@ const Nav = () => {
                 >
                   Chat
                 </Link>
+                <Link
+                  href="/itspaint"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  ItsPaint
+                </Link>
+                <Link
+                  href="/pathlockv2/2p1"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Pathlock v2
+                </Link>
               </div>
               <span className="z-[40] relative">
                 <ThemeToggler isMobile={true} />
