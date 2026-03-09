@@ -4,6 +4,7 @@ import Nav from "@/components/main/Nav";
 import Link from "next/link";
 import PortfolioLink from "./PortfolioLink";
 import { Suspense } from "react";
+import ReportBug from "@/components/KwikMaps/components/ReportBug";
 
 export default function KwikMapsPage() {
   return (
@@ -12,6 +13,7 @@ export default function KwikMapsPage() {
       <Suspense>
         <KwikMapsContainer />
       </Suspense>
+      <ReportBug />
       <div className="text-center text-sm text-slate-500 dark:text-slate-400 py-3">
         Created by{" "}
         <Link
