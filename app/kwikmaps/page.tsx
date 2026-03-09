@@ -5,9 +5,7 @@ import Nav from "@/components/main/Nav";
 export default function KwikMapsPage() {
   return (
     <>
-      <Nav />
       <KwikMapsContainer />
-      <Footer />
     </>
   );
 }
