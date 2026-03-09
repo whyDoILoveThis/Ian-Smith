@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Coordinate } from "@/types/KwikMaps.type";
 import { CoordinateInput, CoordinateList, MapComponent } from "./components";
+import { RouteSharePanel } from "./components/RouteSharePanel";
+import { parseShareParam } from "./utils/routeShare";
 import {
   Navigation2,
   Clock,
@@ -61,6 +64,7 @@ const DEMO_LOCATIONS = [
 ];
 
 export function KwikMapsContainer() {
+  const searchParams = useSearchParams();
   const [coordinates, setCoordinates] = useState<Coordinate[]>([]);
   const [optimizedRoute, setOptimizedRoute] = useState<Coordinate[] | null>(
     null,
@@ -80,6 +84,25 @@ export function KwikMapsContainer() {
   const [isSendingChat, setIsSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+
+  // Load shared route from URL param on mount
+  useEffect(() => {
+    const routeParam = searchParams.get("route");
+    if (routeParam) {
+      const parsed = parseShareParam(routeParam);
+      if (parsed && parsed.length > 0) {
+        setCoordinates(parsed);
+      }
+    }
+  }, [searchParams]);
+
+  const handleImportRoute = useCallback((imported: Coordinate[]) => {
+    setCoordinates(imported);
+    setOptimizedRoute(null);
+    setShowResults(false);
+    setError("");
+    setChatMessages([]);
+  }, []);
 
   const handleAddCoordinate = useCallback((coordinate: Coordinate) => {
     setCoordinates((prev) => [...prev, coordinate]);
@@ -429,6 +452,13 @@ export function KwikMapsContainer() {
                 Load Demo (10 TN Cities)
               </button>
             </div>
+
+            {/* Share & Export */}
+            <RouteSharePanel
+              coordinates={coordinates}
+              optimizedRoute={optimizedRoute}
+              onImportRoute={handleImportRoute}
+            />
 
             {/* Error message */}
             {error && (

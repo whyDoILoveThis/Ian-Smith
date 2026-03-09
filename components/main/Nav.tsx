@@ -57,18 +57,23 @@ const Nav = () => {
               className="!fixed !top-14 !left-0 !right-0 !w-screen !rounded-none p-3 shadow-xl bg-white/70 dark:bg-slate-900/70 border-b border-slate-200/10 dark:border-slate-800/50 flex flex-col gap-2"
             >
               {/* BACKDROP LAYER */}
-              <div className="relative z-[40] w-full p-3 rounded-2xl flex flex-col gap-2">
+              <div className="relative z-[40] w-full p-3 rounded-2xl flex flex-col gap-1.5">
                 {LINKS.map((link) => (
                   <Link
                     key={link.name}
                     href={link.href}
-                    className="group flex flex-col gap-0.5 px-4 py-3 rounded-xl border border-white/10 dark:border-slate-700/40 bg-gradient-to-br from-white/40 to-white/10 dark:from-slate-800/60 dark:to-slate-800/20 shadow-sm hover:shadow-md hover:from-white/60 hover:to-white/20 dark:hover:from-slate-700/60 dark:hover:to-slate-800/30 transition-all duration-200"
+                    className="group relative flex items-center justify-between px-4 py-3.5 rounded-2xl border border-slate-200/60 dark:border-slate-700/30 bg-white/50 dark:bg-slate-800/40 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:bg-white/80 dark:hover:bg-slate-700/50 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 ease-out"
                   >
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-slate-950 dark:group-hover:text-white transition-colors">
-                      {link.name}
-                    </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {link.tagline}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[15px] font-medium tracking-tight text-slate-900 dark:text-slate-50">
+                        {link.name}
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500 font-normal">
+                        {link.tagline}
+                      </span>
+                    </div>
+                    <span className="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all duration-200 text-sm">
+                      ›
                     </span>
                   </Link>
                 ))}
