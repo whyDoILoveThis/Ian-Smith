@@ -1081,6 +1081,7 @@ export default function AIContentSugestions() {
               loadOlderFromServer={firebaseWithSlot.loadOlderFromServer}
               isLoadingOlder={firebaseWithSlot.isLoadingOlder}
               privacyMode={privacyMode}
+              isLockedOut={session.availability.isFull && !slotId}
             />
             <ChatInputArea
               slotId={slotId}

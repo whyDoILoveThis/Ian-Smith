@@ -45,6 +45,8 @@ type ChatMessagesViewProps = {
   isLoadingOlder?: boolean;
   /** Show privacy mode - messages hidden until hovered */
   privacyMode?: boolean;
+  /** Room is full and user doesn't hold a spot — restrict visible content */
+  isLockedOut?: boolean;
 };
 
 export function ChatMessagesView({
@@ -65,6 +67,7 @@ export function ChatMessagesView({
   loadOlderFromServer,
   isLoadingOlder = false,
   privacyMode = false,
+  isLockedOut = false,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -644,7 +647,7 @@ export function ChatMessagesView({
                 />
 
                 {/* Reply preview if this is a reply */}
-                {(msg.replyToText || msg.replyToImageUrl) && (
+                {(msg.replyToText || msg.replyToImageUrl) && !isLockedOut && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -681,8 +684,8 @@ export function ChatMessagesView({
 
                 <p className="text-[11px] uppercase tracking-wide opacity-70 flex items-center justify-between gap-2">
                   <span>
-                    {msg.sender}
-                    {msg.decryptionFailed && (
+                    {isLockedOut ? "???" : msg.sender}
+                    {!isLockedOut && msg.decryptionFailed && (
                       <span className="ml-2 text-amber-400">
                         ⚠️ unencrypted
                       </span>
@@ -734,77 +737,101 @@ export function ChatMessagesView({
                   )}
                 </p>
                 {msg.decryptedText && (
-                  <p className="mt-1 whitespace-pre-line break-words">
-                    {msg.decryptedText}
+                  <p
+                    className={`mt-1 whitespace-pre-line break-words ${isLockedOut ? "select-none" : ""}`}
+                  >
+                    {isLockedOut
+                      ? msg.text || "\u2022\u2022\u2022\u2022\u2022\u2022"
+                      : msg.decryptedText}
                   </p>
                 )}
-                {msg.imageUrl && (
-                  <Image
-                    src={msg.imageUrl}
-                    alt="Uploaded"
-                    width={500} // Adjust width as needed
-                    height={320} // Adjust height as needed
-                    className="mt-2 w-full rounded-xl border border-white/10"
-                  />
-                )}
-                {/* Drawing message - tap to play fullscreen */}
-                {msg.drawingData && msg.drawingData.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveDrawing({
-                        strokes: msg.drawingData!,
-                        duration: msg.drawingDuration || 3000,
-                      });
-                    }}
-                    className="mt-2 w-full rounded-xl border border-white/10 overflow-hidden aspect-video relative bg-black/60 group/draw"
-                  >
-                    {/* Static thumbnail showing all strokes */}
-                    <svg
-                      className="w-full h-full absolute inset-0"
-                      viewBox="0 0 100 100"
-                      preserveAspectRatio="none"
-                    >
-                      {msg.drawingData.map((s, idx) => {
-                        if (s.points.length < 2) return null;
-                        let path = `M ${s.points[0].x} ${s.points[0].y}`;
-                        for (let i = 1; i < s.points.length - 1; i++) {
-                          const curr = s.points[i];
-                          const next = s.points[i + 1];
-                          path += ` Q ${curr.x} ${curr.y} ${(curr.x + next.x) / 2} ${(curr.y + next.y) / 2}`;
-                        }
-                        const last = s.points[s.points.length - 1];
-                        path += ` L ${last.x} ${last.y}`;
-                        return (
-                          <path
-                            key={idx}
-                            d={path}
-                            stroke={s.color}
-                            strokeWidth="0.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            fill="none"
-                            opacity={0.7}
-                          />
-                        );
-                      })}
-                    </svg>
-                    {/* Play icon */}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/draw:bg-black/10 transition-colors">
-                      <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                        <svg
-                          className="w-5 h-5 text-white ml-0.5"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      </div>
+                {msg.imageUrl &&
+                  (isLockedOut ? (
+                    <div className="mt-2 w-full h-40 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-neutral-500 text-sm">
+                      <svg
+                        className="w-5 h-5 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
+                      </svg>
+                      Join to view
                     </div>
-                  </button>
-                )}
-                {msg.videoUrl && !msg.isEphemeral && (
+                  ) : (
+                    <Image
+                      src={msg.imageUrl}
+                      alt="Uploaded"
+                      width={500}
+                      height={320}
+                      className="mt-2 w-full rounded-xl border border-white/10"
+                    />
+                  ))}
+                {/* Drawing message - tap to play fullscreen */}
+                {msg.drawingData &&
+                  msg.drawingData.length > 0 &&
+                  !isLockedOut && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveDrawing({
+                          strokes: msg.drawingData!,
+                          duration: msg.drawingDuration || 3000,
+                        });
+                      }}
+                      className="mt-2 w-full rounded-xl border border-white/10 overflow-hidden aspect-video relative bg-black/60 group/draw"
+                    >
+                      {/* Static thumbnail showing all strokes */}
+                      <svg
+                        className="w-full h-full absolute inset-0"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                      >
+                        {msg.drawingData.map((s, idx) => {
+                          if (s.points.length < 2) return null;
+                          let path = `M ${s.points[0].x} ${s.points[0].y}`;
+                          for (let i = 1; i < s.points.length - 1; i++) {
+                            const curr = s.points[i];
+                            const next = s.points[i + 1];
+                            path += ` Q ${curr.x} ${curr.y} ${(curr.x + next.x) / 2} ${(curr.y + next.y) / 2}`;
+                          }
+                          const last = s.points[s.points.length - 1];
+                          path += ` L ${last.x} ${last.y}`;
+                          return (
+                            <path
+                              key={idx}
+                              d={path}
+                              stroke={s.color}
+                              strokeWidth="0.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              fill="none"
+                              opacity={0.7}
+                            />
+                          );
+                        })}
+                      </svg>
+                      {/* Play icon */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/draw:bg-black/10 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                          <svg
+                            className="w-5 h-5 text-white ml-0.5"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                {msg.videoUrl && !msg.isEphemeral && !isLockedOut && (
                   <video
                     src={msg.videoUrl}
                     controls
@@ -814,6 +841,7 @@ export function ChatMessagesView({
                 {/* Ephemeral video - show icon button instead of inline video */}
                 {msg.videoUrl &&
                   msg.isEphemeral &&
+                  !isLockedOut &&
                   (isMine || !msg.disappearedFor?.[slotId ?? "1"]) && (
                     <button
                       type="button"
@@ -905,7 +933,7 @@ export function ChatMessagesView({
                 )}
               </div>
               {/* Emoji reactions display below bubble */}
-              {msg.reactions && (
+              {msg.reactions && !isLockedOut && (
                 <div
                   className={`w-full ${isMine ? "flex justify-end" : "flex justify-start"} ${
                     privacyMode && privacyHoveredMsgId !== msg.id
