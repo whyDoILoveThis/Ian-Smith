@@ -113,7 +113,9 @@ export function KwikMapsContainer() {
 
   // Map highlight state (arrays for multi-select via ctrl+click)
   const [highlightedStopIds, setHighlightedStopIds] = useState<string[]>([]);
-  const [highlightedLegIndices, setHighlightedLegIndices] = useState<number[]>([]);
+  const [highlightedLegIndices, setHighlightedLegIndices] = useState<number[]>(
+    [],
+  );
 
   // Chat panel state (fixed bottom, draggable)
   const [chatOpen, setChatOpen] = useState(false);
@@ -803,17 +805,29 @@ export function KwikMapsContainer() {
         className="relative shrink-0 flex items-center gap-2 px-4 cursor-pointer select-none"
         style={{ height: 44 }}
         onClick={() => {
-          if (didDragRef.current) { didDragRef.current = false; return; }
+          if (didDragRef.current) {
+            didDragRef.current = false;
+            return;
+          }
           setChatOpen((o) => !o);
         }}
       >
         {chatOpen && (
           <div
             className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 cursor-ns-resize touch-none"
-            onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e); }}
-            onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e); }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              handleDragStart(e);
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              handleDragStart(e);
+            }}
           >
-            <GripHorizontal size={16} className="text-white/25 hover:text-white/50 transition-colors" />
+            <GripHorizontal
+              size={16}
+              className="text-white/25 hover:text-white/50 transition-colors"
+            />
           </div>
         )}
         <MessageCircle size={14} className="text-indigo-400" />
@@ -839,7 +853,9 @@ export function KwikMapsContainer() {
           <div className="flex-1 chat-scroll overflow-y-auto mb-2 space-y-2.5 pr-1">
             {chatMessages.length === 0 ? (
               <div className="text-center py-6">
-                <p className="text-white/20 text-xs">Ask me anything about your route...</p>
+                <p className="text-white/20 text-xs">
+                  Ask me anything about your route...
+                </p>
               </div>
             ) : (
               chatMessages.map((msg) => (
@@ -850,46 +866,80 @@ export function KwikMapsContainer() {
                   className={`group/msg flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {msg.role === "user" && (
-                    <button onClick={() => handleResendMessage(msg.id)} className="self-center mr-1 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-blue-500/20 text-white/30 hover:text-blue-400 transition-all duration-150" title="Resend message">
+                    <button
+                      onClick={() => handleResendMessage(msg.id)}
+                      className="self-center mr-1 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-blue-500/20 text-white/30 hover:text-blue-400 transition-all duration-150"
+                      title="Resend message"
+                    >
                       <RotateCcw size={11} />
                     </button>
                   )}
                   {msg.role === "user" && (
-                    <button onClick={() => setPendingDeleteId(msg.id)} className="self-center mr-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150" title="Delete message">
+                    <button
+                      onClick={() => setPendingDeleteId(msg.id)}
+                      className="self-center mr-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150"
+                      title="Delete message"
+                    >
                       <Trash2 size={11} />
                     </button>
                   )}
-                  <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${msg.role === "user" ? "bg-blue-500/25 border border-blue-400/25 text-white rounded-br-md" : "bg-white/[0.06] border border-white/10 text-white/85 rounded-bl-md"}`}>
+                  <div
+                    className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${msg.role === "user" ? "bg-blue-500/25 border border-blue-400/25 text-white rounded-br-md" : "bg-white/[0.06] border border-white/10 text-white/85 rounded-bl-md"}`}
+                  >
                     {msg.role === "assistant" && (
                       <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                         <Bot size={11} className="text-purple-400" />
-                        <span className="text-purple-400 text-[10px] font-semibold">AI</span>
+                        <span className="text-purple-400 text-[10px] font-semibold">
+                          AI
+                        </span>
                         {msg.routeChanged && (
-                          <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${msg.undone ? "bg-gray-500/25 text-gray-400 line-through" : "bg-emerald-500/25 text-emerald-300"}`}>
+                          <span
+                            className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${msg.undone ? "bg-gray-500/25 text-gray-400 line-through" : "bg-emerald-500/25 text-emerald-300"}`}
+                          >
                             {msg.undone ? "Undone" : "Route Updated"}
                           </span>
                         )}
-                        {msg.routeChanged && msg.previousRoute && !msg.undone && (
-                          <button onClick={() => handleUndoRouteChange(msg.id)} className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/20 text-amber-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all" title="Undo">
-                            <Undo2 size={9} /> Undo
-                          </button>
-                        )}
+                        {msg.routeChanged &&
+                          msg.previousRoute &&
+                          !msg.undone && (
+                            <button
+                              onClick={() => handleUndoRouteChange(msg.id)}
+                              className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/20 text-amber-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all"
+                              title="Undo"
+                            >
+                              <Undo2 size={9} /> Undo
+                            </button>
+                          )}
                         {msg.routeChanged && msg.newRoute && msg.undone && (
-                          <button onClick={() => handleRedoRouteChange(msg.id)} className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-500/15 hover:bg-blue-500/30 border border-blue-400/20 text-blue-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all" title="Redo">
+                          <button
+                            onClick={() => handleRedoRouteChange(msg.id)}
+                            className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-500/15 hover:bg-blue-500/30 border border-blue-400/20 text-blue-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all"
+                            title="Redo"
+                          >
                             <Redo2 size={9} /> Redo
                           </button>
                         )}
                       </div>
                     )}
-                    {msg.role === "user" && msg.resent && msg.originalSnapshot && (
-                      <button onClick={() => handleRestoreOriginal(msg.id)} className="mb-1.5 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/20 text-amber-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all" title="Restore original">
-                        <History size={9} /> Restore original
-                      </button>
-                    )}
+                    {msg.role === "user" &&
+                      msg.resent &&
+                      msg.originalSnapshot && (
+                        <button
+                          onClick={() => handleRestoreOriginal(msg.id)}
+                          className="mb-1.5 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/20 text-amber-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all"
+                          title="Restore original"
+                        >
+                          <History size={9} /> Restore original
+                        </button>
+                      )}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
                   </div>
                   {msg.role === "assistant" && (
-                    <button onClick={() => setPendingDeleteId(msg.id)} className="self-center ml-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150" title="Delete message">
+                    <button
+                      onClick={() => setPendingDeleteId(msg.id)}
+                      className="self-center ml-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150"
+                      title="Delete message"
+                    >
                       <Trash2 size={11} />
                     </button>
                   )}
@@ -897,10 +947,17 @@ export function KwikMapsContainer() {
               ))
             )}
             {isSendingChat && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex justify-start"
+              >
                 <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-white/[0.06] border border-white/10">
                   <div className="flex items-center gap-2">
-                    <Loader size={12} className="animate-spin text-purple-400" />
+                    <Loader
+                      size={12}
+                      className="animate-spin text-purple-400"
+                    />
                     <span className="text-white/40 text-xs">Thinking...</span>
                   </div>
                 </div>
@@ -909,7 +966,10 @@ export function KwikMapsContainer() {
             <div ref={chatEndRef} />
           </div>
 
-          <form onSubmit={handleSendChat} className="flex items-center gap-2 shrink-0">
+          <form
+            onSubmit={handleSendChat}
+            className="flex items-center gap-2 shrink-0"
+          >
             <input
               ref={chatInputRef}
               type="text"
@@ -945,8 +1005,8 @@ export function KwikMapsContainer() {
         <button
           className="flex items-center gap-2 mr-2 lg:pointer-events-none"
           onClick={() => {
-            const el = document.querySelector('[data-scroll-container]');
-            el?.scrollTo({ top: 0, behavior: 'smooth' });
+            const el = document.querySelector("[data-scroll-container]");
+            el?.scrollTo({ top: 0, behavior: "smooth" });
           }}
         >
           <span className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/20">
@@ -955,7 +1015,7 @@ export function KwikMapsContainer() {
           <h1 className="text-base font-bold text-white leading-tight">
             KwikMaps
             <span className="text-[9px] ml-1 text-white/30 font-normal">
-              v0.2
+              v0.5
             </span>
           </h1>
         </button>
@@ -1006,7 +1066,9 @@ export function KwikMapsContainer() {
             <span className="hidden sm:inline">Bug</span>
           </button>
           <button
-            onClick={() => coordinates.length > 0 ? setPendingDemo(true) : handleLoadDemo()}
+            onClick={() =>
+              coordinates.length > 0 ? setPendingDemo(true) : handleLoadDemo()
+            }
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/15 text-purple-300 text-xs font-medium transition-all"
           >
             <Sparkles size={12} />
@@ -1024,7 +1086,10 @@ export function KwikMapsContainer() {
       </header>
 
       {/* ── MAIN CONTENT ── */}
-      <div data-scroll-container className="relative z-10 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden pb-12 lg:pb-0">
+      <div
+        data-scroll-container
+        className="relative z-10 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden pb-12 lg:pb-0"
+      >
         {/* === PLAN TAB === */}
         {mainTab === "planner" && (
           <div className="lg:h-full flex flex-col lg:flex-row">
@@ -1212,7 +1277,9 @@ export function KwikMapsContainer() {
                               } else {
                                 setHighlightedLegIndices([]);
                                 setHighlightedStopIds((prev) =>
-                                  prev.length === 1 && prev[0] === coord.id ? [] : [coord.id],
+                                  prev.length === 1 && prev[0] === coord.id
+                                    ? []
+                                    : [coord.id],
                                 );
                               }
                             }}
@@ -1260,7 +1327,9 @@ export function KwikMapsContainer() {
                                 } else {
                                   setHighlightedStopIds([]);
                                   setHighlightedLegIndices((prev) =>
-                                    prev.length === 1 && prev[0] === i ? [] : [i],
+                                    prev.length === 1 && prev[0] === i
+                                      ? []
+                                      : [i],
                                   );
                                 }
                               }}
@@ -1546,8 +1615,16 @@ export function KwikMapsContainer() {
       </AnimatePresence>
 
       {/* Feedback & Bug Report modals */}
-      <ReportBug mode="feedback" open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
-      <ReportBug mode="bug" open={bugReportOpen} onClose={() => setBugReportOpen(false)} />
+      <ReportBug
+        mode="feedback"
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+      />
+      <ReportBug
+        mode="bug"
+        open={bugReportOpen}
+        onClose={() => setBugReportOpen(false)}
+      />
     </div>
   );
 }
