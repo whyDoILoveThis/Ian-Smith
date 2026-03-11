@@ -36,6 +36,7 @@ import {
   X,
   MessageSquarePlus,
   Bug,
+  MoreVertical,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { motion, AnimatePresence } from "framer-motion";
@@ -113,6 +114,8 @@ export function KwikMapsContainer() {
   const [togglingMaps, setTogglingMaps] = useState(false);
   const pendingResendRef = useRef<string | null>(null);
   const pendingResendSnapshotRef = useRef<RouteSnapshot | null>(null);
+
+  const [toolbarOpen, setToolbarOpen] = useState(false);
 
   // Dashboard tab state
   const [leftTab, setLeftTab] = useState<"add" | "share">("add");
@@ -1030,7 +1033,7 @@ export function KwikMapsContainer() {
       </div>
 
       {/* ── TOP BAR ── */}
-      <header className="relative z-10 shrink-0 px-3 lg:px-5 py-2 flex items-center gap-4 border-b border-white/5 bg-slate-950/60">
+      <header className={`relative shrink-0 px-3 lg:px-5 py-2 flex items-center gap-4 border-b border-white/5 bg-slate-950/60 ${toolbarOpen ? "z-[60]" : "z-10"}`}>
         <button
           className="flex items-center gap-2 mr-2 lg:pointer-events-none"
           onClick={() => {
@@ -1079,20 +1082,21 @@ export function KwikMapsContainer() {
 
         <div className="flex-1" />
 
-        <div className="flex items-center gap-2">
+        {/* Desktop: inline buttons */}
+        <div className="hidden lg:flex items-center gap-2">
           <button
             onClick={() => setFeedbackOpen(true)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/15 text-indigo-300 text-xs font-medium transition-all"
           >
             <MessageSquarePlus size={12} />
-            <span className="hidden sm:inline">Feedback</span>
+            <span>Feedback</span>
           </button>
           <button
             onClick={() => setBugReportOpen(true)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-400/15 text-red-300 text-xs font-medium transition-all"
           >
             <Bug size={12} />
-            <span className="hidden sm:inline">Bug</span>
+            <span>Bug</span>
           </button>
           <button
             onClick={() =>
@@ -1101,7 +1105,7 @@ export function KwikMapsContainer() {
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/15 text-purple-300 text-xs font-medium transition-all"
           >
             <Sparkles size={12} />
-            <span className="hidden sm:inline">Demo</span>
+            <span>Demo</span>
           </button>
           {optimizedRoute && (
             <button
@@ -1113,7 +1117,7 @@ export function KwikMapsContainer() {
           )}
           {isAdmin && mapsFailureLoaded && (
             <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
-              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
                 Failure
               </span>
               <button
@@ -1142,6 +1146,82 @@ export function KwikMapsContainer() {
                 />
               </button>
             </div>
+          )}
+        </div>
+
+        {/* Mobile: dropdown menu */}
+        <div className="relative lg:hidden">
+          <button
+            onClick={() => setToolbarOpen((o) => !o)}
+            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-all"
+          >
+            <MoreVertical size={16} />
+          </button>
+          {toolbarOpen && (
+            <>
+              <div className="fixed inset-0 z-[55]" onClick={() => setToolbarOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 z-[60] w-44 rounded-lg bg-slate-900 border border-white/10 shadow-xl shadow-black/40 p-1.5 flex flex-col gap-1">
+                <button
+                  onClick={() => { setFeedbackOpen(true); setToolbarOpen(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-indigo-300 hover:bg-indigo-500/15 transition-all"
+                >
+                  <MessageSquarePlus size={13} /> Feedback
+                </button>
+                <button
+                  onClick={() => { setBugReportOpen(true); setToolbarOpen(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-red-300 hover:bg-red-500/15 transition-all"
+                >
+                  <Bug size={13} /> Bug Report
+                </button>
+                <button
+                  onClick={() => {
+                    coordinates.length > 0 ? setPendingDemo(true) : handleLoadDemo();
+                    setToolbarOpen(false);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-purple-300 hover:bg-purple-500/15 transition-all"
+                >
+                  <Sparkles size={13} /> Demo
+                </button>
+                {optimizedRoute && (
+                  <button
+                    onClick={() => { setPendingReset(true); setToolbarOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-white/50 hover:bg-white/5 transition-all"
+                  >
+                    <Trash2 size={13} /> Clear
+                  </button>
+                )}
+                {isAdmin && mapsFailureLoaded && (
+                  <div className="flex items-center justify-between px-3 py-2 border-t border-white/5 mt-0.5 pt-1.5">
+                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Failure</span>
+                    <button
+                      onClick={async () => {
+                        const next = !mapsFailure;
+                        setTogglingMaps(true);
+                        setMapsFailure(next);
+                        try {
+                          await appwrSetMapsFailureFlag(next);
+                        } catch (err) {
+                          console.error("❌ Toggle maps failure failed:", err);
+                          setMapsFailure(!next);
+                        } finally {
+                          setTogglingMaps(false);
+                        }
+                      }}
+                      disabled={togglingMaps}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full p-0.5 transition-colors duration-200 ${
+                        mapsFailure ? "bg-red-500" : "bg-slate-600"
+                      } ${togglingMaps ? "opacity-50 pointer-events-none" : ""}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                          mapsFailure ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </header>
