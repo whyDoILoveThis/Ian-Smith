@@ -53,6 +53,79 @@ function computeRouteStats(route: Coordinate[]) {
   };
 }
 
+// ── TSP Solver (nearest-neighbor + 2-opt) ──
+
+function buildDistanceMatrix(coordinates: Coordinate[]): number[][] {
+  const n = coordinates.length;
+  const matrix: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    matrix[i] = [];
+    for (let j = 0; j < n; j++) {
+      matrix[i][j] = i === j ? 0 : haversineDistance(
+        coordinates[i].latitude, coordinates[i].longitude,
+        coordinates[j].latitude, coordinates[j].longitude
+      );
+    }
+  }
+  return matrix;
+}
+
+function nearestNeighbor(n: number, distMatrix: number[][]): number[] {
+  const visited = new Array(n).fill(false);
+  const route: number[] = [0];
+  visited[0] = true;
+  for (let step = 1; step < n; step++) {
+    const current = route[route.length - 1];
+    let nearest = -1;
+    let minDist = Infinity;
+    for (let j = 0; j < n; j++) {
+      if (!visited[j] && distMatrix[current][j] < minDist) {
+        minDist = distMatrix[current][j];
+        nearest = j;
+      }
+    }
+    route.push(nearest);
+    visited[nearest] = true;
+  }
+  return route;
+}
+
+function twoOptImprove(route: number[], distMatrix: number[][]): number[] {
+  const n = route.length;
+  let improved = true;
+  let bestRoute = [...route];
+  while (improved) {
+    improved = false;
+    for (let i = 0; i < n - 1; i++) {
+      for (let k = i + 2; k < n; k++) {
+        const a = bestRoute[i];
+        const b = bestRoute[i + 1];
+        const c = bestRoute[k];
+        const d = k + 1 < n ? bestRoute[k + 1] : bestRoute[0];
+        if (distMatrix[a][b] + distMatrix[c][d] > distMatrix[a][c] + distMatrix[b][d]) {
+          bestRoute = [
+            ...bestRoute.slice(0, i + 1),
+            ...bestRoute.slice(i + 1, k + 1).reverse(),
+            ...bestRoute.slice(k + 1),
+          ];
+          improved = true;
+          break;
+        }
+      }
+      if (improved) break;
+    }
+  }
+  return bestRoute;
+}
+
+function solveTSP(coordinates: Coordinate[]): Coordinate[] {
+  if (coordinates.length <= 2) return coordinates;
+  const distMatrix = buildDistanceMatrix(coordinates);
+  const nnRoute = nearestNeighbor(coordinates.length, distMatrix);
+  const optimized = twoOptImprove(nnRoute, distMatrix);
+  return optimized.map((idx, order) => ({ ...coordinates[idx], order: order + 1 }));
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
@@ -95,70 +168,122 @@ export async function POST(request: NextRequest) {
       : 'No locations added yet.';
 
     const systemPrompt = hasRoute
-      ? `You are an AI travel route advisor for KwikMaps. The user has an optimized route and wants to discuss or modify it.
+      ? `You are an expert AI travel route advisor for KwikMaps. You are smart, precise, and always follow the user's instructions. The user has an optimized route and wants to discuss or modify it.
 
 CURRENT ROUTE (${body.currentRoute.length} stops, ~${currentStats!.totalDistanceMiles} miles total):
 ${routeDescription}
 
-RULES FOR RESPONDING:
-1. When the user suggests reordering (e.g., "make order 7-1-2" or "swap stops 3 and 5" or "move Memphis to the end"), evaluate whether this is a good idea.
-2. Consider total distance, logical geographic flow, hotel availability, and practical driving concerns.
-3. If the suggestion makes sense or the user insists, agree and provide the new order.
-4. If the suggestion would make the route significantly worse, explain why respectfully but if the user insists, comply.
-5. You can also ADD new locations or REMOVE existing locations from the route when the user requests it.
+YOUR CAPABILITIES:
+- Reorder stops (full reorder or partial — moving just a few stops)
+- Add new locations at any position
+- Remove locations
+- Combine any of the above in one response
+- Evaluate the current order and suggest the most efficient route
+- Answer travel questions and give advice
 
---- ROUTE REORDER ---
-When you agree to reorder the route, include at the VERY END of your response:
-ROUTE_UPDATE:[3,1,2,4,5,6,7,8,9,10]
+RULES:
+1. ALWAYS follow the user's instructions. If they ask to move, swap, add, remove, or reorder — DO IT immediately with the correct directive.
+2. If a change would significantly increase distance, briefly note it but STILL comply.
+3. When the user asks you to "evaluate", "optimize", "find the best order", or "reoptimize" — use the ROUTE_OPTIMIZE directive (see below). Do NOT try to manually figure out the optimal order yourself.
+4. When the user asks about a location (e.g. "what's near stop 3?" or "how far is Memphis from Nashville?"), just answer — no directives needed.
 
-The numbers are STOP NUMBERS referring to the current order above. For ${body.currentRoute.length} stops, list ALL stop numbers in the new desired order. You must include every stop number from 1 to ${body.currentRoute.length} exactly once.
+=== ROUTE REORDER (ROUTE_UPDATE) ===
+To reorder stops, put this on its own line at the VERY END of your response:
+ROUTE_UPDATE:[new_order_of_stop_numbers]
 
---- ADDING LOCATIONS ---
-When the user asks to ADD a new location (e.g., "add Atlanta", "include a stop in Denver"), you MUST know the approximate latitude and longitude of the location. Include at the VERY END of your response:
-ROUTE_ADD:[{"name":"Atlanta Downtown","latitude":33.7490,"longitude":-84.3880,"afterStop":3}]
+CRITICAL RULES:
+- Numbers refer to CURRENT stop numbers (Stop 1, Stop 2, etc. as listed above).
+- You MUST list ALL ${body.currentRoute.length} stop numbers exactly once.
+- The order you list them IS the new order.
 
-afterStop is the current stop number after which the new location should be inserted. Use 0 to insert at the beginning. You can add multiple locations in the array.
-After adding, if you also want to reorder, include a ROUTE_UPDATE line AFTER the ROUTE_ADD line using the NEW stop count (current + added).
+EXAMPLES (assuming 5 stops):
+- "move stop 3 first" -> ROUTE_UPDATE:[3,1,2,4,5]
+- "swap 2 and 4" -> ROUTE_UPDATE:[1,4,3,2,5]
+- "reverse it" -> ROUTE_UPDATE:[5,4,3,2,1]
+- "put Memphis first" (Memphis=stop 4) -> ROUTE_UPDATE:[4,1,2,3,5]
+- "order: 3,1,5,2,4" -> ROUTE_UPDATE:[3,1,5,2,4]
 
---- REMOVING LOCATIONS ---
-When the user asks to REMOVE a location (e.g., "remove Memphis", "drop stop 3"), include at the VERY END of your response:
+PARTIAL REORDER: If the user mentions only some stops, place those where requested and fill remaining stops in their original relative order.
+Example (5 stops): "put stop 4 first, stop 2 second" -> positions: 4=1st, 2=2nd, remaining [1,3,5] fill 3rd-5th -> ROUTE_UPDATE:[4,2,1,3,5]
+
+=== ADDING LOCATIONS (ROUTE_ADD) ===
+ROUTE_ADD:[{"name":"City Name","latitude":33.7490,"longitude":-84.3880,"afterStop":3}]
+
+- afterStop = current stop number to insert AFTER (0 = insert at beginning).
+- Multiple: ROUTE_ADD:[{"name":"A","latitude":1.0,"longitude":2.0,"afterStop":0},{"name":"B","latitude":3.0,"longitude":4.0,"afterStop":5}]
+- You MUST know approximate lat/lng for any city/location. Use your geographic knowledge.
+- After adding, you can include a ROUTE_UPDATE on the next line using the NEW total stop count to place the new stop optimally.
+
+=== REMOVING LOCATIONS (ROUTE_REMOVE) ===
 ROUTE_REMOVE:[3,5]
 
-The numbers are the CURRENT stop numbers to remove. After removing, if you also want to reorder the remaining stops, include a ROUTE_UPDATE line AFTER the ROUTE_REMOVE line using the NEW stop numbers (re-numbered 1 to N after removal).
+- Numbers are CURRENT stop numbers to remove.
+- Example: "remove Memphis" (Memphis=stop 3) -> ROUTE_REMOVE:[3]
+- Example: "remove stops 2 and 5" -> ROUTE_REMOVE:[2,5]
+- After removing, you can include a ROUTE_UPDATE using re-numbered stops (1 to N after removal).
 
---- COMBINING OPERATIONS ---
-You can combine ROUTE_REMOVE, ROUTE_ADD, and ROUTE_UPDATE in a single response. They are processed in this order:
-1. ROUTE_REMOVE (remove stops first)
-2. ROUTE_ADD (add new stops)
-3. ROUTE_UPDATE (reorder the resulting list)
+=== COMBINING OPERATIONS ===
+You can use multiple directives in one response. Processing order: ROUTE_REMOVE -> ROUTE_ADD -> ROUTE_UPDATE -> ROUTE_OPTIMIZE.
+Example: Remove stop 3, add Dallas, then optimize:
+ROUTE_REMOVE:[3]
+ROUTE_ADD:[{"name":"Dallas","latitude":32.7767,"longitude":-96.7970,"afterStop":0}]
+ROUTE_OPTIMIZE
 
-All directive lines MUST appear at the very end of your response with NO text after them.
-If you are NOT changing the route, do NOT include any directive lines.
+=== OPTIMIZING THE ROUTE (ROUTE_OPTIMIZE) ===
+When the user asks to "optimize", "evaluate the order", "find the best order", "reoptimize", or "make it efficient" — use this directive on its own line at the VERY END:
+ROUTE_OPTIMIZE
 
-When the user references stops by number, those numbers refer to the current order shown above (Stop 1, Stop 2, etc.).
-When the user references stops by name, map them to the stop numbers above.
-If they only mention a few stops for reorder, assume unmentioned stops keep their relative position but are placed after the mentioned ones. You MUST still list ALL stops in the ROUTE_UPDATE.
+This runs an advanced algorithm to find the shortest-distance ordering. You do NOT need to figure out the order yourself.
+- You can combine it with other directives. For example, after adding a new stop, include ROUTE_OPTIMIZE to automatically find the best order including the new stop.
+- If the user says something like "add Nashville and optimize" -> use ROUTE_ADD then ROUTE_OPTIMIZE.
+- If the user just says "optimize" or "reorder for efficiency" -> just use ROUTE_OPTIMIZE.
 
-Keep responses conversational, practical, and concise. Do not use asterisks or markdown code blocks. Use plain text.`
-      : `You are an AI travel route advisor for KwikMaps. The user has not optimized a route yet but may want to chat about planning, ask questions, or add locations.
+All directive lines MUST be the last lines of your response. NO text after them.
+If NOT changing the route, do NOT include any directives.
+
+Keep responses conversational, practical, and concise. Use plain text only — no asterisks, no markdown, no code blocks.`
+      : `You are an expert AI travel route advisor for KwikMaps. You are smart, precise, and always follow the user's instructions. The user is planning a trip and managing locations.
 
 CURRENT LOCATIONS (${body.allCoordinates.length} total):
 ${locationsList}
 
-You can suggest locations to add. When the user asks to add a location, include at the VERY END of your response:
+YOUR CAPABILITIES:
+- Add new locations
+- Remove existing locations
+- Answer travel questions and give advice
+- Help plan routes
+
+RULES:
+1. ALWAYS follow the user's instructions immediately with the correct directive.
+2. When adding, you MUST know approximate lat/lng for cities/locations. Use your geographic knowledge.
+3. When removing, use the location numbers shown above.
+
+=== ADDING LOCATIONS (ROUTE_ADD) ===
 ROUTE_ADD:[{"name":"Location Name","latitude":33.7490,"longitude":-84.3880,"afterStop":0}]
 
-afterStop should always be 0 when there is no route. You can add multiple locations in one array. If you are NOT adding locations, do NOT include any directive lines.
-Keep responses conversational, practical, and concise. Do not use asterisks or markdown code blocks. Use plain text.`;
+- afterStop should be 0 when there is no route.
+- Multiple: ROUTE_ADD:[{"name":"A","latitude":1.0,"longitude":2.0,"afterStop":0},{"name":"B","latitude":3.0,"longitude":4.0,"afterStop":0}]
+
+=== REMOVING LOCATIONS (ROUTE_REMOVE) ===
+ROUTE_REMOVE:[2,5]
+
+- Numbers are the CURRENT location numbers to remove (as listed above).
+- Example: "remove Atlanta" (Atlanta=location 3) -> ROUTE_REMOVE:[3]
+
+All directive lines MUST be the last lines of your response. NO text after them.
+If NOT changing locations, do NOT include any directives.
+
+Keep responses conversational, practical, and concise. Use plain text only — no asterisks, no markdown, no code blocks.`;
 
     // Build conversation messages
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
     ];
 
-    // Add conversation history
+    // Add conversation history (limit to last 16 messages to keep context focused)
     if (body.conversationHistory && body.conversationHistory.length > 0) {
-      messages.push(...body.conversationHistory);
+      const recentHistory = body.conversationHistory.slice(-16);
+      messages.push(...recentHistory);
     }
 
     // Add current user message
@@ -175,7 +300,7 @@ Keep responses conversational, practical, and concise. Do not use asterisks or m
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           messages,
-          temperature: 0.6,
+          temperature: 0.2,
           max_tokens: 2000,
         }),
       }
@@ -197,6 +322,20 @@ Keep responses conversational, practical, and concise. Do not use asterisks or m
 
     if (!response.ok) {
       console.error('Groq chat API error:', status, data);
+
+      // Surface rate-limit details to the user
+      if (status === 429 && data?.error?.message) {
+        const raw: string = data.error.message;
+        const cleaned = raw
+          .replace(/\s*Need more tokens\?.*$/i, '')
+          .replace(/\s*in organization `[^`]*`/i, '')
+          .trim();
+        return NextResponse.json(
+          { error: cleaned },
+          { status: 429 }
+        );
+      }
+
       return NextResponse.json(
         { error: 'AI service error' },
         { status: 502 }
@@ -218,33 +357,32 @@ Keep responses conversational, practical, and concise. Do not use asterisks or m
     const replyText = typeof reply === 'string' ? reply.trim() : JSON.stringify(reply);
 
     // ── Parse AI directives ──
-    let displayReply = replyText;
     let workingRoute = [...body.currentRoute];
     const addedCoordinates: Coordinate[] = [];
     const removedCoordinateIds: string[] = [];
     let routeChanged = false;
 
-    // 1. Process ROUTE_REMOVE (only if route exists)
+    // 1. Process ROUTE_REMOVE (works with route or allCoordinates)
     const routeRemoveMatch = replyText.match(/ROUTE_REMOVE:\s*\[([^\]]+)\]/);
     if (routeRemoveMatch) {
-      displayReply = displayReply.replace(/\n?ROUTE_REMOVE:\s*\[[^\]]+\]/, '').trim();
-
       const removeNumbers = routeRemoveMatch[1]
         .split(',')
         .map((s: string) => parseInt(s.trim(), 10))
         .filter((n: number) => !isNaN(n));
 
-      const N = workingRoute.length;
+      // When route exists, remove from workingRoute; otherwise remove from allCoordinates
+      const removeSource = hasRoute ? workingRoute : body.allCoordinates;
+      const N = removeSource.length;
       const validRemove = removeNumbers.every((n: number) => n >= 1 && n <= N);
 
       if (validRemove && removeNumbers.length > 0 && removeNumbers.length < N) {
         const removeSet = new Set(removeNumbers);
-        // Collect IDs of removed coordinates
         removeNumbers.forEach((n: number) => {
-          removedCoordinateIds.push(workingRoute[n - 1].id);
+          removedCoordinateIds.push(removeSource[n - 1].id);
         });
-        // Filter out removed stops
-        workingRoute = workingRoute.filter((_: Coordinate, i: number) => !removeSet.has(i + 1));
+        if (hasRoute) {
+          workingRoute = workingRoute.filter((_: Coordinate, i: number) => !removeSet.has(i + 1));
+        }
         routeChanged = true;
       }
     }
@@ -252,8 +390,6 @@ Keep responses conversational, practical, and concise. Do not use asterisks or m
     // 2. Process ROUTE_ADD
     const routeAddMatch = replyText.match(/ROUTE_ADD:\s*(\[\{[\s\S]*?\}\])/);
     if (routeAddMatch) {
-      displayReply = displayReply.replace(/\n?ROUTE_ADD:\s*\[\{[\s\S]*?\}\]/, '').trim();
-
       try {
         const addItems: { name: string; latitude: number; longitude: number; afterStop?: number }[] =
           JSON.parse(routeAddMatch[1]);
@@ -290,8 +426,6 @@ Keep responses conversational, practical, and concise. Do not use asterisks or m
     // 3. Process ROUTE_UPDATE (reorder after add/remove)
     const routeUpdateMatch = replyText.match(/ROUTE_UPDATE:\s*\[([^\]]+)\]/);
     if (routeUpdateMatch) {
-      displayReply = displayReply.replace(/\n?ROUTE_UPDATE:\s*\[[^\]]+\]/, '').trim();
-
       const stopNumbers = routeUpdateMatch[1]
         .split(',')
         .map((s: string) => parseInt(s.trim(), 10))
@@ -311,6 +445,21 @@ Keep responses conversational, practical, and concise. Do not use asterisks or m
         routeChanged = true;
       }
     }
+
+    // 4. Process ROUTE_OPTIMIZE — run real TSP solver instead of LLM guessing
+    const routeOptimizeMatch = replyText.match(/ROUTE_OPTIMIZE/);
+    if (routeOptimizeMatch && workingRoute.length >= 2) {
+      workingRoute = solveTSP(workingRoute);
+      routeChanged = true;
+    }
+
+    // Strip ALL directive lines from display text in one pass
+    const displayReply = replyText
+      .replace(/\n?ROUTE_REMOVE:\s*\[[^\]]*\]/g, '')
+      .replace(/\n?ROUTE_ADD:\s*\[\{[\s\S]*?\}\]/g, '')
+      .replace(/\n?ROUTE_UPDATE:\s*\[[^\]]*\]/g, '')
+      .replace(/\n?ROUTE_OPTIMIZE/g, '')
+      .trim();
 
     // Compute final stats if route changed
     let routeUpdate = null;

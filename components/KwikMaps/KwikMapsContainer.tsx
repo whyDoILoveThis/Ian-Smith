@@ -483,7 +483,8 @@ export function KwikMapsContainer() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get AI response");
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.error || "Failed to get AI response");
       }
 
       const data = await response.json();
@@ -566,6 +567,12 @@ export function KwikMapsContainer() {
             };
 
             let newCoordinates = [...coordinates];
+            if (data.routeUpdate.removedCoordinateIds) {
+              const removeSet = new Set(data.routeUpdate.removedCoordinateIds);
+              newCoordinates = newCoordinates.filter(
+                (c) => !removeSet.has(c.id),
+              );
+            }
             if (data.routeUpdate.addedCoordinates) {
               newCoordinates = [
                 ...newCoordinates,
@@ -608,7 +615,10 @@ export function KwikMapsContainer() {
       const errorMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: "Failed to reach AI. Please try again.",
+        content:
+          err instanceof Error && err.message !== "Failed to get AI response"
+            ? err.message
+            : "Failed to reach AI. Please try again.",
       };
       setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -766,7 +776,31 @@ export function KwikMapsContainer() {
                           Restore original
                         </button>
                       )}
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                    <div className="whitespace-pre-wrap">
+                      {(() => {
+                        const retryMatch = msg.content.match(/(Please try again in [\d.]+[smhd][\w.]*)/i);
+                        const rateMatch = msg.content.match(/(Rate limit reached)/i);
+                        if (retryMatch || rateMatch) {
+                          let parts: React.ReactNode[] = [];
+                          let remaining = msg.content;
+                          if (rateMatch) {
+                            const i = remaining.indexOf(rateMatch[1]);
+                            parts.push(remaining.slice(0, i));
+                            parts.push(<span key="rl" className="text-orange-400 font-semibold">{rateMatch[1]}</span>);
+                            remaining = remaining.slice(i + rateMatch[1].length);
+                          }
+                          if (retryMatch) {
+                            const i = remaining.indexOf(retryMatch[1]);
+                            parts.push(remaining.slice(0, i));
+                            parts.push(<span key="rt" className="text-green-400 font-semibold">{retryMatch[1]}</span>);
+                            remaining = remaining.slice(i + retryMatch[1].length);
+                          }
+                          parts.push(remaining);
+                          return <>{parts}</>;
+                        }
+                        return msg.content;
+                      })()}
+                    </div>
                   </div>
                   {msg.role === "assistant" && (
                     <button
@@ -964,7 +998,31 @@ export function KwikMapsContainer() {
                           <History size={9} /> Restore original
                         </button>
                       )}
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                    <div className="whitespace-pre-wrap">
+                      {(() => {
+                        const retryMatch = msg.content.match(/(Please try again in [\d.]+[smhd][\w.]*)/i);
+                        const rateMatch = msg.content.match(/(Rate limit reached)/i);
+                        if (retryMatch || rateMatch) {
+                          let parts: React.ReactNode[] = [];
+                          let remaining = msg.content;
+                          if (rateMatch) {
+                            const i = remaining.indexOf(rateMatch[1]);
+                            parts.push(remaining.slice(0, i));
+                            parts.push(<span key="rl" className="text-orange-400 font-semibold">{rateMatch[1]}</span>);
+                            remaining = remaining.slice(i + rateMatch[1].length);
+                          }
+                          if (retryMatch) {
+                            const i = remaining.indexOf(retryMatch[1]);
+                            parts.push(remaining.slice(0, i));
+                            parts.push(<span key="rt" className="text-green-400 font-semibold">{retryMatch[1]}</span>);
+                            remaining = remaining.slice(i + retryMatch[1].length);
+                          }
+                          parts.push(remaining);
+                          return <>{parts}</>;
+                        }
+                        return msg.content;
+                      })()}
+                    </div>
                   </div>
                   {msg.role === "assistant" && (
                     <button
