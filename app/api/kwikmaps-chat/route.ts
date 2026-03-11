@@ -57,12 +57,16 @@ export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
 
-    if (!body.message || !body.currentRoute || !body.allCoordinates) {
+    if (!body.message) {
       return NextResponse.json(
-        { error: 'message, currentRoute, and allCoordinates are required' },
+        { error: 'message is required' },
         { status: 400 }
       );
     }
+
+    // Default to empty arrays if not provided
+    if (!body.currentRoute) body.currentRoute = [];
+    if (!body.allCoordinates) body.allCoordinates = [];
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
@@ -73,18 +77,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Build context about the current route
-    const routeDescription = body.currentRoute
-      .map(
-        (c, i) =>
-          `Stop ${i + 1}: ${c.name} (${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`
-      )
-      .join('\n');
+    const hasRoute = body.currentRoute.length > 0;
 
-    const currentStats = computeRouteStats(body.currentRoute);
+    const routeDescription = hasRoute
+      ? body.currentRoute
+          .map(
+            (c, i) =>
+              `Stop ${i + 1}: ${c.name} (${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`
+          )
+          .join('\n')
+      : '';
 
-    const systemPrompt = `You are an AI travel route advisor for KwikMaps. The user has an optimized route and wants to discuss or modify it.
+    const currentStats = hasRoute ? computeRouteStats(body.currentRoute) : null;
 
-CURRENT ROUTE (${body.currentRoute.length} stops, ~${currentStats.totalDistanceMiles} miles total):
+    const locationsList = body.allCoordinates.length > 0
+      ? body.allCoordinates.map((c, i) => `${i + 1}. ${c.name} (${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join('\n')
+      : 'No locations added yet.';
+
+    const systemPrompt = hasRoute
+      ? `You are an AI travel route advisor for KwikMaps. The user has an optimized route and wants to discuss or modify it.
+
+CURRENT ROUTE (${body.currentRoute.length} stops, ~${currentStats!.totalDistanceMiles} miles total):
 ${routeDescription}
 
 RULES FOR RESPONDING:
@@ -126,6 +139,16 @@ When the user references stops by number, those numbers refer to the current ord
 When the user references stops by name, map them to the stop numbers above.
 If they only mention a few stops for reorder, assume unmentioned stops keep their relative position but are placed after the mentioned ones. You MUST still list ALL stops in the ROUTE_UPDATE.
 
+Keep responses conversational, practical, and concise. Do not use asterisks or markdown code blocks. Use plain text.`
+      : `You are an AI travel route advisor for KwikMaps. The user has not optimized a route yet but may want to chat about planning, ask questions, or add locations.
+
+CURRENT LOCATIONS (${body.allCoordinates.length} total):
+${locationsList}
+
+You can suggest locations to add. When the user asks to add a location, include at the VERY END of your response:
+ROUTE_ADD:[{"name":"Location Name","latitude":33.7490,"longitude":-84.3880,"afterStop":0}]
+
+afterStop should always be 0 when there is no route. You can add multiple locations in one array. If you are NOT adding locations, do NOT include any directive lines.
 Keep responses conversational, practical, and concise. Do not use asterisks or markdown code blocks. Use plain text.`;
 
     // Build conversation messages
@@ -201,7 +224,7 @@ Keep responses conversational, practical, and concise. Do not use asterisks or m
     const removedCoordinateIds: string[] = [];
     let routeChanged = false;
 
-    // 1. Process ROUTE_REMOVE
+    // 1. Process ROUTE_REMOVE (only if route exists)
     const routeRemoveMatch = replyText.match(/ROUTE_REMOVE:\s*\[([^\]]+)\]/);
     if (routeRemoveMatch) {
       displayReply = displayReply.replace(/\n?ROUTE_REMOVE:\s*\[[^\]]+\]/, '').trim();

@@ -30,7 +30,7 @@ export function CoordinateList({
   if (coordinates.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-4">
-        <div className="w-16 h-16 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-4">
+        <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-4">
           <GripVertical size={24} className="text-white/40" />
         </div>
         <p className="text-white/60 text-center">No locations added yet</p>

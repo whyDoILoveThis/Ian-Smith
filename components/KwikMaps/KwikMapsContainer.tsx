@@ -5,10 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { Coordinate } from "@/types/KwikMaps.type";
 import { CoordinateInput, CoordinateList, MapComponent } from "./components";
 import { RouteSharePanel } from "./components/RouteSharePanel";
+import ReportBug from "./components/ReportBug";
 import { parseShareParam } from "./utils/routeShare";
 import {
   Navigation2,
-  Clock,
   MapPin,
   Sparkles,
   Route,
@@ -24,8 +24,13 @@ import {
   AlertTriangle,
   RotateCcw,
   History,
-  ChevronDown,
+  Share2,
+  Plus,
   GripHorizontal,
+  ChevronUp,
+  X,
+  MessageSquarePlus,
+  Bug,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { motion, AnimatePresence } from "framer-motion";
@@ -38,7 +43,7 @@ interface RouteLeg {
 }
 
 interface RouteSnapshot {
-  optimizedRoute: Coordinate[];
+  optimizedRoute: Coordinate[] | null;
   legs: RouteLeg[];
   totalDistanceMiles: number;
   totalDistanceKm: number;
@@ -84,7 +89,6 @@ export function KwikMapsContainer() {
   const [totalDistanceKm, setTotalDistanceKm] = useState<number>(0);
   const [legs, setLegs] = useState<RouteLeg[]>([]);
   const [aiInsights, setAiInsights] = useState<string>("");
-  const resultsRef = useRef<HTMLDivElement>(null);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -93,49 +97,31 @@ export function KwikMapsContainer() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingReset, setPendingReset] = useState(false);
+  const [pendingDemo, setPendingDemo] = useState(false);
   const pendingResendRef = useRef<string | null>(null);
   const pendingResendSnapshotRef = useRef<RouteSnapshot | null>(null);
-  const [chatCollapsed, setChatCollapsed] = useState(false);
+
+  // Dashboard tab state
+  const [leftTab, setLeftTab] = useState<"add" | "share">("add");
+  const [mainTab, setMainTab] = useState<"planner" | "route" | "ai">("planner");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Feedback / Bug report modal state
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [bugReportOpen, setBugReportOpen] = useState(false);
+
+  // Map highlight state (arrays for multi-select via ctrl+click)
+  const [highlightedStopIds, setHighlightedStopIds] = useState<string[]>([]);
+  const [highlightedLegIndices, setHighlightedLegIndices] = useState<number[]>([]);
+
+  // Chat panel state (fixed bottom, draggable)
+  const [chatOpen, setChatOpen] = useState(false);
   const [chatHeight, setChatHeight] = useState(340);
-  const isDraggingChat = useRef(false);
-  const chatPanelRef = useRef<HTMLDivElement>(null);
-  const CHAT_TOPBAR_HEIGHT = 44;
-
-  // Drag to resize chat panel
-  const handleDragStart = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      e.preventDefault();
-      isDraggingChat.current = true;
-      const startY = "touches" in e ? e.touches[0].clientY : e.clientY;
-      const startHeight = chatHeight;
-
-      const onMove = (ev: MouseEvent | TouchEvent) => {
-        if (!isDraggingChat.current) return;
-        const currentY =
-          "touches" in ev ? ev.touches[0].clientY : (ev as MouseEvent).clientY;
-        const delta = startY - currentY;
-        const newHeight = Math.max(
-          100,
-          Math.min(window.innerHeight * 0.8, startHeight + delta),
-        );
-        setChatHeight(newHeight);
-      };
-
-      const onEnd = () => {
-        isDraggingChat.current = false;
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onEnd);
-        document.removeEventListener("touchmove", onMove);
-        document.removeEventListener("touchend", onEnd);
-      };
-
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onEnd);
-      document.addEventListener("touchmove", onMove);
-      document.addEventListener("touchend", onEnd);
-    },
-    [chatHeight],
-  );
+  const isDraggingRef = useRef(false);
+  const didDragRef = useRef(false);
+  const dragStartYRef = useRef(0);
+  const dragStartHeightRef = useRef(0);
 
   // Load shared route from URL param on mount
   useEffect(() => {
@@ -300,14 +286,7 @@ export function KwikMapsContainer() {
         setLegs(data.legs || []);
         setAiInsights(data.aiInsights || "");
         setShowResults(true);
-
-        // Scroll to results after a short delay
-        setTimeout(() => {
-          resultsRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }, 300);
+        setMainTab("route");
       } else {
         setError(data.error || "Failed to optimize route");
       }
@@ -329,6 +308,8 @@ export function KwikMapsContainer() {
     setAiInsights("");
     setChatMessages([]);
     setChatInput("");
+    setHighlightedStopIds([]);
+    setHighlightedLegIndices([]);
   };
 
   const handleLoadDemo = useCallback(() => {
@@ -353,9 +334,7 @@ export function KwikMapsContainer() {
       setLegs(msg.previousRoute.legs);
       setTotalDistanceMiles(msg.previousRoute.totalDistanceMiles);
       setTotalDistanceKm(msg.previousRoute.totalDistanceKm);
-      if (msg.previousRoute.coordinates) {
-        setCoordinates(msg.previousRoute.coordinates);
-      }
+      setCoordinates(msg.previousRoute.coordinates);
 
       // Mark this message as undone so the button shows the state
       setChatMessages((prev) =>
@@ -374,9 +353,7 @@ export function KwikMapsContainer() {
       setLegs(msg.newRoute.legs);
       setTotalDistanceMiles(msg.newRoute.totalDistanceMiles);
       setTotalDistanceKm(msg.newRoute.totalDistanceKm);
-      if (msg.newRoute.coordinates) {
-        setCoordinates(msg.newRoute.coordinates);
-      }
+      setCoordinates(msg.newRoute.coordinates);
 
       setChatMessages((prev) =>
         prev.map((m) => (m.id === messageId ? { ...m, undone: false } : m)),
@@ -390,10 +367,53 @@ export function KwikMapsContainer() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  // Auto-open chat when new messages arrive
+  useEffect(() => {
+    if (chatMessages.length > 0) setChatOpen(true);
+  }, [chatMessages.length]);
+
+  // Drag handlers for chat panel resize
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      isDraggingRef.current = true;
+      didDragRef.current = false;
+      const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+      dragStartYRef.current = clientY;
+      dragStartHeightRef.current = chatHeight;
+
+      const handleMove = (ev: MouseEvent | TouchEvent) => {
+        if (!isDraggingRef.current) return;
+        const currentY = "touches" in ev ? ev.touches[0].clientY : ev.clientY;
+        const delta = dragStartYRef.current - currentY;
+        if (Math.abs(delta) > 3) didDragRef.current = true;
+        const newHeight = Math.max(
+          200,
+          Math.min(
+            window.innerHeight - 100,
+            dragStartHeightRef.current + delta,
+          ),
+        );
+        setChatHeight(newHeight);
+      };
+      const handleEnd = () => {
+        isDraggingRef.current = false;
+        document.removeEventListener("mousemove", handleMove);
+        document.removeEventListener("mouseup", handleEnd);
+        document.removeEventListener("touchmove", handleMove);
+        document.removeEventListener("touchend", handleEnd);
+      };
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("mouseup", handleEnd);
+      document.addEventListener("touchmove", handleMove);
+      document.addEventListener("touchend", handleEnd);
+    },
+    [chatHeight],
+  );
+
   const handleSendChat = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const msg = chatInput.trim();
-    if (!msg || !optimizedRoute || isSendingChat) return;
+    if (!msg || isSendingChat) return;
 
     const userMessage: ChatMessage = {
       id: uuidv4(),
@@ -422,7 +442,7 @@ export function KwikMapsContainer() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: msg,
-          currentRoute: optimizedRoute,
+          currentRoute: optimizedRoute || [],
           allCoordinates: coordinates,
           conversationHistory,
         }),
@@ -445,56 +465,100 @@ export function KwikMapsContainer() {
 
         // If the AI updated the route, save snapshots then apply
         if (data.routeUpdate) {
-          const previousSnapshot: RouteSnapshot = {
-            optimizedRoute: optimizedRoute!,
-            legs,
-            totalDistanceMiles,
-            totalDistanceKm,
-            coordinates: [...coordinates],
-          };
+          if (optimizedRoute) {
+            // Route exists — full snapshot handling
+            const previousSnapshot: RouteSnapshot = {
+              optimizedRoute: optimizedRoute,
+              legs,
+              totalDistanceMiles,
+              totalDistanceKm,
+              coordinates: [...coordinates],
+            };
 
-          // Compute new coordinates list after add/remove
-          let newCoordinates = [...coordinates];
-          if (data.routeUpdate.removedCoordinateIds) {
-            const removeSet = new Set(data.routeUpdate.removedCoordinateIds);
-            newCoordinates = newCoordinates.filter((c) => !removeSet.has(c.id));
-          }
-          if (data.routeUpdate.addedCoordinates) {
-            newCoordinates = [
-              ...newCoordinates,
-              ...data.routeUpdate.addedCoordinates,
-            ];
-          }
+            // Compute new coordinates list after add/remove
+            let newCoordinates = [...coordinates];
+            if (data.routeUpdate.removedCoordinateIds) {
+              const removeSet = new Set(data.routeUpdate.removedCoordinateIds);
+              newCoordinates = newCoordinates.filter(
+                (c) => !removeSet.has(c.id),
+              );
+            }
+            if (data.routeUpdate.addedCoordinates) {
+              newCoordinates = [
+                ...newCoordinates,
+                ...data.routeUpdate.addedCoordinates,
+              ];
+            }
 
-          const newSnapshot: RouteSnapshot = {
-            optimizedRoute: data.routeUpdate.optimizedRoute,
-            legs: data.routeUpdate.legs,
-            totalDistanceMiles: data.routeUpdate.totalDistanceMiles,
-            totalDistanceKm: data.routeUpdate.totalDistanceKm,
-            coordinates: newCoordinates,
-          };
-          setChatMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMessage.id
-                ? {
-                    ...m,
-                    previousRoute: previousSnapshot,
-                    newRoute: newSnapshot,
-                  }
-                : m,
-            ),
-          );
+            const newSnapshot: RouteSnapshot = {
+              optimizedRoute: data.routeUpdate.optimizedRoute,
+              legs: data.routeUpdate.legs,
+              totalDistanceMiles: data.routeUpdate.totalDistanceMiles,
+              totalDistanceKm: data.routeUpdate.totalDistanceKm,
+              coordinates: newCoordinates,
+            };
+            setChatMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? {
+                      ...m,
+                      previousRoute: previousSnapshot,
+                      newRoute: newSnapshot,
+                    }
+                  : m,
+              ),
+            );
 
-          setOptimizedRoute(data.routeUpdate.optimizedRoute);
-          setLegs(data.routeUpdate.legs);
-          setTotalDistanceMiles(data.routeUpdate.totalDistanceMiles);
-          setTotalDistanceKm(data.routeUpdate.totalDistanceKm);
+            setOptimizedRoute(data.routeUpdate.optimizedRoute);
+            setLegs(data.routeUpdate.legs);
+            setTotalDistanceMiles(data.routeUpdate.totalDistanceMiles);
+            setTotalDistanceKm(data.routeUpdate.totalDistanceKm);
 
-          // Sync coordinates if locations were added or removed
-          if (
-            data.routeUpdate.addedCoordinates ||
-            data.routeUpdate.removedCoordinateIds
-          ) {
+            // Sync coordinates if locations were added or removed
+            if (
+              data.routeUpdate.addedCoordinates ||
+              data.routeUpdate.removedCoordinateIds
+            ) {
+              setCoordinates(newCoordinates);
+            }
+          } else {
+            // No route yet — snapshot coordinates for undo/redo, then add
+            const previousSnapshot: RouteSnapshot = {
+              optimizedRoute: null,
+              legs: [],
+              totalDistanceMiles: 0,
+              totalDistanceKm: 0,
+              coordinates: [...coordinates],
+            };
+
+            let newCoordinates = [...coordinates];
+            if (data.routeUpdate.addedCoordinates) {
+              newCoordinates = [
+                ...newCoordinates,
+                ...data.routeUpdate.addedCoordinates,
+              ];
+            }
+
+            const newSnapshot: RouteSnapshot = {
+              optimizedRoute: null,
+              legs: [],
+              totalDistanceMiles: 0,
+              totalDistanceKm: 0,
+              coordinates: newCoordinates,
+            };
+
+            setChatMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? {
+                      ...m,
+                      previousRoute: previousSnapshot,
+                      newRoute: newSnapshot,
+                    }
+                  : m,
+              ),
+            );
+
             setCoordinates(newCoordinates);
           }
         }
@@ -519,540 +583,971 @@ export function KwikMapsContainer() {
     }
   };
 
-  return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-4 md:p-8">
-      {/* Background decorative elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl" />
+  // Chat panel rendered at the bottom of each tab's left column (desktop)
+  const chatPanel = (
+    <div
+      className="shrink-0 z-50 hidden lg:flex flex-col bg-slate-950/95 border-t border-white/10"
+      style={{ height: chatOpen ? chatHeight : 44 }}
+    >
+      {/* Drag handle + header */}
+      <div
+        className="relative shrink-0 flex items-center gap-2 px-4 cursor-pointer select-none"
+        style={{ height: 44 }}
+        onClick={() => {
+          if (didDragRef.current) {
+            didDragRef.current = false;
+            return;
+          }
+          setChatOpen((o) => !o);
+        }}
+      >
+        {chatOpen && (
+          <div
+            className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 cursor-ns-resize touch-none"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              handleDragStart(e);
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              handleDragStart(e);
+            }}
+          >
+            <GripHorizontal
+              size={16}
+              className="text-white/25 hover:text-white/50 transition-colors"
+            />
+          </div>
+        )}
+        <MessageCircle size={14} className="text-indigo-400" />
+        <span className="text-xs font-semibold text-white/60">Route Chat</span>
+        {chatMessages.length > 0 && (
+          <span className="px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[9px] font-bold">
+            {chatMessages.length}
+          </span>
+        )}
+        {isSendingChat && (
+          <Loader size={12} className="animate-spin text-purple-400" />
+        )}
+        <div className="flex-1" />
+        <ChevronUp
+          size={14}
+          className={`text-white/30 transition-transform duration-200 ${chatOpen ? "rotate-180" : ""}`}
+        />
       </div>
 
-      {/* Main content */}
-      <div className="relative z-10 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500">
-              <Navigation2 size={24} className="text-white" />
-            </span>
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-300 to-cyan-300 bg-clip-text text-transparent">
-              KwikMaps<span className="text-sm mr-[4px]">v0.2</span>
-            </h1>
-          </div>
-          <p className="text-white/60 text-lg">
-            AI-powered route optimization with hotel recommendations
-          </p>
-        </div>
-
-        {/* Main layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Left sidebar - Input and list */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Input section */}
-            <div className="p-6 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl">
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <MapPin size={20} className="text-blue-400" />
-                Add Locations
-              </h2>
-              <CoordinateInput onAddCoordinate={handleAddCoordinate} />
-            </div>
-
-            {/* List section */}
-            <div className="p-6 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl">
-              <CoordinateList
-                coordinates={coordinates}
-                onRemoveCoordinate={handleRemoveCoordinate}
-                optimizedOrder={
-                  optimizedRoute ? optimizedRoute.map((c) => c.id) : undefined
-                }
-              />
-            </div>
-
-            {/* Action buttons */}
-            <div className="space-y-3">
-              <button
-                onClick={handleOptimizeRoute}
-                disabled={coordinates.length < 2 || isOptimizing}
-                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:hover:scale-100"
+      {/* Chat body */}
+      {chatOpen && (
+        <div className="flex-1 flex flex-col min-h-0 px-4 pb-3">
+          <div className="flex-1 chat-scroll overflow-y-auto mb-2 space-y-2.5 pr-1">
+            {chatMessages.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-white/20 text-xs">
+                  Ask me anything about your route...
+                </p>
+              </div>
+            ) : (
+              chatMessages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`group/msg flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  {msg.role === "user" && (
+                    <button
+                      onClick={() => handleResendMessage(msg.id)}
+                      className="self-center mr-1 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-blue-500/20 text-white/30 hover:text-blue-400 transition-all duration-150"
+                      title="Resend message"
+                    >
+                      <RotateCcw size={11} />
+                    </button>
+                  )}
+                  {msg.role === "user" && (
+                    <button
+                      onClick={() => setPendingDeleteId(msg.id)}
+                      className="self-center mr-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150"
+                      title="Delete message"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                  <div
+                    className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-blue-500/25 border border-blue-400/25 text-white rounded-br-md"
+                        : "bg-white/[0.06] border border-white/10 text-white/85 rounded-bl-md"
+                    }`}
+                  >
+                    {msg.role === "assistant" && (
+                      <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                        <Bot size={11} className="text-purple-400" />
+                        <span className="text-purple-400 text-[10px] font-semibold">
+                          AI
+                        </span>
+                        {msg.routeChanged && (
+                          <span
+                            className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                              msg.undone
+                                ? "bg-gray-500/25 text-gray-400 line-through"
+                                : "bg-emerald-500/25 text-emerald-300"
+                            }`}
+                          >
+                            {msg.undone ? "Undone" : "Route Updated"}
+                          </span>
+                        )}
+                        {msg.routeChanged &&
+                          msg.previousRoute &&
+                          !msg.undone && (
+                            <button
+                              onClick={() => handleUndoRouteChange(msg.id)}
+                              className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/20 text-amber-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all"
+                              title="Undo this route change"
+                            >
+                              <Undo2 size={9} />
+                              Undo
+                            </button>
+                          )}
+                        {msg.routeChanged && msg.newRoute && msg.undone && (
+                          <button
+                            onClick={() => handleRedoRouteChange(msg.id)}
+                            className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-500/15 hover:bg-blue-500/30 border border-blue-400/20 text-blue-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all"
+                            title="Redo this route change"
+                          >
+                            <Redo2 size={9} />
+                            Redo
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {msg.role === "user" &&
+                      msg.resent &&
+                      msg.originalSnapshot && (
+                        <button
+                          onClick={() => handleRestoreOriginal(msg.id)}
+                          className="mb-1.5 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/20 text-amber-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all"
+                          title="Restore the original AI response state"
+                        >
+                          <History size={9} />
+                          Restore original
+                        </button>
+                      )}
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  </div>
+                  {msg.role === "assistant" && (
+                    <button
+                      onClick={() => setPendingDeleteId(msg.id)}
+                      className="self-center ml-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150"
+                      title="Delete message"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </motion.div>
+              ))
+            )}
+            {isSendingChat && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex justify-start"
               >
-                {isOptimizing ? (
-                  <>
-                    <span className="inline-block animate-spin">⚡</span>
-                    Optimizing with AI...
-                  </>
-                ) : (
-                  <>
-                    <Navigation2 size={20} />
-                    Map Out Route
-                  </>
-                )}
+                <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-white/[0.06] border border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Loader
+                      size={12}
+                      className="animate-spin text-purple-400"
+                    />
+                    <span className="text-white/40 text-xs">Thinking...</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          <form
+            onSubmit={handleSendChat}
+            className="flex items-center gap-2 shrink-0"
+          >
+            <input
+              ref={chatInputRef}
+              type="text"
+              placeholder="Add locations, ask about your route..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              disabled={isSendingChat}
+              className="flex-1 px-3.5 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 focus:border-indigo-400/30 text-xs disabled:opacity-40 transition-all"
+            />
+            <button
+              type="submit"
+              disabled={!chatInput.trim() || isSendingChat}
+              className="p-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-700 text-white transition-all duration-150 disabled:cursor-not-allowed"
+            >
+              <Send size={14} />
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+
+  // Mobile-only fixed-bottom chat panel
+  const mobileChatPanel = (
+    <div
+      className="fixed bottom-0 left-0 right-0 z-50 flex lg:hidden flex-col bg-slate-950/95 border-t border-white/10"
+      style={{ height: chatOpen ? chatHeight : 44 }}
+    >
+      {/* Drag handle + header */}
+      <div
+        className="relative shrink-0 flex items-center gap-2 px-4 cursor-pointer select-none"
+        style={{ height: 44 }}
+        onClick={() => {
+          if (didDragRef.current) { didDragRef.current = false; return; }
+          setChatOpen((o) => !o);
+        }}
+      >
+        {chatOpen && (
+          <div
+            className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 cursor-ns-resize touch-none"
+            onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e); }}
+            onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e); }}
+          >
+            <GripHorizontal size={16} className="text-white/25 hover:text-white/50 transition-colors" />
+          </div>
+        )}
+        <MessageCircle size={14} className="text-indigo-400" />
+        <span className="text-xs font-semibold text-white/60">Route Chat</span>
+        {chatMessages.length > 0 && (
+          <span className="px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[9px] font-bold">
+            {chatMessages.length}
+          </span>
+        )}
+        {isSendingChat && (
+          <Loader size={12} className="animate-spin text-purple-400" />
+        )}
+        <div className="flex-1" />
+        <ChevronUp
+          size={14}
+          className={`text-white/30 transition-transform duration-200 ${chatOpen ? "rotate-180" : ""}`}
+        />
+      </div>
+
+      {/* Chat body */}
+      {chatOpen && (
+        <div className="flex-1 flex flex-col min-h-0 px-4 pb-3">
+          <div className="flex-1 chat-scroll overflow-y-auto mb-2 space-y-2.5 pr-1">
+            {chatMessages.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-white/20 text-xs">Ask me anything about your route...</p>
+              </div>
+            ) : (
+              chatMessages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`group/msg flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  {msg.role === "user" && (
+                    <button onClick={() => handleResendMessage(msg.id)} className="self-center mr-1 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-blue-500/20 text-white/30 hover:text-blue-400 transition-all duration-150" title="Resend message">
+                      <RotateCcw size={11} />
+                    </button>
+                  )}
+                  {msg.role === "user" && (
+                    <button onClick={() => setPendingDeleteId(msg.id)} className="self-center mr-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150" title="Delete message">
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                  <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${msg.role === "user" ? "bg-blue-500/25 border border-blue-400/25 text-white rounded-br-md" : "bg-white/[0.06] border border-white/10 text-white/85 rounded-bl-md"}`}>
+                    {msg.role === "assistant" && (
+                      <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                        <Bot size={11} className="text-purple-400" />
+                        <span className="text-purple-400 text-[10px] font-semibold">AI</span>
+                        {msg.routeChanged && (
+                          <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${msg.undone ? "bg-gray-500/25 text-gray-400 line-through" : "bg-emerald-500/25 text-emerald-300"}`}>
+                            {msg.undone ? "Undone" : "Route Updated"}
+                          </span>
+                        )}
+                        {msg.routeChanged && msg.previousRoute && !msg.undone && (
+                          <button onClick={() => handleUndoRouteChange(msg.id)} className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/20 text-amber-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all" title="Undo">
+                            <Undo2 size={9} /> Undo
+                          </button>
+                        )}
+                        {msg.routeChanged && msg.newRoute && msg.undone && (
+                          <button onClick={() => handleRedoRouteChange(msg.id)} className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-500/15 hover:bg-blue-500/30 border border-blue-400/20 text-blue-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all" title="Redo">
+                            <Redo2 size={9} /> Redo
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {msg.role === "user" && msg.resent && msg.originalSnapshot && (
+                      <button onClick={() => handleRestoreOriginal(msg.id)} className="mb-1.5 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/20 text-amber-300 text-[9px] font-bold uppercase flex items-center gap-1 transition-all" title="Restore original">
+                        <History size={9} /> Restore original
+                      </button>
+                    )}
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  </div>
+                  {msg.role === "assistant" && (
+                    <button onClick={() => setPendingDeleteId(msg.id)} className="self-center ml-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150" title="Delete message">
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </motion.div>
+              ))
+            )}
+            {isSendingChat && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+                <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-white/[0.06] border border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Loader size={12} className="animate-spin text-purple-400" />
+                    <span className="text-white/40 text-xs">Thinking...</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          <form onSubmit={handleSendChat} className="flex items-center gap-2 shrink-0">
+            <input
+              ref={chatInputRef}
+              type="text"
+              placeholder="Add locations, ask about your route..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              disabled={isSendingChat}
+              className="flex-1 px-3.5 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 focus:border-indigo-400/30 text-xs disabled:opacity-40 transition-all"
+            />
+            <button
+              type="submit"
+              disabled={!chatInput.trim() || isSendingChat}
+              className="p-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-700 text-white transition-all duration-150 disabled:cursor-not-allowed"
+            >
+              <Send size={14} />
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="w-full h-full bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 overflow-hidden flex flex-col">
+      {/* Background accents */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/8 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-cyan-500/8 rounded-full blur-3xl" />
+      </div>
+
+      {/* ── TOP BAR ── */}
+      <header className="relative z-10 shrink-0 px-3 lg:px-5 py-2 flex items-center gap-4 border-b border-white/5 bg-slate-950/60">
+        <button
+          className="flex items-center gap-2 mr-2 lg:pointer-events-none"
+          onClick={() => {
+            const el = document.querySelector('[data-scroll-container]');
+            el?.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <span className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/20">
+            <Navigation2 size={16} className="text-white" />
+          </span>
+          <h1 className="text-base font-bold text-white leading-tight">
+            KwikMaps
+            <span className="text-[9px] ml-1 text-white/30 font-normal">
+              v0.2
+            </span>
+          </h1>
+        </button>
+
+        {/* Main tabs */}
+        <nav className="flex items-center gap-0.5 bg-white/5 rounded-lg p-0.5">
+          {[
+            { key: "planner" as const, label: "Plan", icon: MapPin },
+            { key: "route" as const, label: "Route", icon: Route },
+            { key: "ai" as const, label: "AI", icon: Sparkles },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setMainTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150 ${
+                mainTab === tab.key
+                  ? "bg-white/10 text-white shadow-sm"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/[0.03]"
+              }`}
+            >
+              <tab.icon size={13} />
+              <span className="hidden sm:inline">{tab.label}</span>
+              {tab.key === "route" && optimizedRoute && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
+              {tab.key === "ai" && aiInsights && (
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="flex-1" />
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFeedbackOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/15 text-indigo-300 text-xs font-medium transition-all"
+          >
+            <MessageSquarePlus size={12} />
+            <span className="hidden sm:inline">Feedback</span>
+          </button>
+          <button
+            onClick={() => setBugReportOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-400/15 text-red-300 text-xs font-medium transition-all"
+          >
+            <Bug size={12} />
+            <span className="hidden sm:inline">Bug</span>
+          </button>
+          <button
+            onClick={() => coordinates.length > 0 ? setPendingDemo(true) : handleLoadDemo()}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/15 text-purple-300 text-xs font-medium transition-all"
+          >
+            <Sparkles size={12} />
+            <span className="hidden sm:inline">Demo</span>
+          </button>
+          {optimizedRoute && (
+            <button
+              onClick={() => setPendingReset(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 text-white/50 hover:text-white/80 text-xs font-medium transition-all"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* ── MAIN CONTENT ── */}
+      <div data-scroll-container className="relative z-10 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden pb-12 lg:pb-0">
+        {/* === PLAN TAB === */}
+        {mainTab === "planner" && (
+          <div className="lg:h-full flex flex-col lg:flex-row">
+            {/* Left column: sidebar + chat */}
+            <div
+              className={`shrink-0 flex flex-col border-r border-white/5 transition-all duration-200 overflow-hidden ${
+                sidebarCollapsed ? "lg:w-10" : "lg:w-[400px]"
+              }`}
+            >
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="hidden lg:flex items-center justify-center h-7 text-white/20 hover:text-white/50 hover:bg-white/5 transition-colors shrink-0"
+                title={sidebarCollapsed ? "Expand" : "Collapse"}
+              >
+                <ChevronRight
+                  size={14}
+                  className={`transition-transform duration-200 ${sidebarCollapsed ? "" : "rotate-180"}`}
+                />
               </button>
 
-              {optimizedRoute && (
-                <button
-                  onClick={handleReset}
-                  className="w-full px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold transition-all duration-200"
-                >
-                  Clear Route
-                </button>
+              {!sidebarCollapsed && (
+                <div className="flex-1 flex flex-col min-h-0 px-3 pb-3">
+                  {/* Sub-tabs: Add / Share */}
+                  <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5 mb-3 shrink-0">
+                    <button
+                      onClick={() => setLeftTab("add")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        leftTab === "add"
+                          ? "bg-white/10 text-white"
+                          : "text-white/35 hover:text-white/60"
+                      }`}
+                    >
+                      <Plus size={12} />
+                      Add Location
+                    </button>
+                    <button
+                      onClick={() => setLeftTab("share")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        leftTab === "share"
+                          ? "bg-white/10 text-white"
+                          : "text-white/35 hover:text-white/60"
+                      }`}
+                    >
+                      <Share2 size={12} />
+                      Share
+                    </button>
+                  </div>
+
+                  <div className="flex-1 chat-scroll overflow-y-auto min-h-0 space-y-3">
+                    {leftTab === "add" ? (
+                      <div className="p-3 rounded-xl bg-white/[0.03] border border-white/8">
+                        <CoordinateInput
+                          onAddCoordinate={handleAddCoordinate}
+                        />
+                      </div>
+                    ) : (
+                      <RouteSharePanel
+                        coordinates={coordinates}
+                        optimizedRoute={optimizedRoute}
+                        onImportRoute={handleImportRoute}
+                      />
+                    )}
+
+                    <button
+                      onClick={handleOptimizeRoute}
+                      disabled={coordinates.length < 2 || isOptimizing}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 text-white text-sm font-bold transition-all duration-150 disabled:cursor-not-allowed shrink-0"
+                    >
+                      {isOptimizing ? (
+                        <>
+                          <Loader size={15} className="animate-spin" />{" "}
+                          Optimizing...
+                        </>
+                      ) : (
+                        <>
+                          <Navigation2 size={15} /> Map Out Route
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-400/15 text-red-300 text-xs">
+                        {error}
+                      </div>
+                    )}
+
+                    {/* Location list */}
+                    <CoordinateList
+                      coordinates={coordinates}
+                      onRemoveCoordinate={handleRemoveCoordinate}
+                      optimizedOrder={
+                        optimizedRoute
+                          ? optimizedRoute.map((c) => c.id)
+                          : undefined
+                      }
+                    />
+                  </div>
+                </div>
               )}
 
-              <button
-                onClick={handleLoadDemo}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500/50 to-pink-500/50 hover:from-purple-600/60 hover:to-pink-600/60 border border-purple-400/30 text-white font-semibold transition-all duration-200 transform hover:scale-105 active:scale-95"
-              >
-                <Sparkles size={18} />
-                Load Demo (10 TN Cities)
-              </button>
+              {/* Chat panel at bottom of sidebar */}
+              {!sidebarCollapsed && chatPanel}
             </div>
 
-            {/* Share & Export */}
-            <RouteSharePanel
-              coordinates={coordinates}
-              optimizedRoute={optimizedRoute}
-              onImportRoute={handleImportRoute}
-            />
-
-            {/* Error message */}
-            {error && (
-              <div className="p-4 rounded-xl bg-red-500/20 backdrop-blur-md border border-red-400/30 text-red-200 text-sm">
-                {error}
-              </div>
-            )}
-          </div>
-
-          {/* Right side - Map */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="h-96 lg:h-full min-h-96 rounded-2xl overflow-hidden shadow-2xl">
+            {/* Map */}
+            <div className="h-screen lg:h-auto lg:flex-1 lg:min-h-0">
               <MapComponent
                 coordinates={coordinates}
                 optimizedRoute={optimizedRoute || undefined}
                 isLoading={isOptimizing}
                 error={error && coordinates.length > 0 ? error : undefined}
+                highlightedStopIds={highlightedStopIds}
+                highlightedLegIndices={highlightedLegIndices}
               />
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Results section */}
-        <AnimatePresence>
-          {showResults && optimizedRoute && (
-            <motion.div
-              ref={resultsRef}
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 40 }}
-              transition={{ duration: 0.5 }}
-              className="space-y-6"
-            >
-              {/* Stats bar */}
-              <div className="p-6 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-                  <div>
-                    <h3 className="text-2xl font-bold text-white mb-1">
-                      Route Optimized
-                    </h3>
-                    <p className="text-white/60">
-                      {optimizedRoute.length} stops planned with AI-powered
-                      insights
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="px-5 py-3 rounded-xl bg-white/10 border border-white/20">
-                      <div className="flex items-center gap-2 text-white/60 mb-1">
-                        <Map size={14} />
-                        <span className="text-xs uppercase tracking-wide">
-                          Distance
-                        </span>
-                      </div>
-                      <p className="text-xl font-bold text-cyan-400">
-                        {totalDistanceMiles.toFixed(0)} mi
-                      </p>
-                      <p className="text-xs text-white/40">
-                        {totalDistanceKm.toFixed(0)} km
-                      </p>
-                    </div>
-                    <div className="px-5 py-3 rounded-xl bg-white/10 border border-white/20">
-                      <div className="flex items-center gap-2 text-white/60 mb-1">
-                        <Route size={14} />
-                        <span className="text-xs uppercase tracking-wide">
-                          Legs
-                        </span>
-                      </div>
-                      <p className="text-xl font-bold text-cyan-400">
-                        {legs.length}
-                      </p>
-                      <p className="text-xs text-white/40">segments</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Optimized route cards */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {optimizedRoute.map((coord, index) => (
-                    <motion.div
-                      key={coord.id}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="p-4 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-white/20 hover:border-white/40 transition-all"
-                    >
-                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-cyan-400 text-white font-bold mb-2 mx-auto">
-                        {index + 1}
-                      </div>
-                      <p className="text-white font-semibold text-center text-sm">
-                        {coord.name}
-                      </p>
-                      <p className="text-white/50 text-xs text-center mt-1">
-                        {coord.latitude.toFixed(4)},{" "}
-                        {coord.longitude.toFixed(4)}
-                      </p>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Route legs */}
-              {legs.length > 0 && (
-                <div className="p-6 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl">
-                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <Route size={20} className="text-emerald-400" />
-                    Route Legs
-                  </h3>
-                  <div className="space-y-2">
-                    {legs.map((leg, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
-                      >
-                        <div className="flex items-center justify-center w-7 h-7 rounded-md bg-emerald-500/30 text-emerald-300 text-xs font-bold shrink-0">
-                          {i + 1}
-                        </div>
-                        <span className="text-white/90 text-sm font-medium">
-                          {leg.from}
-                        </span>
-                        <ChevronRight
-                          size={14}
-                          className="text-white/30 shrink-0"
-                        />
-                        <span className="text-white/90 text-sm font-medium">
-                          {leg.to}
-                        </span>
-                        <span className="ml-auto text-cyan-400 text-sm font-semibold whitespace-nowrap">
-                          {leg.distanceMiles} mi
-                        </span>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* AI Insights panel */}
-              {aiInsights && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-xl border border-purple-400/20 shadow-2xl"
-                >
-                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <Bot size={20} className="text-purple-400" />
-                    AI Travel Insights & Hotel Recommendations
-                  </h3>
-                  <div className="prose prose-invert max-w-none">
-                    <div className="text-white/85 text-sm leading-relaxed whitespace-pre-wrap">
-                      {aiInsights}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Fixed chat panel at bottom */}
-        {showResults && optimizedRoute && (
-          <div
-            ref={chatPanelRef}
-            style={{ height: chatCollapsed ? CHAT_TOPBAR_HEIGHT : chatHeight }}
-            className="fixed bottom-0 left-0 right-0 z-50 border-t border-indigo-400/20 bg-slate-950/95 shadow-[0_-4px_24px_rgba(0,0,0,0.4)] flex flex-col transition-[height] duration-200 ease-out"
-          >
-            {/* Drag handle */}
-            {!chatCollapsed && (
-              <div
-                onMouseDown={handleDragStart}
-                onTouchStart={handleDragStart}
-                className="flex items-center justify-center py-1 cursor-ns-resize shrink-0 group"
-              >
-                <GripHorizontal
-                  size={16}
-                  className="text-white/20 group-hover:text-white/50 transition-colors"
-                />
-              </div>
-            )}
-
-            {/* Top bar with toggle */}
-            <div
-              onClick={() => setChatCollapsed((v) => !v)}
-              className="flex items-center justify-between px-4 md:px-8 py-2 cursor-pointer select-none shrink-0"
-            >
-              <div className="flex items-center gap-2">
-                <MessageCircle size={16} className="text-indigo-400" />
-                <h3 className="text-sm font-semibold text-white">
-                  Chat with AI about your route
-                </h3>
-                {chatMessages.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 text-[10px] font-bold">
-                    {chatMessages.length}
-                  </span>
-                )}
-              </div>
-              <ChevronDown
-                size={18}
-                className={`text-white/50 transition-transform duration-200 ${chatCollapsed ? "" : "rotate-180"}`}
-              />
-            </div>
-
-            {/* Collapsible body */}
-            {!chatCollapsed && (
-              <div className="flex-1 flex flex-col min-h-0 px-4 md:px-8 pb-4">
-                {/* Chat messages */}
-                <div className="flex-1 overflow-y-auto mb-3 space-y-3 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent pr-2">
-                  {chatMessages.length === 0 && (
-                    <div className="text-center py-4">
-                      <p className="text-white/30 text-xs">
-                        Ask me anything about your route...
-                      </p>
-                    </div>
-                  )}
-                  {chatMessages.map((msg) => (
-                    <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`group/msg flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      {msg.role === "user" && (
-                        <button
-                          onClick={() => handleResendMessage(msg.id)}
-                          className="self-center mr-1 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-blue-500/20 text-white/30 hover:text-blue-400 transition-all duration-150"
-                          title="Resend message"
-                        >
-                          <RotateCcw size={12} />
-                        </button>
-                      )}
-                      {msg.role === "user" && (
-                        <button
-                          onClick={() => setPendingDeleteId(msg.id)}
-                          className="self-center mr-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150"
-                          title="Delete message"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                      <div
-                        className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                          msg.role === "user"
-                            ? "bg-blue-500/30 border border-blue-400/30 text-white rounded-br-md"
-                            : "bg-white/10 border border-white/15 text-white/90 rounded-bl-md"
-                        }`}
-                      >
-                        {msg.role === "assistant" && (
-                          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                            <Bot size={12} className="text-purple-400" />
-                            <span className="text-purple-400 text-xs font-semibold">
-                              AI
-                            </span>
-                            {msg.routeChanged && (
-                              <span
-                                className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                  msg.undone
-                                    ? "bg-gray-500/30 text-gray-400 line-through"
-                                    : "bg-emerald-500/30 text-emerald-300"
-                                }`}
-                              >
-                                {msg.undone ? "Undone" : "Route Updated"}
-                              </span>
-                            )}
-                            {msg.routeChanged &&
-                              msg.previousRoute &&
-                              !msg.undone && (
-                                <button
-                                  onClick={() => handleUndoRouteChange(msg.id)}
-                                  className="ml-1 px-2 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-400/30 text-amber-300 text-[10px] font-bold uppercase flex items-center gap-1 transition-all duration-200 hover:scale-105 active:scale-95"
-                                  title="Undo this route change"
-                                >
-                                  <Undo2 size={10} />
-                                  Undo
-                                </button>
-                              )}
-                            {msg.routeChanged && msg.newRoute && msg.undone && (
-                              <button
-                                onClick={() => handleRedoRouteChange(msg.id)}
-                                className="ml-1 px-2 py-0.5 rounded-full bg-blue-500/20 hover:bg-blue-500/40 border border-blue-400/30 text-blue-300 text-[10px] font-bold uppercase flex items-center gap-1 transition-all duration-200 hover:scale-105 active:scale-95"
-                                title="Redo this route change"
-                              >
-                                <Redo2 size={10} />
-                                Redo
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {msg.role === "user" &&
-                          msg.resent &&
-                          msg.originalSnapshot && (
-                            <button
-                              onClick={() => handleRestoreOriginal(msg.id)}
-                              className="mb-1.5 px-2 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-400/30 text-amber-300 text-[10px] font-bold uppercase flex items-center gap-1 self-end transition-all duration-200 hover:scale-105 active:scale-95"
-                              title="Restore the original AI response state"
-                            >
-                              <History size={10} />
-                              Restore original
-                            </button>
-                          )}
-                        <div className="whitespace-pre-wrap">{msg.content}</div>
-                      </div>
-                      {msg.role === "assistant" && (
-                        <button
-                          onClick={() => setPendingDeleteId(msg.id)}
-                          className="self-center ml-1.5 p-1 rounded-md opacity-0 group-hover/msg:opacity-100 hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all duration-150"
-                          title="Delete message"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </motion.div>
-                  ))}
-                  {isSendingChat && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="flex justify-start"
-                    >
-                      <div className="px-4 py-3 rounded-2xl rounded-bl-md bg-white/10 border border-white/15">
-                        <div className="flex items-center gap-2">
-                          <Loader
-                            size={14}
-                            className="animate-spin text-purple-400"
-                          />
-                          <span className="text-white/50 text-sm">
-                            Thinking...
+        {/* === ROUTE TAB === */}
+        {mainTab === "route" && (
+          <div className="lg:h-full flex flex-col lg:flex-row">
+            {/* Left column: route info + chat */}
+            <div className="shrink-0 lg:w-[400px] flex flex-col min-h-0 border-r border-white/5">
+              <div className="flex-1 chat-scroll overflow-y-auto p-4 space-y-4">
+                {optimizedRoute ? (
+                  <>
+                    {/* Stats */}
+                    <div className="flex gap-2">
+                      <div className="flex-1 p-3 rounded-xl bg-white/[0.03] border border-white/8">
+                        <div className="flex items-center gap-1.5 text-white/40 mb-0.5">
+                          <Map size={11} />
+                          <span className="text-[10px] uppercase tracking-wider font-medium">
+                            Distance
                           </span>
                         </div>
+                        <p className="text-lg font-bold text-cyan-400 leading-tight">
+                          {totalDistanceMiles.toFixed(0)} mi
+                        </p>
+                        <p className="text-[10px] text-white/25">
+                          {totalDistanceKm.toFixed(0)} km
+                        </p>
                       </div>
-                    </motion.div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
+                      <div className="flex-1 p-3 rounded-xl bg-white/[0.03] border border-white/8">
+                        <div className="flex items-center gap-1.5 text-white/40 mb-0.5">
+                          <Route size={11} />
+                          <span className="text-[10px] uppercase tracking-wider font-medium">
+                            Legs
+                          </span>
+                        </div>
+                        <p className="text-lg font-bold text-cyan-400 leading-tight">
+                          {legs.length}
+                        </p>
+                        <p className="text-[10px] text-white/25">segments</p>
+                      </div>
+                      <div className="flex-1 p-3 rounded-xl bg-white/[0.03] border border-white/8">
+                        <div className="flex items-center gap-1.5 text-white/40 mb-0.5">
+                          <MapPin size={11} />
+                          <span className="text-[10px] uppercase tracking-wider font-medium">
+                            Stops
+                          </span>
+                        </div>
+                        <p className="text-lg font-bold text-cyan-400 leading-tight">
+                          {optimizedRoute.length}
+                        </p>
+                        <p className="text-[10px] text-white/25">locations</p>
+                      </div>
+                    </div>
 
-                {/* Chat input */}
-                <form
-                  onSubmit={handleSendChat}
-                  className="flex items-center gap-2"
-                >
-                  <input
-                    ref={chatInputRef}
-                    type="text"
-                    placeholder="e.g., Why not visit Memphis first instead?"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    disabled={isSendingChat}
-                    className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 text-sm disabled:opacity-50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!chatInput.trim() || isSendingChat}
-                    className="p-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:from-gray-500 disabled:to-gray-600 text-white transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  >
-                    <Send size={18} />
-                  </button>
-                </form>
+                    {/* Optimized order */}
+                    <div>
+                      <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2">
+                        Optimized Order
+                      </h3>
+                      <div className="space-y-1">
+                        {optimizedRoute.map((coord, index) => (
+                          <div
+                            key={coord.id}
+                            onClick={(e) => {
+                              if (e.ctrlKey || e.metaKey) {
+                                setHighlightedStopIds((prev) =>
+                                  prev.includes(coord.id)
+                                    ? prev.filter((id) => id !== coord.id)
+                                    : [...prev, coord.id],
+                                );
+                              } else {
+                                setHighlightedLegIndices([]);
+                                setHighlightedStopIds((prev) =>
+                                  prev.length === 1 && prev[0] === coord.id ? [] : [coord.id],
+                                );
+                              }
+                            }}
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                              highlightedStopIds.includes(coord.id)
+                                ? "bg-yellow-500/10 border-yellow-400/25 ring-1 ring-yellow-400/20"
+                                : "bg-white/[0.03] border-white/6 hover:bg-white/[0.06]"
+                            }`}
+                          >
+                            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-blue-500/80 to-cyan-500/80 text-white text-[10px] font-bold shrink-0">
+                              {index + 1}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-white/90 text-xs font-medium truncate">
+                                {coord.name}
+                              </p>
+                              <p className="text-white/25 text-[10px]">
+                                {coord.latitude.toFixed(4)},{" "}
+                                {coord.longitude.toFixed(4)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Route legs */}
+                    {legs.length > 0 && (
+                      <div>
+                        <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Route size={11} className="text-emerald-400" />
+                          Route Legs
+                        </h3>
+                        <div className="space-y-1">
+                          {legs.map((leg, i) => (
+                            <div
+                              key={i}
+                              onClick={(e) => {
+                                if (e.ctrlKey || e.metaKey) {
+                                  setHighlightedLegIndices((prev) =>
+                                    prev.includes(i)
+                                      ? prev.filter((idx) => idx !== i)
+                                      : [...prev, i],
+                                  );
+                                } else {
+                                  setHighlightedStopIds([]);
+                                  setHighlightedLegIndices((prev) =>
+                                    prev.length === 1 && prev[0] === i ? [] : [i],
+                                  );
+                                }
+                              }}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                                highlightedLegIndices.includes(i)
+                                  ? "bg-yellow-500/10 border-yellow-400/25 ring-1 ring-yellow-400/20"
+                                  : "bg-white/[0.03] border-white/6 hover:bg-white/[0.06]"
+                              }`}
+                            >
+                              <div className="flex items-center justify-center w-5 h-5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold shrink-0">
+                                {i + 1}
+                              </div>
+                              <span className="text-white/70 text-xs truncate">
+                                {leg.from}
+                              </span>
+                              <ChevronRight
+                                size={10}
+                                className="text-white/15 shrink-0"
+                              />
+                              <span className="text-white/70 text-xs truncate">
+                                {leg.to}
+                              </span>
+                              <span className="ml-auto text-cyan-400 text-xs font-semibold whitespace-nowrap">
+                                {leg.distanceMiles} mi
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center py-16">
+                    <Route size={36} className="text-white/8 mb-3" />
+                    <p className="text-white/25 text-sm font-medium">
+                      No route optimized yet
+                    </p>
+                    <p className="text-white/15 text-xs mt-1">
+                      Switch to Plan tab to add locations
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
+              {/* Chat panel at bottom of sidebar */}
+              {chatPanel}
+            </div>
+
+            <div className="h-screen lg:h-auto lg:flex-1 lg:min-h-0">
+              <MapComponent
+                coordinates={coordinates}
+                optimizedRoute={optimizedRoute || undefined}
+                isLoading={isOptimizing}
+                error={error && coordinates.length > 0 ? error : undefined}
+                highlightedStopIds={highlightedStopIds}
+                highlightedLegIndices={highlightedLegIndices}
+              />
+            </div>
           </div>
         )}
 
-        {/* Spacer so content isn't hidden behind fixed chat */}
-        {showResults && optimizedRoute && (
-          <div
-            style={{
-              height: chatCollapsed ? CHAT_TOPBAR_HEIGHT + 16 : chatHeight + 16,
-            }}
-          />
-        )}
-
-        {/* Delete confirm modal */}
-        <AnimatePresence>
-          {pendingDeleteId &&
-            (() => {
-              const msg = chatMessages.find((m) => m.id === pendingDeleteId);
-              const willRevert =
-                msg?.role === "assistant" &&
-                msg.routeChanged &&
-                msg.previousRoute &&
-                !msg.undone;
-              return (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-                  onClick={() => setPendingDeleteId(null)}
-                >
-                  <div className="absolute inset-0 bg-black/60" />
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="relative w-full max-w-sm rounded-2xl bg-slate-900 border border-white/10 shadow-2xl p-6"
-                  >
-                    <div className="flex flex-col items-center text-center">
-                      <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center mb-4">
-                        <AlertTriangle size={24} className="text-red-400" />
+        {/* === AI TAB (Overview only) === */}
+        {mainTab === "ai" && (
+          <div className="lg:h-full flex flex-col lg:flex-row">
+            <div className="shrink-0 lg:w-[400px] flex flex-col min-h-0 border-r border-white/5">
+              <div className="flex-1 chat-scroll overflow-y-auto p-4">
+                {aiInsights ? (
+                  <div>
+                    <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <Sparkles size={11} className="text-purple-400" />
+                      AI Route Overview
+                    </h3>
+                    <div className="p-4 rounded-xl bg-white/[0.03] border border-white/8">
+                      <div className="text-white/70 text-xs leading-relaxed whitespace-pre-wrap">
+                        {aiInsights}
                       </div>
-                      <h3 className="text-lg font-semibold text-white mb-1">
-                        Delete message?
-                      </h3>
-                      <p className="text-sm text-white/50 mb-1">
-                        This will permanently remove this message.
-                      </p>
-                      {willRevert && (
-                        <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5 mt-2">
-                          This will also revert the route changes made by this
-                          response.
-                        </p>
-                      )}
                     </div>
-                    <div className="flex gap-3 mt-6">
-                      <button
-                        onClick={() => setPendingDeleteId(null)}
-                        className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition-all duration-150"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleDeleteMessage(pendingDeleteId);
-                          setPendingDeleteId(null);
-                        }}
-                        className="flex-1 px-4 py-2.5 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-400/30 text-white text-sm font-medium transition-all duration-150"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </motion.div>
-                </motion.div>
-              );
-            })()}
-        </AnimatePresence>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center py-16">
+                    <Sparkles size={36} className="text-white/8 mb-3" />
+                    <p className="text-white/25 text-sm font-medium">
+                      No AI overview yet
+                    </p>
+                    <p className="text-white/15 text-xs mt-1">
+                      Optimize a route to generate AI insights
+                    </p>
+                  </div>
+                )}
+              </div>
+              {/* Chat panel at bottom of sidebar */}
+              {chatPanel}
+            </div>
+
+            <div className="h-screen lg:h-auto lg:flex-1 lg:min-h-0">
+              <MapComponent
+                coordinates={coordinates}
+                optimizedRoute={optimizedRoute || undefined}
+                isLoading={isOptimizing}
+                error={error && coordinates.length > 0 ? error : undefined}
+                highlightedStopIds={highlightedStopIds}
+                highlightedLegIndices={highlightedLegIndices}
+              />
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Mobile-only fixed-bottom chat panel */}
+      {mobileChatPanel}
+
+      {/* Demo confirm modal */}
+      <AnimatePresence>
+        {pendingDemo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+            onClick={() => setPendingDemo(false)}
+          >
+            <div className="absolute inset-0 bg-black/60" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-sm rounded-2xl bg-slate-900 border border-white/10 shadow-2xl p-6"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-11 h-11 rounded-full bg-purple-500/15 flex items-center justify-center mb-3">
+                  <Sparkles size={20} className="text-purple-400" />
+                </div>
+                <h3 className="text-base font-semibold text-white mb-1">
+                  Load demo?
+                </h3>
+                <p className="text-xs text-white/45">
+                  This will replace your current locations with demo data.
+                </p>
+              </div>
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={() => setPendingDemo(false)}
+                  className="flex-1 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/8 text-white text-xs font-medium transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleLoadDemo();
+                    setPendingDemo(false);
+                  }}
+                  className="flex-1 px-4 py-2 rounded-xl bg-purple-500/80 hover:bg-purple-500 border border-purple-400/25 text-white text-xs font-medium transition-all"
+                >
+                  Load Demo
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Reset confirm modal */}
+      <AnimatePresence>
+        {pendingReset && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+            onClick={() => setPendingReset(false)}
+          >
+            <div className="absolute inset-0 bg-black/60" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-sm rounded-2xl bg-slate-900 border border-white/10 shadow-2xl p-6"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-11 h-11 rounded-full bg-red-500/15 flex items-center justify-center mb-3">
+                  <AlertTriangle size={20} className="text-red-400" />
+                </div>
+                <h3 className="text-base font-semibold text-white mb-1">
+                  Clear route?
+                </h3>
+                <p className="text-xs text-white/45">
+                  This will reset the optimized route, stats, and chat history.
+                </p>
+              </div>
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={() => setPendingReset(false)}
+                  className="flex-1 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/8 text-white text-xs font-medium transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleReset();
+                    setPendingReset(false);
+                  }}
+                  className="flex-1 px-4 py-2 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-400/25 text-white text-xs font-medium transition-all"
+                >
+                  Clear
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete confirm modal */}
+      <AnimatePresence>
+        {pendingDeleteId &&
+          (() => {
+            const msg = chatMessages.find((m) => m.id === pendingDeleteId);
+            const willRevert =
+              msg?.role === "assistant" &&
+              msg.routeChanged &&
+              msg.previousRoute &&
+              !msg.undone;
+            return (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+                onClick={() => setPendingDeleteId(null)}
+              >
+                <div className="absolute inset-0 bg-black/60" />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.92, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.92, y: 8 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="relative w-full max-w-sm rounded-2xl bg-slate-900 border border-white/10 shadow-2xl p-6"
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-11 h-11 rounded-full bg-red-500/15 flex items-center justify-center mb-3">
+                      <AlertTriangle size={20} className="text-red-400" />
+                    </div>
+                    <h3 className="text-base font-semibold text-white mb-1">
+                      Delete message?
+                    </h3>
+                    <p className="text-xs text-white/45 mb-1">
+                      This will permanently remove this message.
+                    </p>
+                    {willRevert && (
+                      <p className="text-[10px] text-amber-400/80 bg-amber-500/10 border border-amber-500/15 rounded-lg px-3 py-1.5 mt-2">
+                        This will also revert the route changes made by this
+                        response.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-3 mt-5">
+                    <button
+                      onClick={() => setPendingDeleteId(null)}
+                      className="flex-1 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/8 text-white text-xs font-medium transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleDeleteMessage(pendingDeleteId);
+                        setPendingDeleteId(null);
+                      }}
+                      className="flex-1 px-4 py-2 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-400/25 text-white text-xs font-medium transition-all"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            );
+          })()}
+      </AnimatePresence>
+
+      {/* Feedback & Bug Report modals */}
+      <ReportBug mode="feedback" open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+      <ReportBug mode="bug" open={bugReportOpen} onClose={() => setBugReportOpen(false)} />
     </div>
   );
 }
