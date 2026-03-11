@@ -8,6 +8,7 @@ import { SignOutButton, useAuth, UserButton, useUser } from "@clerk/nextjs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LogoutIcon from "../sub/LogoutIcon";
 import AiConversationsCMS from "./AiConversationsCMS";
+import BugReportsCMS from "./BugReportsCMS";
 import {
   appwrGetSecurityFlag,
   appwrSetSecurityFlag,
@@ -42,6 +43,7 @@ const CMS = () => {
           <TabsTrigger value="skills">Skills</TabsTrigger>
           <TabsTrigger value="projects">Projects</TabsTrigger>
           <TabsTrigger value="convos">Convos</TabsTrigger>
+          <TabsTrigger value="bugs">Bugs</TabsTrigger>
         </TabsList>
         <TabsContent value="header">
           <div className="w-full flex justify-center">
@@ -56,6 +58,9 @@ const CMS = () => {
         </TabsContent>
         <TabsContent className="w-full" value="convos">
           <AiConversationsCMS />
+        </TabsContent>
+        <TabsContent className="w-full" value="bugs">
+          <BugReportsCMS />
         </TabsContent>
       </Tabs>
     </article>

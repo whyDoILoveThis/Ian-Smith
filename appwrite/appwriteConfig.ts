@@ -1,7 +1,7 @@
 // lib/appwriteConfig.ts
 import { Client, Databases, Storage, TablesDB } from "appwrite";
 
-const client = new Client()
+export const client = new Client()
   .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!) // e.g. "https://fra.cloud.appwrite.io/v1"
   .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!); // your project ID
 
