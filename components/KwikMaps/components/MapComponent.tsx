@@ -12,6 +12,7 @@ interface MapComponentProps {
   error?: string;
   highlightedStopIds?: string[];
   highlightedLegIndices?: number[];
+  mapsFailure?: boolean;
 }
 
 export function MapComponent({
@@ -21,6 +22,7 @@ export function MapComponent({
   error,
   highlightedStopIds = [],
   highlightedLegIndices = [],
+  mapsFailure = false,
 }: MapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<google.maps.Map | null>(null);
@@ -29,9 +31,15 @@ export function MapComponent({
   const highlightMarkersRef = useRef<google.maps.Marker[]>([]);
   const highlightPolylinesRef = useRef<google.maps.Polyline[]>([]);
   const [mapsReady, setMapsReady] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(true);
+  const [showOverlay, setShowOverlay] = useState(mapsFailure);
   const [dismissed, setDismissed] = useState(false);
   const [reported, setReported] = useState(false);
+
+  // Sync overlay when mapsFailure prop changes
+  useEffect(() => {
+    setShowOverlay(mapsFailure);
+    if (!mapsFailure) setDismissed(false);
+  }, [mapsFailure]);
 
   // Wait for Google Maps to load, give up after 15s
   useEffect(() => {
@@ -52,12 +60,12 @@ export function MapComponent({
 
   // Re-show overlay every 15s unless permanently dismissed
   useEffect(() => {
-    if (dismissed) return;
+    if (dismissed || !mapsFailure) return;
     const interval = setInterval(() => {
       setShowOverlay(true);
     }, 15_000);
     return () => clearInterval(interval);
-  }, [dismissed]);
+  }, [dismissed, mapsFailure]);
 
   useEffect(() => {
     if (!mapsReady) return;
@@ -312,13 +320,13 @@ export function MapComponent({
   return (
     <div className="relative w-full h-full overflow-hidden">
       <div ref={mapRef} className="w-full h-full" />
-      {showOverlay && !dismissed && (
+      {showOverlay && mapsFailure && !dismissed && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-8 bg-gradient-to-b from-red-950/90 to-slate-950/95">
           <button
             onClick={() => setShowOverlay(false)}
-            className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-all"
+            className="absolute top-4 right-4 text-lg font-semibold p-1.5 rounded-lg bg-amber-500/50 hover:bg-amber-500/70 text-amber-50/80 hover:text-amber-500 transition-all"
           >
-            <X size={16} />
+            Close
           </button>
           <div className="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/25 flex items-center justify-center mb-5 animate-pulse">
             <AlertCircle size={32} className="text-red-400" />
@@ -339,9 +347,9 @@ export function MapComponent({
               Investigating
             </span>
           </div>
-          <p className="text-white/50 text-sm text-center max-w-xs mb-6 leading-relaxed">
-            You can close this and give it a try, but it will probly not work
-            right now.
+          <p className="text-green-400 text-sm text-center max-w-xs mb-6 leading-relaxed">
+            Please close this and give it a try, but I&apos;m suspecting that it
+            may not work right now.
           </p>
           <button
             onClick={async () => {
@@ -376,13 +384,13 @@ export function MapComponent({
           </button>
         </div>
       )}
-      {(!showOverlay || dismissed) && (
+      {mapsFailure && (!showOverlay || dismissed) && (
         <button
           onClick={() => {
             setShowOverlay(true);
             setDismissed(false);
           }}
-          className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/25 text-red-300 hover:bg-red-500/25 text-xs font-medium transition-all backdrop-blur-sm"
+          className="absolute top-3 right-[40%]  origin-center z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/25 text-red-300 hover:bg-red-500/25 text-xs font-medium transition-all backdrop-blur-sm"
         >
           <AlertCircle size={14} />
           Click to View Status
