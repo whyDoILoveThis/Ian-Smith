@@ -2,6 +2,12 @@
    Tattoo Stencil Creator – Shared Type Definitions
    ───────────────────────────────────────────────────────────── */
 
+/** A 2D point, normalised 0-1 relative to the image. */
+export interface Point2D {
+  x: number;
+  y: number;
+}
+
 /** A single MediaPipe pose landmark (normalised 0-1). */
 export interface PoseLandmark {
   x: number;
@@ -30,27 +36,61 @@ export interface LimbRegion {
   angle: number;
 }
 
+/**
+ * Polygon outline of the limb boundary.
+ * Ordered vertices (normalised 0-1). Minimum 3 points.
+ * Used to derive cylinder parameters via PCA.
+ */
+export interface LimbOutline {
+  points: Point2D[];
+}
+
+/**
+ * User-painted mask highlighting the tattoo.
+ * base64 PNG where white = tattoo ink area, black = skin.
+ * Dimensions are the display canvas size (server resizes to match).
+ */
+export interface TattooHighlight {
+  maskBase64: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * User-painted mask highlighting curved areas that need flattening.
+ * base64 PNG where white = curved area, black = flat.
+ * curvaturePercent: 0-100 how aggressively to unwrap (100 = maximum).
+ */
+export interface CurveHighlight {
+  maskBase64: string;
+  width: number;
+  height: number;
+  curvaturePercent: number;
+  /** Cylinder axis angle in degrees (0 = horizontal →, 90 = vertical ↑). */
+  angleDeg: number;
+}
+
 /** Debug info returned when cylindrical unwrap was applied. */
 export interface UnwrapDebug {
   applied: boolean;
-  source: 'boundary' | 'landmarks' | 'none';
-  /** Cylinder centre in pixel coords (post-resize image space). */
+  source: 'outline' | 'landmarks' | 'curve-mask' | 'none';
   centerX?: number;
   centerY?: number;
-  /** Effective radius in pixels (after curvatureStrength). */
   radius?: number;
-  /** Cylinder axis angle in radians. */
   angle?: number;
-  /** Image dimensions the unwrap operated on. */
   imageW?: number;
   imageH?: number;
+  halfLength?: number;
+  outlinePoints?: { x: number; y: number }[];
+  tattooHighlightBase64?: string;
+  curveHighlightBase64?: string;
+  curvaturePercent?: number;
 }
 
 /** The final stencil output returned by the API. */
 export interface StencilResult {
   pngBase64: string;
   svgData?: string;
-  /** Grayscale image before stencilization, for before/after comparisons. */
   preStencilBase64?: string;
   metadata: {
     originalWidth: number;
@@ -61,6 +101,8 @@ export interface StencilResult {
     limbType?: string;
     processingTimeMs: number;
     unwrapDebug?: UnwrapDebug;
+    /** Info about the ink/skin separation approach used. */
+    separationMethod?: 'supervised' | 'unsupervised';
   };
 }
 
@@ -70,7 +112,7 @@ export type ProcessingStep =
   | 'uploading'
   | 'detecting-pose'
   | 'isolating-limb'
-  | 'awaiting-boundary'
+  | 'awaiting-regions'
   | 'processing'
   | 'flattening'
   | 'generating-stencil'
@@ -99,37 +141,16 @@ export interface StencilOptions {
   contrastLevel: 'low' | 'medium' | 'high';
   edgeThickness: 'thin' | 'medium' | 'thick';
   noiseReduction: 'low' | 'medium' | 'high';
-  /**
-   * Multiplier applied to the derived cylinder radius.
-   * 1.0 = standard cylindrical model.
-   * <1.0 = stronger correction (thinner arm / telephoto).
-   * >1.0 = weaker correction (thicker arm / wide-angle).
-   */
   curvatureStrength: number;
 }
 
 /**
- * User-drawn wrap boundary — explicit human input that defines
- * the cylindrical surface of the limb the tattoo wraps around.
- *
- * All coordinates are normalised 0-1 relative to the uploaded image
- * (NOT pixel values) so they survive client-side resize / compression.
- *
- *   axisStart / axisEnd — the centre-line of the limb (from joint
- *       to joint, e.g. elbow → wrist). Defines the cylinder's axis.
- *
- *   leftEdge / rightEdge — the visible left and right silhouette
- *       edges of the limb *at the widest point*.  The perpendicular
- *       distance from the axis to each edge is used to compute radius.
+ * @deprecated Use LimbOutline (polygon) instead.
  */
 export interface WrapBoundary {
-  /** Top of limb axis (normalised 0-1). */
   axisStart: { x: number; y: number };
-  /** Bottom of limb axis (normalised 0-1). */
   axisEnd: { x: number; y: number };
-  /** Left silhouette edge at widest point (normalised 0-1). */
   leftEdge: { x: number; y: number };
-  /** Right silhouette edge at widest point (normalised 0-1). */
   rightEdge: { x: number; y: number };
 }
 
@@ -137,7 +158,9 @@ export interface WrapBoundary {
 export interface StencilApiPayload {
   imageBase64: string;
   limbRegion?: LimbRegion;
-  wrapBoundary?: WrapBoundary;
+  limbOutline?: LimbOutline;
+  tattooHighlight?: TattooHighlight;
+  curveHighlight?: CurveHighlight;
   options: StencilOptions;
 }
 
@@ -146,6 +169,17 @@ export interface StencilApiResponse {
   success: boolean;
   data?: StencilResult;
   error?: string;
+}
+
+/**
+ * Combined output from the RegionEditor component.
+ * Holds the limb outline polygon, the tattoo highlight mask,
+ * and an optional curve highlight mask with curvature %.
+ */
+export interface RegionEditorResult {
+  limbOutline: LimbOutline | null;
+  tattooHighlight: TattooHighlight | null;
+  curveHighlight: CurveHighlight | null;
 }
 
 /** Sensible defaults. */

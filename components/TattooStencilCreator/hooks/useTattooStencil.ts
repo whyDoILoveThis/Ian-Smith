@@ -10,11 +10,11 @@ import type {
   LimbRegion,
   ProcessingState,
   ProcessingStep,
+  RegionEditorResult,
   StencilApiResponse,
   StencilOptions,
   StencilResult,
   UploadedImage,
-  WrapBoundary,
 } from '../types';
 import { DEFAULT_STENCIL_OPTIONS } from '../types';
 
@@ -44,11 +44,11 @@ export function useTattooStencil() {
   const [processing, setProcessing] = useState<ProcessingState>(idle);
   const [result, setResult] = useState<StencilResult | null>(null);
   const [options, setOptions] = useState<StencilOptions>(DEFAULT_STENCIL_OPTIONS);
-  const [wrapBoundary, setWrapBoundary] = useState<WrapBoundary | null>(null);
+  const [regionResult, setRegionResult] = useState<RegionEditorResult | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Derived: are we waiting for the user to draw boundaries?
-  const awaitingBoundary = processing.step === 'awaiting-boundary';
+  // Derived: are we waiting for the user to draw regions?
+  const awaitingRegions = processing.step === 'awaiting-regions';
 
   // ── Internal helpers ─────────────────────────────────────
 
@@ -91,9 +91,9 @@ export function useTattooStencil() {
 
   // ── Process pipeline ─────────────────────────────────────
   //
-  // Phase 1: pose detect → pause at 'awaiting-boundary' so the
-  //          user can draw wrap boundaries on the image.
-  // Phase 2: after boundary confirm → compress → API call.
+  // Phase 1: pose detect → pause at 'awaiting-regions' so the
+  //          user can draw regions on the image.
+  // Phase 2: after region confirm → compress → API call.
 
   /** Phase 1 — called when user clicks "Generate Stencil".
    *  Runs pose detection, then pauses for boundary input. */
@@ -103,6 +103,9 @@ export function useTattooStencil() {
     abortRef.current?.abort();
     const abort = new AbortController();
     abortRef.current = abort;
+
+    // Clear previous result but keep regionResult for persistence
+    setResult(null);
 
     try {
       // 1. Pose detection (client-side, AI-assisted) ──────────
@@ -125,11 +128,11 @@ export function useTattooStencil() {
 
       if (abort.signal.aborted) return;
 
-      // 2. Pause — ask user for wrap boundaries ───────────────
-      step('awaiting-boundary', 25);
+      // 2. Pause — ask user for region editor ─────────────────
+      step('awaiting-regions', 25);
       // Execution pauses here. The user interacts with the
-      // BoundarySelector component. When they confirm, the
-      // page calls `confirmBoundaryAndProcess(boundary)`.
+      // RegionEditor component. When they confirm, the
+      // page calls `confirmRegionsAndProcess(result)`.
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       fail(err instanceof Error ? err.message : 'Unexpected error during processing.');
@@ -139,15 +142,15 @@ export function useTattooStencil() {
   // Ref to hold auto-detected limbRegion between phases
   const limbRef = useRef<LimbRegion | undefined>(undefined);
 
-  /** Phase 2 — called after user confirms (or skips) boundaries. */
-  const confirmBoundaryAndProcess = useCallback(
-    async (boundary: WrapBoundary | null) => {
+  /** Phase 2 — called after user confirms (or skips) regions. */
+  const confirmRegionsAndProcess = useCallback(
+    async (regions: RegionEditorResult | null) => {
       if (!image) { fail('No image selected.'); return; }
 
       const abort = abortRef.current ?? new AbortController();
       abortRef.current = abort;
 
-      setWrapBoundary(boundary);
+      setRegionResult(regions);
 
       try {
         // 3. Compress image for upload ─────────────────────────
@@ -165,7 +168,9 @@ export function useTattooStencil() {
           body: JSON.stringify({
             imageBase64,
             limbRegion,
-            wrapBoundary: boundary,
+            limbOutline: regions?.limbOutline ?? undefined,
+            tattooHighlight: regions?.tattooHighlight ?? undefined,
+            curveHighlight: regions?.curveHighlight ?? undefined,
             options,
           }),
           signal: abort.signal,
@@ -200,7 +205,7 @@ export function useTattooStencil() {
     if (image?.preview) URL.revokeObjectURL(image.preview);
     setImage(null);
     setResult(null);
-    setWrapBoundary(null);
+    setRegionResult(null);
     limbRef.current = undefined;
     setProcessing(idle);
     disposePoseDetection();
@@ -212,11 +217,11 @@ export function useTattooStencil() {
     result,
     options,
     setOptions,
-    wrapBoundary,
-    awaitingBoundary,
+    regionResult,
+    awaitingRegions,
     handleUpload,
     processImage,
-    confirmBoundaryAndProcess,
+    confirmRegionsAndProcess,
     reset,
   } as const;
 }

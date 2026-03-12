@@ -1,20 +1,32 @@
 /* ─────────────────────────────────────────────────────────────
-   POST /api/tattoo-stencil   (Pipeline v5)
+   POST /api/tattoo-stencil   (Pipeline v6 — LAB color-space)
 
-   Takes a photo of a tattoo on a body part, isolates the ink
-   from the skin, and generates a flat, clean, high-contrast
-   stencil image (PNG + optional SVG) suitable for transfer.
+   Takes a photo of a tattoo on a body part and generates a
+   flat, clean, high-contrast stencil (PNG + optional SVG).
+
+   Major improvements over v5:
+     • Works in CIE-LAB color space — separates lightness from
+       chrominance, making ink detection lighting-invariant.
+     • Supports a user-painted tattoo highlight mask: the user
+       paints over the tattoo, giving us supervised ink/skin
+       samples for robust statistical separation.
+     • Supports polygon-based limb outline for better cylinder
+       fitting via PCA.
+     • Uses Otsu's automatic thresholding — adapts to every
+       image instead of hard-coded values.
 
    Pipeline:
-     1. Decode → flatten alpha → optional crop → resize → gray 1-ch
+     1. Decode → flatten alpha → optional crop → resize
      2. Light denoise (median 3)
-     3. Background subtraction (large Gaussian blur = skin estimate)
-     4. Manual linear normalize (NOT Sharp's aggressive percentile)
-     5. Pre-threshold blur (suppress texture noise)
-     6. Threshold to binary → negate (ink = black, paper = white)
-     7. Median cleanup + anti-alias
-     8. Optional cylindrical unwrap (only with very high confidence)
-     9. Optional axis straighten
+     3. Convert to CIE-LAB per-pixel
+     4. Ink/skin separation:
+        a) Supervised: use tattoo mask to sample ink & skin stats
+        b) Unsupervised: background-estimation in LAB space
+     5. Generate "ink score" map (0-255)
+     6. Optional cylindrical unwrap (polygon outline or AI)
+     7. Otsu auto-threshold → binary stencil
+     8. Cleanup: median, anti-alias
+     9. Straighten limb axis
     10. Output PNG + optional SVG
    ───────────────────────────────────────────────────────────── */
 
@@ -23,37 +35,25 @@ import sharp from 'sharp';
 
 // ── Tunables ─────────────────────────────────────────────────
 
-/**
- * Threshold applied AFTER manual linear normalisation (0-255).
- * After linear scale, 255 = absolute darkest pixel in the diff.
- * Most real tattoo ink lands in the 80-200 range after linear scale.
- *
- * "low"  contrast → high threshold → only strongest ink lines
- * "high" contrast → low threshold → captures shading & faint lines
- */
-const DIFF_THRESH = { low: 140, medium: 100, high: 65 } as const;
+/** How much to weight chrominance vs luminance in the ink score.
+ *  Higher = more weight on color difference (good for coloured tattoos).
+ *  Lower  = more weight on darkness (good for black ink). */
+const CHROMA_WEIGHT = { low: 0.3, medium: 0.5, high: 0.8 } as const;
 
-/**
- * Background-estimate blur sigma as a fraction of the shorter
- * image dimension.  Must be much larger than any tattoo stroke
- * so the blur averages completely over the ink lines.
- */
+/** Background-estimate blur sigma as fraction of short side. */
 const BG_SIGMA_FRAC = 0.12;
 
-/**
- * Pre-threshold blur sigma as a fraction of the short side.
- * Removes skin texture / sensor noise from the difference image
- * BEFORE the hard threshold, so only real ink edges survive.
- * ~0.3-0.6 % → 3-6 px on a 1024px image.
- */
-const PRE_BLUR_FRAC = { low: 0.003, medium: 0.004, high: 0.006 } as const;
+/** Post-Otsu threshold bias.  Positive = stricter, negative = looser. */
+const THRESHOLD_BIAS = { low: 25, medium: 0, high: -20 } as const;
 
-/**
- * Final anti-alias sigma (absolute pixels).
- */
-const SMOOTH_SIGMA = { thin: 0.5, medium: 0.8, thick: 1.2 } as const;
+/** Curvature multiplier — values >1 make unwrapping more aggressive. */
+const UNWRAP_AGGRESSION = 1.35;
 
-// ── Types (server-local) ─────────────────────────────────────
+/** Angular edge-fade start (radians). Score is attenuated from here to ±90°
+ *  to prevent dark-spot artifacts at the cylinder boundary. */
+const EDGE_FADE_START = 75 * Math.PI / 180;
+
+// ── Server-local types ───────────────────────────────────────
 
 interface BBox { x: number; y: number; width: number; height: number }
 interface Landmark { x: number; y: number; z: number; visibility: number }
@@ -64,13 +64,10 @@ interface LimbRegion {
   confidence: number;
   landmarks: Landmark[];
 }
-/** User-drawn wrap boundary (normalised 0-1 coords). */
-interface WrapBoundary {
-  axisStart: { x: number; y: number };
-  axisEnd: { x: number; y: number };
-  leftEdge: { x: number; y: number };
-  rightEdge: { x: number; y: number };
-}
+interface Point2D { x: number; y: number }
+interface LimbOutline { points: Point2D[] }
+interface TattooHighlight { maskBase64: string; width: number; height: number }
+interface CurveHighlight { maskBase64: string; width: number; height: number; curvaturePercent: number; angleDeg: number }
 interface StencilOptions {
   generateSvg: boolean;
   contrastLevel: 'low' | 'medium' | 'high';
@@ -78,24 +75,22 @@ interface StencilOptions {
   noiseReduction: 'low' | 'medium' | 'high';
   curvatureStrength: number;
 }
-
-/** Debug telemetry returned alongside the unwrapped buffer. */
 interface UnwrapDebugInfo {
   applied: boolean;
-  source: 'boundary' | 'landmarks' | 'none';
+  source: 'outline' | 'landmarks' | 'curve-mask' | 'none';
   centerX?: number;
   centerY?: number;
   radius?: number;
   angle?: number;
   imageW?: number;
   imageH?: number;
+  halfLength?: number;
+  outlinePoints?: { x: number; y: number }[];
+  tattooHighlightBase64?: string;
+  curveHighlightBase64?: string;
+  curvaturePercent?: number;
 }
-
-/** Return type of the unwrap entry-point functions. */
-interface UnwrapResult {
-  buf: Buffer;
-  debug: UnwrapDebugInfo;
-}
+interface UnwrapResult { buf: Buffer; debug: UnwrapDebugInfo }
 
 // ── Route configuration ──────────────────────────────────────
 
@@ -109,10 +104,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { imageBase64, limbRegion, wrapBoundary, options } = body as {
+    const { imageBase64, limbRegion, limbOutline, tattooHighlight, curveHighlight, options } = body as {
       imageBase64: string;
       limbRegion?: LimbRegion;
-      wrapBoundary?: WrapBoundary;
+      limbOutline?: LimbOutline;
+      tattooHighlight?: TattooHighlight;
+      curveHighlight?: CurveHighlight;
       options: StencilOptions;
     };
 
@@ -137,22 +134,15 @@ export async function POST(request: NextRequest) {
       }, 400);
     }
 
-    /* ─────────────────────────────────────────────────────────
-       STEP 1 — Flatten alpha · optional crop · resize · gray
-
-       IMPORTANT: when wrapBoundary is provided the user has
-       already defined the region of interest via control points
-       whose normalised 0-1 coords are relative to the FULL
-       image.  Cropping would put W/H into a different coordinate
-       space and the boundary math would be wrong.  So we ONLY
-       crop when no explicit boundary exists.
-       ───────────────────────────────────────────────────────── */
+    /* ── 2. Flatten alpha · optional crop · resize ─────────── */
     let cropX = 0, cropY = 0, cropW = origW, cropH = origH;
-
     const base = () => sharp(srcBuf).flatten({ background: '#ffffff' });
     let chain;
 
-    if (!wrapBoundary && limbRegion?.boundingBox) {
+    // Only auto-crop when no user geometry is provided
+    const hasUserGeometry = !!limbOutline || !!tattooHighlight;
+
+    if (!hasUserGeometry && limbRegion?.boundingBox) {
       const b = limbRegion.boundingBox;
       cropX = clamp(Math.round(b.x), 0, origW - 1);
       cropY = clamp(Math.round(b.y), 0, origH - 1);
@@ -168,150 +158,192 @@ export async function POST(request: NextRequest) {
       chain = base();
     }
 
-    let grayBuf = await chain
+    const rgbPng = await chain
       .resize(1536, 1536, { fit: 'inside', withoutEnlargement: true })
-      .grayscale()
       .removeAlpha()
       .toFormat('png')
       .toBuffer();
 
-    const gMeta = await sharp(grayBuf).metadata();
+    const gMeta = await sharp(rgbPng).metadata();
     const W = gMeta.width!;
     const H = gMeta.height!;
-    if (gMeta.channels !== 1) {
-      grayBuf = await sharp(grayBuf).grayscale().removeAlpha().png().toBuffer();
+    const numPixels = W * H;
+
+    /* ── 3. Light denoise ──────────────────────────────────── */
+    const denoisedBuf = await sharp(rgbPng).median(3).removeAlpha().raw().toBuffer();
+
+    /* ── 4. Convert to CIE-LAB ─────────────────────────────── */
+    const labL = new Float32Array(numPixels);
+    const labA = new Float32Array(numPixels);
+    const labB = new Float32Array(numPixels);
+
+    for (let i = 0; i < numPixels; i++) {
+      const r = denoisedBuf[i * 3] / 255;
+      const g = denoisedBuf[i * 3 + 1] / 255;
+      const b = denoisedBuf[i * 3 + 2] / 255;
+      const [L, a, bVal] = rgbToLab(r, g, b);
+      labL[i] = L;
+      labA[i] = a;
+      labB[i] = bVal;
     }
 
-    /* ─────────────────────────────────────────────────────────
-       STEP 2 — Light denoise
-       ───────────────────────────────────────────────────────── */
-    grayBuf = await sharp(grayBuf).median(3).png().toBuffer();
+    /* ── 5. Ink/skin separation ────────────────────────────── */
+    // Always use unsupervised separation — it gives the cleanest ink scores.
+    // When a tattoo highlight mask is provided, it's used purely for clipping
+    // in step 7 (not for changing the detection algorithm).  The supervised
+    // approach was producing patchy results because the hand-painted mask
+    // blends ink + skin pixels, giving noisy class statistics.
+    let inkScoreMap: Uint8Array;
+    const separationMethod: 'supervised' | 'unsupervised' = 'unsupervised';
 
-    /* ─────────────────────────────────────────────────────────
-       STEP 2b — Cylindrical surface unwrap (BEFORE stencilize)
+    inkScoreMap = unsupervisedSeparation(
+      labL, labA, labB, W, H, options.contrastLevel,
+    );
 
-       Must happen on the continuous-tone grayscale so the
-       geometry warp doesn't interact with binary thresholding.
+    // Debug: log ink-score distribution to help diagnose blank outputs
+    {
+      let sMin = 255, sMax = 0, sSum = 0;
+      for (let i = 0; i < numPixels; i++) {
+        if (inkScoreMap[i] < sMin) sMin = inkScoreMap[i];
+        if (inkScoreMap[i] > sMax) sMax = inkScoreMap[i];
+        sSum += inkScoreMap[i];
+      }
+      console.log('[tattoo-stencil] InkScore: min=%d max=%d mean=%.1f',
+        sMin, sMax, sSum / numPixels);
+    }
 
-       PRIORITY: user-drawn wrapBoundary (explicit human input).
-       FALLBACK: auto-detected limbRegion (only at high confidence).
-       ───────────────────────────────────────────────────────── */
+    // Pre-stencil grayscale for debug overlay
+    const preStencilBuf = await sharp(
+      Buffer.from(inkScoreMap),
+      { raw: { width: W, height: H, channels: 1 } },
+    ).png({ compressionLevel: 8 }).toBuffer();
+    const preStencilBase64 = preStencilBuf.toString('base64');
+
+    /* ── 6. Cylindrical unwrap ─────────────────────────────── */
     const curvK = typeof options.curvatureStrength === 'number'
       ? Math.max(0.25, Math.min(3.0, options.curvatureStrength))
       : 1.0;
 
     let unwrapDebug: UnwrapDebugInfo = { applied: false, source: 'none' };
+    let scoreBuf = await sharp(
+      Buffer.from(inkScoreMap),
+      { raw: { width: W, height: H, channels: 1 } },
+    ).png().toBuffer();
 
-    if (wrapBoundary) {
-      const ur = await cylindricalUnwrapFromBoundary(
-        grayBuf, W, H, wrapBoundary, curvK,
+    // Priority 1: user-painted curve mask (most direct control)
+    if (curveHighlight?.maskBase64) {
+      const ur = await curveMaskUnwrap(
+        scoreBuf, W, H, curveHighlight,
       );
-      if (ur.debug.applied) grayBuf = ur.buf;
+      if (ur.debug.applied) scoreBuf = ur.buf;
       unwrapDebug = ur.debug;
-    } else if (limbRegion && limbRegion.confidence > 0.85) {
+    }
+    // Priority 2: polygon outline → PCA cylinder
+    else if (limbOutline && limbOutline.points.length >= 3) {
+      const ur = await cylindricalUnwrapFromOutline(
+        scoreBuf, W, H, limbOutline, curvK,
+      );
+      if (ur.debug.applied) scoreBuf = ur.buf;
+      unwrapDebug = ur.debug;
+    }
+    // Priority 3: AI-detected landmarks
+    else if (limbRegion && limbRegion.confidence > 0.85) {
       const ur = await cylindricalUnwrapFromLandmarks(
-        grayBuf, W, H, limbRegion,
+        scoreBuf, W, H, limbRegion,
         origW, origH, cropX, cropY, cropW, cropH, curvK,
       );
-      if (ur.buf !== grayBuf) {
-        grayBuf = ur.buf;
-        unwrapDebug = ur.debug;
+      if (ur.debug.applied) scoreBuf = ur.buf;
+      unwrapDebug = ur.debug;
+    }
+
+    // Attach tattoo highlight mask to debug info for visual feedback
+    if (tattooHighlight?.maskBase64) {
+      unwrapDebug.tattooHighlightBase64 = tattooHighlight.maskBase64;
+    }
+    // Also attach curve highlight for debug
+    if (curveHighlight?.maskBase64) {
+      unwrapDebug.curveHighlightBase64 = curveHighlight.maskBase64;
+    }
+
+    /* ── 7. Auto-threshold (Otsu) → binary stencil ─────────── */
+    const scoreRaw = await sharp(scoreBuf)
+      .removeAlpha()
+      .grayscale()
+      .raw()
+      .toBuffer();
+
+    const sMeta2 = await sharp(scoreBuf).metadata();
+    const sW = sMeta2.width ?? W;
+    const sH = sMeta2.height ?? H;
+    const scorePixels = sW * sH;
+
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < scorePixels; i++) hist[scoreRaw[i]]++;
+
+    // When cylindrical unwrap was applied, pixels outside the cylinder
+    // are zero-filled. Exclude bin 0 from Otsu so the huge zero-spike
+    // doesn't drag the threshold to near-zero.
+    let otsuTotal = scorePixels;
+    if (unwrapDebug.applied) {
+      otsuTotal -= hist[0];
+      hist[0] = 0;
+    }
+    const autoThresh = otsuThreshold(hist, otsuTotal);
+    const bias = THRESHOLD_BIAS[options.contrastLevel];
+    const finalThresh = clamp(autoThresh + bias, 10, 245);
+
+    console.log('[tattoo-stencil] Otsu threshold=%d, bias=%d, final=%d, unwrap=%s',
+      autoThresh, bias, finalThresh, unwrapDebug.applied ? unwrapDebug.source : 'none');
+
+    const binaryBuf = Buffer.alloc(scorePixels, 255); // default white
+    for (let i = 0; i < scorePixels; i++) {
+      // Skip zero-filled pixels from unwrap (leave white)
+      if (unwrapDebug.applied && scoreRaw[i] === 0) continue;
+      binaryBuf[i] = scoreRaw[i] >= finalThresh ? 0 : 255;
+    }
+
+    // If user painted a tattoo highlight, clip stencil to that region only.
+    // Anything outside the highlight mask is forced white (not tattoo).
+    if (tattooHighlight?.maskBase64) {
+      const clipMask = Buffer.from(tattooHighlight.maskBase64, 'base64');
+      const clipRaw = await sharp(clipMask)
+        .resize(sW, sH, { fit: 'fill' })
+        .grayscale()
+        .removeAlpha()
+        .raw()
+        .toBuffer();
+      for (let i = 0; i < scorePixels; i++) {
+        if (clipRaw[i] <= 128) binaryBuf[i] = 255; // outside highlight → white
       }
     }
 
-    /* ─────────────────────────────────────────────────────────
-       STEP 3 — Background subtraction
-
-       A very-large-sigma Gaussian blur estimates the local skin
-       tone at every pixel.  Subtracting the original from it
-       isolates anything darker than the surrounding area (= ink).
-
-       difference = blurred − original   (≥ 0 everywhere)
-
-       Now operates on the (possibly unwrapped) grayscale, so
-       the stencilization runs exactly once.
-       ───────────────────────────────────────────────────────── */
-    const shortSide = Math.min(W, H);
-    const bgSigma = Math.max(10, Math.round(shortSide * BG_SIGMA_FRAC));
-
-    const bgRaw = await sharp(grayBuf).blur(bgSigma).raw().toBuffer();
-    const fgRaw = await sharp(grayBuf).raw().toBuffer();
-
-    const diffBuf = Buffer.alloc(W * H);
-    let maxDiff = 0;
-    for (let i = 0; i < W * H; i++) {
-      const d = clamp(bgRaw[i] - fgRaw[i], 0, 255);
-      diffBuf[i] = d;
-      if (d > maxDiff) maxDiff = d;
+    // If user drew an outline polygon, also clip to inside the polygon.
+    if (limbOutline && limbOutline.points.length >= 3) {
+      // Build a polygon mask at stencil resolution
+      const polyPts = limbOutline.points.map(p => ({
+        x: p.x * sW,
+        y: p.y * sH,
+      }));
+      for (let py = 0; py < sH; py++) {
+        for (let px = 0; px < sW; px++) {
+          if (!pointInPolygon(px, py, polyPts)) {
+            binaryBuf[py * sW + px] = 255; // outside polygon → white
+          }
+        }
+      }
     }
 
-    if (maxDiff < 8) {
-      return res({
-        success: false,
-        error: 'No tattoo detected — the image may lack contrast or the tattoo is too faint.',
-      }, 422);
-    }
+    let stencilBuf = await sharp(
+      binaryBuf,
+      { raw: { width: sW, height: sH, channels: 1 } },
+    ).png().toBuffer();
 
-    /* ─────────────────────────────────────────────────────────
-       STEP 4 — Manual linear normalize
+    /* ── 8. Cleanup ─────────────────────────────────────── */
+    // No blur — Otsu already gives clean binary edges.
+    // The blur+threshold was causing lumpy/wavery lines.
+    // Potrace's turdSize handles remaining single-pixel noise.
 
-       Scale the difference linearly so the darkest ink pixel
-       maps to 255.  This is MUCH gentler than Sharp's
-       .normalize() which does percentile clipping and can
-       amplify skin texture noise into full-range garbage.
-       ───────────────────────────────────────────────────────── */
-    const scale = 255 / maxDiff;
-    const normBuf = Buffer.alloc(W * H);
-    for (let i = 0; i < W * H; i++) {
-      normBuf[i] = clamp(Math.round(diffBuf[i] * scale), 0, 255);
-    }
-
-    /* ─────────────────────────────────────────────────────────
-       STEP 5 — Pre-threshold blur (suppress skin texture)
-
-       A moderate Gaussian blur on the normalised difference
-       image smooths out pores, hair, and JPEG artefacts so
-       the threshold produces clean ink outlines instead of
-       capturing every skin texture detail.
-       ───────────────────────────────────────────────────────── */
-    const preBlurSigma = Math.max(1.0, shortSide * PRE_BLUR_FRAC[options.noiseReduction]);
-
-    let diffImg = await sharp(normBuf, { raw: { width: W, height: H, channels: 1 } })
-      .blur(preBlurSigma + 0.1)
-      .png()
-      .toBuffer();
-
-    /* ─────────────────────────────────────────────────────────
-       STEP 6 — Threshold → binary stencil
-
-       After linear normalise, 255 = darkest ink.
-       threshold(T) → pixels ≥ T become white, < T become black.
-       Negate so ink = black on white paper.
-       ───────────────────────────────────────────────────────── */
-    const threshVal = DIFF_THRESH[options.contrastLevel];
-    let stencilBuf = await sharp(diffImg)
-      .threshold(threshVal)
-      .negate({ alpha: false })
-      .png()
-      .toBuffer();
-
-    /* ─────────────────────────────────────────────────────────
-       STEP 7 — Cleanup: median + anti-alias
-       ───────────────────────────────────────────────────────── */
-    // Remove isolated speck pixels
-    stencilBuf = await sharp(stencilBuf).median(3).png().toBuffer();
-
-    // Anti-alias jagged edges
-    const smoothSigma = SMOOTH_SIGMA[options.edgeThickness];
-    stencilBuf = await sharp(stencilBuf)
-      .blur(smoothSigma + 0.1)
-      .threshold(128)
-      .png()
-      .toBuffer();
-
-    /* ─────────────────────────────────────────────────────────
-       STEP 9 — Straighten limb axis
-       ───────────────────────────────────────────────────────── */
+    /* ── 9. Straighten limb axis ───────────────────────────── */
     if (limbRegion?.angle && Math.abs(limbRegion.angle) > 5) {
       stencilBuf = await sharp(stencilBuf)
         .rotate(-limbRegion.angle, { background: '#ffffff' })
@@ -319,18 +351,10 @@ export async function POST(request: NextRequest) {
         .toBuffer();
     }
 
-    /* ─────────────────────────────────────────────────────────
-       STEP 10 — Final output
-       ───────────────────────────────────────────────────────── */
+    /* ── 10. Final output ──────────────────────────────────── */
     const pngBuf = await sharp(stencilBuf).png({ compressionLevel: 6 }).toBuffer();
-    const sMeta  = await sharp(pngBuf).metadata();
+    const sMeta = await sharp(pngBuf).metadata();
     const pngBase64 = pngBuf.toString('base64');
-
-    // Pre-stencil grayscale for client-side before/after comparison.
-    // grayBuf is already the (possibly unwrapped) denoised grayscale.
-    const preStencilBase64 = (await sharp(grayBuf)
-      .png({ compressionLevel: 8 })
-      .toBuffer()).toString('base64');
 
     let svgData: string | undefined;
     if (options.generateSvg) {
@@ -354,6 +378,7 @@ export async function POST(request: NextRequest) {
           limbType: limbRegion?.limbType,
           processingTimeMs: Date.now() - t0,
           unwrapDebug,
+          separationMethod,
         },
       },
     });
@@ -365,61 +390,452 @@ export async function POST(request: NextRequest) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  Cylindrical surface unwrapping — TWO entry points:
-//
-//  A) cylindricalUnwrapFromBoundary  (human-defined geometry)
-//  B) cylindricalUnwrapFromLandmarks (AI-detected, fallback)
-//
-//  Both compute the same pure-math inverse cylindrical projection.
-//  The only difference is *where the cylinder parameters come from*.
+//  CIE-LAB colour space conversion
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/** Convert sRGB (0-1) to CIE-LAB. Returns [L, a, b]. */
+function rgbToLab(r: number, g: number, b: number): [number, number, number] {
+  // sRGB → linear RGB
+  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+
+  // Linear RGB → XYZ (D65 illuminant)
+  let x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047;
+  let y = (0.2126729 * r + 0.7151522 * g + 0.0721750 * b) / 1.00000;
+  let z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883;
+
+  // XYZ → LAB
+  const epsilon = 0.008856;
+  const kappa = 903.3;
+  x = x > epsilon ? Math.cbrt(x) : (kappa * x + 16) / 116;
+  y = y > epsilon ? Math.cbrt(y) : (kappa * y + 16) / 116;
+  z = z > epsilon ? Math.cbrt(z) : (kappa * z + 16) / 116;
+
+  const L = 116 * y - 16;     // 0 – 100
+  const a = 500 * (x - y);    // approx -128 – 127
+  const bVal = 200 * (y - z); // approx -128 – 127
+  return [L, a, bVal];
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  Supervised separation (user-painted tattoo mask)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async function supervisedSeparation(
+  labL: Float32Array, labA: Float32Array, labB: Float32Array,
+  W: number, H: number,
+  tattooHighlight: TattooHighlight,
+  contrast: 'low' | 'medium' | 'high',
+): Promise<Uint8Array> {
+  const maskBuf = Buffer.from(tattooHighlight.maskBase64, 'base64');
+  const maskRaw = await sharp(maskBuf)
+    .resize(W, H, { fit: 'fill' })
+    .grayscale()
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+
+  const numPixels = W * H;
+
+  // First pass: compute means
+  let inkL = 0, inkA = 0, inkB = 0, inkCount = 0;
+  let skinL = 0, skinA = 0, skinB = 0, skinCount = 0;
+
+  for (let i = 0; i < numPixels; i++) {
+    if (maskRaw[i] > 128) {
+      inkL += labL[i]; inkA += labA[i]; inkB += labB[i]; inkCount++;
+    } else {
+      skinL += labL[i]; skinA += labA[i]; skinB += labB[i]; skinCount++;
+    }
+  }
+
+  if (inkCount < 10) {
+    return unsupervisedSeparation(labL, labA, labB, W, H, contrast);
+  }
+
+  const inkMeanL = inkL / inkCount;
+  const inkMeanA = inkA / inkCount;
+  const inkMeanB = inkB / inkCount;
+  const skinMeanL = skinCount > 0 ? skinL / skinCount : 70;
+  const skinMeanA = skinCount > 0 ? skinA / skinCount : 15;
+  const skinMeanB = skinCount > 0 ? skinB / skinCount : 20;
+
+  // Second pass: compute variances → std deviations
+  let skinLVar = 0, skinAVar = 0, skinBVar = 0;
+  for (let i = 0; i < numPixels; i++) {
+    if (maskRaw[i] <= 128) {
+      skinLVar += (labL[i] - skinMeanL) ** 2;
+      skinAVar += (labA[i] - skinMeanA) ** 2;
+      skinBVar += (labB[i] - skinMeanB) ** 2;
+    }
+  }
+  const skinStdL = Math.max(3, Math.sqrt(skinLVar / Math.max(1, skinCount)));
+  const skinStdA = Math.max(2, Math.sqrt(skinAVar / Math.max(1, skinCount)));
+  const skinStdB = Math.max(2, Math.sqrt(skinBVar / Math.max(1, skinCount)));
+
+  // Score: distance from skin model in standardised LAB space
+  const chromaW = CHROMA_WEIGHT[contrast];
+  const lumaW = 1.0 - chromaW * 0.5;
+  const rawScores = new Float32Array(numPixels);
+  let maxScore = 0;
+
+  for (let i = 0; i < numPixels; i++) {
+    const dL = Math.abs(labL[i] - skinMeanL) / skinStdL;
+    const dA = Math.abs(labA[i] - skinMeanA) / skinStdA;
+    const dB = Math.abs(labB[i] - skinMeanB) / skinStdB;
+    const chromaDist = Math.sqrt(dA * dA + dB * dB);
+    const score = lumaW * dL + chromaW * chromaDist;
+    rawScores[i] = score;
+    if (score > maxScore) maxScore = score;
+  }
+
+  if (maxScore < 0.1) maxScore = 1;
+  const scoreMap = new Uint8Array(numPixels);
+  for (let i = 0; i < numPixels; i++) {
+    scoreMap[i] = clamp(Math.round((rawScores[i] / maxScore) * 255), 0, 255);
+  }
+  return scoreMap;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  Unsupervised separation (background estimation in LAB)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function unsupervisedSeparation(
+  labL: Float32Array, labA: Float32Array, labB: Float32Array,
+  W: number, H: number,
+  contrast: 'low' | 'medium' | 'high',
+): Uint8Array {
+  const numPixels = W * H;
+
+  // Estimate skin as the median LAB value (majority of pixels)
+  // Use histogram on L channel (quantised to 0-100)
+  const lHist = new Uint32Array(101);
+  for (let i = 0; i < numPixels; i++) {
+    lHist[clamp(Math.round(labL[i]), 0, 100)]++;
+  }
+  let peakBin = 0, peakCount = 0;
+  for (let b = 0; b < 101; b++) {
+    if (lHist[b] > peakCount) { peakCount = lHist[b]; peakBin = b; }
+  }
+
+  // Average LAB values of pixels near the L-peak (within ±8)
+  let sL = 0, sA = 0, sB = 0, sCnt = 0;
+  for (let i = 0; i < numPixels; i++) {
+    if (Math.abs(labL[i] - peakBin) <= 8) {
+      sL += labL[i]; sA += labA[i]; sB += labB[i]; sCnt++;
+    }
+  }
+  const skinMeanL = sCnt > 0 ? sL / sCnt : peakBin;
+  const skinMeanA = sCnt > 0 ? sA / sCnt : 0;
+  const skinMeanB = sCnt > 0 ? sB / sCnt : 0;
+
+  // Score each pixel by distance from estimated skin color
+  const chromaW = CHROMA_WEIGHT[contrast];
+  const lumaW = 1.0 - chromaW * 0.5;
+  const rawScores = new Float32Array(numPixels);
+  let maxScore = 0;
+
+  for (let i = 0; i < numPixels; i++) {
+    const dL = Math.abs(labL[i] - skinMeanL);
+    const dA = Math.abs(labA[i] - skinMeanA);
+    const dB = Math.abs(labB[i] - skinMeanB);
+    const chromaDist = Math.sqrt(dA * dA + dB * dB);
+    const score = lumaW * dL + chromaW * chromaDist;
+    rawScores[i] = score;
+    if (score > maxScore) maxScore = score;
+  }
+
+  if (maxScore < 1) return new Uint8Array(numPixels);
+
+  const scoreMap = new Uint8Array(numPixels);
+  for (let i = 0; i < numPixels; i++) {
+    scoreMap[i] = clamp(Math.round((rawScores[i] / maxScore) * 255), 0, 255);
+  }
+  return scoreMap;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  Otsu's automatic thresholding
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function otsuThreshold(histogram: Uint32Array, total: number): number {
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * histogram[i];
+
+  let sumB = 0, wB = 0, maxVariance = 0, bestThreshold = 128;
+
+  for (let t = 0; t < 256; t++) {
+    wB += histogram[t];
+    if (wB === 0) continue;
+    const wF = total - wB;
+    if (wF === 0) break;
+
+    sumB += t * histogram[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const variance = wB * wF * (mB - mF) * (mB - mF);
+    if (variance > maxVariance) {
+      maxVariance = variance;
+      bestThreshold = t;
+    }
+  }
+  return bestThreshold;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  Point-in-polygon (ray casting)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function pointInPolygon(
+  x: number, y: number,
+  poly: { x: number; y: number }[],
+): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    if ((yi > y) !== (yj > y) &&
+        x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  Cylindrical surface unwrapping
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /**
- * (A) User-drawn boundary → cylinder geometry.
- *
- * axisStart/axisEnd define the cylinder's centreline.
- * leftEdge/rightEdge define the visible radius.
- * All inputs are normalised 0-1 → we convert to pixel coords at W×H.
+ * User-painted curve mask → cylinder unwrap.
+ * The yellow mask stores per-pixel curvature as a grayscale value:
+ *   0 = not painted (no curvature)
+ *   1–255 = curvature level (maps to ~0.4 %–100 %)
+ * The unwrap uses a cross-section curvature profile along the user-
+ * specified axis so that different brush strokes with different
+ * curvature levels produce proportionally different amounts of stretch.
  */
-async function cylindricalUnwrapFromBoundary(
+async function curveMaskUnwrap(
   imgBuf: Buffer,
   W: number, H: number,
-  boundary: WrapBoundary,
-  curvK: number,
+  curveHighlight: CurveHighlight,
 ): Promise<UnwrapResult> {
-  const noOp: UnwrapDebugInfo = { applied: false, source: 'boundary' };
+  const noOp: UnwrapDebugInfo = { applied: false, source: 'curve-mask' };
 
-  // Convert normalised 0-1 → pixel coords
-  const axS = { x: boundary.axisStart.x * W, y: boundary.axisStart.y * H };
-  const axE = { x: boundary.axisEnd.x * W,   y: boundary.axisEnd.y * H };
-  const lE  = { x: boundary.leftEdge.x * W,  y: boundary.leftEdge.y * H };
-  const rE  = { x: boundary.rightEdge.x * W, y: boundary.rightEdge.y * H };
+  const maskBuf = Buffer.from(curveHighlight.maskBase64, 'base64');
+  const maskRaw = await sharp(maskBuf)
+    .resize(W, H, { fit: 'fill' })
+    .grayscale()
+    .removeAlpha()
+    .raw()
+    .toBuffer();
 
-  const midX = (axS.x + axE.x) / 2;
-  const midY = (axS.y + axE.y) / 2;
-  const angle = Math.atan2(axE.y - axS.y, axE.x - axS.x);
+  // Collect non-zero mask pixels with their curvature values
+  const maskedPts: { x: number; y: number; curv: number }[] = [];
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const v = maskRaw[py * W + px];
+      if (v > 2) {
+        maskedPts.push({ x: px, y: py, curv: v / 255 });
+      }
+    }
+  }
 
-  // Radius = half the perpendicular distance between left & right edges
-  // projected onto the axis-perpendicular direction.
-  const cosA = Math.cos(angle);
-  const sinA = Math.sin(angle);
-  const lAcross = -(lE.x - midX) * sinA + (lE.y - midY) * cosA;
-  const rAcross = -(rE.x - midX) * sinA + (rE.y - midY) * cosA;
-  const diameter = Math.abs(rAcross - lAcross);
-  const radius = (diameter / 2) * curvK;
+  if (maskedPts.length < 50) return { buf: imgBuf, debug: noOp };
 
-  if (radius < 15) return { buf: imgBuf, debug: noOp }; // too small, skip
+  // Centroid of the masked region
+  let cx = 0, cy = 0;
+  for (const p of maskedPts) { cx += p.x; cy += p.y; }
+  cx /= maskedPts.length;
+  cy /= maskedPts.length;
+
+  // Use user-specified angle (degrees → radians)
+  const angle = (curveHighlight.angleDeg ?? 0) * Math.PI / 180;
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+
+  // Find perpendicular width and along extent of masked region
+  let minAcross = Infinity, maxAcross = -Infinity;
+  let minAlong = Infinity, maxAlong = -Infinity;
+  for (const p of maskedPts) {
+    const along  =  (p.x - cx) * cosA + (p.y - cy) * sinA;
+    const across = -(p.x - cx) * sinA + (p.y - cy) * cosA;
+    minAcross = Math.min(minAcross, across);
+    maxAcross = Math.max(maxAcross, across);
+    minAlong  = Math.min(minAlong, along);
+    maxAlong  = Math.max(maxAlong, along);
+  }
+
+  const perpWidth = maxAcross - minAcross;
+  if (perpWidth < 10) return { buf: imgBuf, debug: noOp };
+
+  const halfLength = Math.max(Math.abs(minAlong), Math.abs(maxAlong));
+
+  // ── Build curvature profile along the axis ───────────────
+  // Each bin covers one pixel along the axis direction.
+  const alongMin = minAlong - 2;
+  const alongMax = maxAlong + 2;
+  const alongRange = alongMax - alongMin;
+  const NUM_BINS = Math.max(1, Math.ceil(alongRange));
+  const binCurv   = new Float32Array(NUM_BINS);
+  const binCounts = new Uint32Array(NUM_BINS);
+
+  for (const p of maskedPts) {
+    const along = (p.x - cx) * cosA + (p.y - cy) * sinA;
+    const t = (along - alongMin) / alongRange;
+    const idx = clamp(Math.floor(t * (NUM_BINS - 1)), 0, NUM_BINS - 1);
+    binCurv[idx]   += p.curv;
+    binCounts[idx] ++;
+  }
+  for (let i = 0; i < NUM_BINS; i++) {
+    if (binCounts[i] > 0) binCurv[i] /= binCounts[i];
+  }
+
+  // Smooth the profile (box blur, radius 4) to prevent seams
+  const smoothed = new Float32Array(NUM_BINS);
+  const BLUR_R = 4;
+  for (let i = 0; i < NUM_BINS; i++) {
+    let sum = 0, cnt = 0;
+    for (let j = -BLUR_R; j <= BLUR_R; j++) {
+      const idx = i + j;
+      if (idx >= 0 && idx < NUM_BINS) { sum += binCurv[idx]; cnt++; }
+    }
+    smoothed[i] = sum / cnt;
+  }
+
+  // Weighted-average curvature for debug / radius readout
+  let totalCurv = 0;
+  for (const p of maskedPts) totalCurv += p.curv;
+  const avgCurv = totalCurv / maskedPts.length;
+  const avgCurvPct = Math.round(avgCurv * 100);
+  const effAvg = Math.min(1.5, avgCurv * UNWRAP_AGGRESSION);
+  const avgRadius = (perpWidth / 2) / Math.max(0.1, effAvg);
+
+  console.log(
+    '[tattoo-stencil] CurveMask unwrap: center=(%.1f,%.1f) angle=%d° perpW=%.1f avgCurv=%d%% eff=%d%% avgR=%.1f px=%d bins=%d',
+    cx, cy, curveHighlight.angleDeg, perpWidth, avgCurvPct,
+    Math.round(effAvg * 100), avgRadius, maskedPts.length, NUM_BINS,
+  );
 
   const debug: UnwrapDebugInfo = {
-    applied: true, source: 'boundary',
-    centerX: midX, centerY: midY, radius, angle, imageW: W, imageH: H,
+    applied: true, source: 'curve-mask',
+    centerX: cx, centerY: cy, radius: avgRadius, angle, imageW: W, imageH: H,
+    halfLength,
+    curvaturePercent: avgCurvPct,
   };
-  const buf = await applyCylindricalUnwrap(imgBuf, W, H, midX, midY, angle, radius);
+
+  const buf = await applyCylindricalUnwrapVariable(
+    imgBuf, W, H, cx, cy, angle, perpWidth, smoothed, alongMin, alongRange,
+  );
   return { buf, debug };
 }
 
 /**
- * (B) AI-detected landmarks → cylinder geometry (fallback).
+ * Polygon outline → cylinder geometry via PCA.
+ */
+async function cylindricalUnwrapFromOutline(
+  imgBuf: Buffer,
+  W: number, H: number,
+  outline: LimbOutline,
+  curvK: number,
+): Promise<UnwrapResult> {
+  const noOp: UnwrapDebugInfo = { applied: false, source: 'outline' };
+  const pts = outline.points;
+  if (pts.length < 3) return { buf: imgBuf, debug: noOp };
+
+  // Convert normalised → pixel coords
+  const px = pts.map(p => ({ x: p.x * W, y: p.y * H }));
+
+  // ── Area centroid (not vertex centroid) ──────────────────
+  // Shoelace formula: immune to uneven vertex placement
+  let signedArea2 = 0, areaCx = 0, areaCy = 0;
+  for (let i = 0; i < px.length; i++) {
+    const j = (i + 1) % px.length;
+    const cross = px[i].x * px[j].y - px[j].x * px[i].y;
+    signedArea2 += cross;
+    areaCx += (px[i].x + px[j].x) * cross;
+    areaCy += (px[i].y + px[j].y) * cross;
+  }
+  const area6 = 3 * signedArea2;          // 6A
+  // Fall back to vertex average if polygon is degenerate (zero area)
+  const cx = Math.abs(area6) > 1e-6
+    ? areaCx / area6
+    : px.reduce((s, p) => s + p.x, 0) / px.length;
+  const cy = Math.abs(area6) > 1e-6
+    ? areaCy / area6
+    : px.reduce((s, p) => s + p.y, 0) / px.length;
+
+  // ── Uniform edge sampling for PCA ──────────────────────
+  // Interpolate points along each edge so vertex density
+  // doesn't bias the principal axis
+  const edgeSamples: { x: number; y: number }[] = [];
+  const SAMPLES_PER_EDGE = 8;
+  for (let i = 0; i < px.length; i++) {
+    const j = (i + 1) % px.length;
+    for (let s = 0; s < SAMPLES_PER_EDGE; s++) {
+      const t = s / SAMPLES_PER_EDGE;
+      edgeSamples.push({
+        x: px[i].x + (px[j].x - px[i].x) * t,
+        y: px[i].y + (px[j].y - px[i].y) * t,
+      });
+    }
+  }
+
+  // PCA: covariance matrix from uniform edge samples
+  // Run in ISOTROPIC space (scale to square) so non-square images
+  // don't distort the visual angle. Use max(W,H) as common scale.
+  const maxDim = Math.max(W, H);
+  const isoX = maxDim / W;   // >1 if image is taller than wide
+  const isoY = maxDim / H;   // >1 if image is wider than tall
+  let cxx = 0, cxy = 0, cyy = 0;
+  for (const p of edgeSamples) {
+    const dx = (p.x - cx) * isoX, dy = (p.y - cy) * isoY;
+    cxx += dx * dx; cxy += dx * dy; cyy += dy * dy;
+  }
+
+  // Major axis angle (in isotropic/visual space)
+  const isoAngle = 0.5 * Math.atan2(2 * cxy, cxx - cyy);
+
+  // Convert iso angle back to pixel-space angle for the unwrap transform.
+  // In pixel space, the axis direction vector is (cos(isoAngle)/isoX, sin(isoAngle)/isoY).
+  const axisDx = Math.cos(isoAngle) / isoX;
+  const axisDy = Math.sin(isoAngle) / isoY;
+  const angle = Math.atan2(axisDy, axisDx);
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+
+  // Width perpendicular to axis + extent along axis (in pixel space)
+  let minAcross = Infinity, maxAcross = -Infinity;
+  let minAlong = Infinity, maxAlong = -Infinity;
+  for (const p of px) {
+    const along  =  (p.x - cx) * cosA + (p.y - cy) * sinA;
+    const across = -(p.x - cx) * sinA + (p.y - cy) * cosA;
+    minAcross = Math.min(minAcross, across);
+    maxAcross = Math.max(maxAcross, across);
+    minAlong  = Math.min(minAlong, along);
+    maxAlong  = Math.max(maxAlong, along);
+  }
+  const radius = ((maxAcross - minAcross) / 2) * curvK;
+  if (radius < 15) return { buf: imgBuf, debug: noOp };
+
+  // Half-length along the cylinder axis (for debug grid extent)
+  const halfLength = Math.max(Math.abs(minAlong), Math.abs(maxAlong));
+
+  console.log('[tattoo-stencil] Outline PCA: center=(%.1f,%.1f) isoAngle=%.1f° pixAngle=%.1f° radius=%.1f halfLen=%.1f W=%d H=%d',
+    cx, cy, isoAngle * 180 / Math.PI, angle * 180 / Math.PI, radius, halfLength, W, H);
+
+  const debug: UnwrapDebugInfo = {
+    applied: true, source: 'outline',
+    centerX: cx, centerY: cy, radius, angle, imageW: W, imageH: H,
+    halfLength,
+    outlinePoints: outline.points, // normalised 0-1 for debug overlay
+  };
+  const buf = await applyCylindricalUnwrap(imgBuf, W, H, cx, cy, angle, radius);
+  return { buf, debug };
+}
+
+/**
+ * AI-detected landmarks → cylinder geometry (fallback).
  */
 async function cylindricalUnwrapFromLandmarks(
   imgBuf: Buffer,
@@ -467,16 +883,11 @@ async function cylindricalUnwrapFromLandmarks(
 }
 
 /**
- * Core cylindrical unwrap — pure math, no AI.
+ * Core cylindrical unwrap — inverse cylindrical projection.
+ * Works on a single-channel grayscale buffer (the ink score map).
+ * Used by the polygon-outline and AI-landmarks paths (single uniform radius).
  *
- * For each output pixel, compute where it maps on the curved
- * cylinder surface and bilinear-sample the source image.
- *
- *   θ = across / R         (arc-length to angle on the cylinder)
- *   inputAcross = R·sin(θ) (projected position in the flat camera view)
- *
- * This stretches the edges of the limb outward, correcting
- * foreshortening from the curved surface.
+ * Includes edge-fade to prevent dark-spot artifacts at the cylinder boundary.
  */
 async function applyCylindricalUnwrap(
   imgBuf: Buffer,
@@ -486,24 +897,44 @@ async function applyCylindricalUnwrap(
 ): Promise<Buffer> {
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
+
+  const stretchRatio = Math.PI / 2;
+  const extraPerp = (stretchRatio - 1) * radius;
+
+  const padX = Math.ceil(Math.abs(sinA) * extraPerp);
+  const padY = Math.ceil(Math.abs(cosA) * extraPerp);
+  const outW = W + padX * 2;
+  const outH = H + padY * 2;
+
+  const outMidX = midX + padX;
+  const outMidY = midY + padY;
+
   const maxArc = (Math.PI / 2) * radius;
+  const thetaLimit = Math.PI / 2;
 
-  const raw = await sharp(imgBuf).removeAlpha().raw().toBuffer();
-  const out = Buffer.alloc(W * H, 255);
+  const raw = await sharp(imgBuf).grayscale().raw().toBuffer();
+  const out = Buffer.alloc(outW * outH, 0);
 
-  for (let py = 0; py < H; py++) {
-    for (let px = 0; px < W; px++) {
-      const dx = px - midX;
-      const dy = py - midY;
-
+  for (let py = 0; py < outH; py++) {
+    for (let px = 0; px < outW; px++) {
+      const dx = px - outMidX;
+      const dy = py - outMidY;
       const along  =  dx * cosA + dy * sinA;
       const across = -dx * sinA + dy * cosA;
 
       if (Math.abs(across) > maxArc) continue;
 
       const theta = across / radius;
-      const inputAcross = radius * Math.sin(theta);
+      const absTheta = Math.abs(theta);
 
+      // Edge-fade: attenuate toward ±90° to suppress dark-spot artefacts
+      let fade = 1;
+      if (absTheta > EDGE_FADE_START) {
+        fade = 1 - (absTheta - EDGE_FADE_START) / (thetaLimit - EDGE_FADE_START);
+        if (fade <= 0) continue;
+      }
+
+      const inputAcross = radius * Math.sin(theta);
       const srcX = midX + along * cosA - inputAcross * sinA;
       const srcY = midY + along * sinA + inputAcross * cosA;
 
@@ -520,11 +951,130 @@ async function applyCylindricalUnwrap(
         raw[i + W]     * (1 - fx) * fy +
         raw[i + W + 1] * fx       * fy;
 
-      out[py * W + px] = Math.round(v);
+      out[py * outW + px] = Math.round(v * fade);
     }
   }
 
-  return sharp(out, { raw: { width: W, height: H, channels: 1 } })
+  console.log(
+    '[tattoo-stencil] Unwrap canvas: %dx%d → %dx%d (pad %d,%d, stretch %.2fx)',
+    W, H, outW, outH, padX, padY, stretchRatio,
+  );
+
+  return sharp(out, { raw: { width: outW, height: outH, channels: 1 } })
+    .png()
+    .toBuffer();
+}
+
+/**
+ * Variable-radius cylindrical unwrap driven by a per-cross-section
+ * curvature profile.  Each bin of the profile gives the average curvature
+ * for that position along the axis.  Where curvature is 0 (no brush
+ * strokes), pixels pass through unchanged.  Where curvature > 0 the
+ * inverse cylindrical mapping is applied with a local radius derived
+ * from `(perpWidth/2) / (curvature * UNWRAP_AGGRESSION)`.
+ */
+async function applyCylindricalUnwrapVariable(
+  imgBuf: Buffer,
+  W: number, H: number,
+  midX: number, midY: number,
+  angle: number,
+  perpWidth: number,
+  curvProfile: Float32Array,
+  alongMin: number,
+  alongRange: number,
+): Promise<Buffer> {
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+  const numBins = curvProfile.length;
+  const thetaLimit = Math.PI / 2;
+
+  // Find max curvature for canvas sizing
+  let maxCurv = 0;
+  for (let i = 0; i < numBins; i++) {
+    if (curvProfile[i] > maxCurv) maxCurv = curvProfile[i];
+  }
+
+  const effMax = Math.min(1.5, maxCurv * UNWRAP_AGGRESSION);
+  const minRadius = (perpWidth / 2) / Math.max(0.1, effMax);
+  const maxArc = thetaLimit * minRadius;
+  const maxExpansion = Math.max(0, maxArc - perpWidth / 2);
+
+  const padX = Math.ceil(Math.abs(sinA) * maxExpansion) + 2;
+  const padY = Math.ceil(Math.abs(cosA) * maxExpansion) + 2;
+  const outW = W + padX * 2;
+  const outH = H + padY * 2;
+
+  const outMidX = midX + padX;
+  const outMidY = midY + padY;
+
+  const raw = await sharp(imgBuf).grayscale().raw().toBuffer();
+  const out = Buffer.alloc(outW * outH, 0);
+
+  for (let py = 0; py < outH; py++) {
+    for (let px = 0; px < outW; px++) {
+      const dx = px - outMidX;
+      const dy = py - outMidY;
+      const along  =  dx * cosA + dy * sinA;
+      const across = -dx * sinA + dy * cosA;
+
+      // Interpolate curvature from the profile
+      const t = (along - alongMin) / alongRange;
+      const binF = t * (numBins - 1);
+      const lo = clamp(Math.floor(binF), 0, numBins - 1);
+      const hi = Math.min(lo + 1, numBins - 1);
+      const frac = binF - lo;
+      const localRaw = curvProfile[lo] * (1 - frac) + curvProfile[hi] * frac;
+      const localCurv = Math.min(1.5, localRaw * UNWRAP_AGGRESSION);
+
+      let srcX: number, srcY: number;
+      let fade = 1;
+
+      if (localCurv < 0.005) {
+        // No curvature — pass through to the corresponding input pixel
+        srcX = px - padX;
+        srcY = py - padY;
+      } else {
+        const localRadius = (perpWidth / 2) / localCurv;
+        const localMaxArc = thetaLimit * localRadius;
+        if (Math.abs(across) > localMaxArc) continue;
+
+        const theta = across / localRadius;
+        const absTheta = Math.abs(theta);
+
+        // Edge-fade to suppress dark-spot artefacts
+        if (absTheta > EDGE_FADE_START) {
+          fade = 1 - (absTheta - EDGE_FADE_START) / (thetaLimit - EDGE_FADE_START);
+          if (fade <= 0) continue;
+        }
+
+        const inputAcross = localRadius * Math.sin(theta);
+        srcX = midX + along * cosA - inputAcross * sinA;
+        srcY = midY + along * sinA + inputAcross * cosA;
+      }
+
+      const ix = Math.floor(srcX);
+      const iy = Math.floor(srcY);
+      if (ix < 0 || ix >= W - 1 || iy < 0 || iy >= H - 1) continue;
+
+      const fx = srcX - ix;
+      const fy = srcY - iy;
+      const i = iy * W + ix;
+      const v =
+        raw[i]         * (1 - fx) * (1 - fy) +
+        raw[i + 1]     * fx       * (1 - fy) +
+        raw[i + W]     * (1 - fx) * fy +
+        raw[i + W + 1] * fx       * fy;
+
+      out[py * outW + px] = Math.round(v * fade);
+    }
+  }
+
+  console.log(
+    '[tattoo-stencil] Variable unwrap: %dx%d → %dx%d (pad %d,%d, maxCurv=%d%%, bins=%d)',
+    W, H, outW, outH, padX, padY, Math.round(maxCurv * 100), numBins,
+  );
+
+  return sharp(out, { raw: { width: outW, height: outH, channels: 1 } })
     .png()
     .toBuffer();
 }
@@ -536,7 +1086,7 @@ async function traceToSvg(png: Buffer): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     potrace.trace(png, {
       threshold: 128,
-      turdSize: 15,        // suppress small speckles
+      turdSize: 15,
       optCurve: true,
       optTolerance: 0.4,
       alphaMax: 1.3,

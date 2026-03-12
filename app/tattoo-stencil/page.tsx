@@ -1,16 +1,16 @@
 /* ─────────────────────────────────────────────────────────────
    /tattoo-stencil – Tattoo Stencil Creator page
    ───────────────────────────────────────────────────────────── */
-'use client';
+"use client";
 
-import React, { useCallback } from 'react';
-import { useTattooStencil } from '@/components/TattooStencilCreator/hooks/useTattooStencil';
-import TattooUploader from '@/components/TattooStencilCreator/components/TattooUploader';
-import StencilPreview from '@/components/TattooStencilCreator/components/StencilPreview';
-import ProcessingStatus from '@/components/TattooStencilCreator/components/ProcessingStatus';
-import StencilOptions from '@/components/TattooStencilCreator/components/StencilOptions';
-import BoundarySelector from '@/components/TattooStencilCreator/components/BoundarySelector';
-import type { WrapBoundary } from '@/components/TattooStencilCreator/types';
+import React, { useCallback } from "react";
+import { useTattooStencil } from "@/components/TattooStencilCreator/hooks/useTattooStencil";
+import TattooUploader from "@/components/TattooStencilCreator/components/TattooUploader";
+import StencilPreview from "@/components/TattooStencilCreator/components/StencilPreview";
+import ProcessingStatus from "@/components/TattooStencilCreator/components/ProcessingStatus";
+import StencilOptions from "@/components/TattooStencilCreator/components/StencilOptions";
+import RegionEditor from "@/components/TattooStencilCreator/components/RegionEditor";
+import type { RegionEditorResult } from "@/components/TattooStencilCreator/types";
 
 export default function TattooStencilPage() {
   const {
@@ -19,30 +19,30 @@ export default function TattooStencilPage() {
     result,
     options,
     setOptions,
-    wrapBoundary,
-    awaitingBoundary,
+    regionResult,
+    awaitingRegions,
     handleUpload,
     processImage,
-    confirmBoundaryAndProcess,
+    confirmRegionsAndProcess,
     reset,
   } = useTattooStencil();
 
   const isBusy =
-    processing.step !== 'idle' &&
-    processing.step !== 'complete' &&
-    processing.step !== 'error' &&
-    processing.step !== 'awaiting-boundary';
+    processing.step !== "idle" &&
+    processing.step !== "complete" &&
+    processing.step !== "error" &&
+    processing.step !== "awaiting-regions";
 
-  /** User confirmed boundary → proceed to API. */
-  const handleBoundaryConfirm = useCallback(
-    (boundary: WrapBoundary) => confirmBoundaryAndProcess(boundary),
-    [confirmBoundaryAndProcess],
+  /** User confirmed regions → proceed to API. */
+  const handleRegionConfirm = useCallback(
+    (result: RegionEditorResult) => confirmRegionsAndProcess(result),
+    [confirmRegionsAndProcess],
   );
 
-  /** User chose to skip boundary → proceed without. */
-  const handleBoundarySkip = useCallback(
-    () => confirmBoundaryAndProcess(null),
-    [confirmBoundaryAndProcess],
+  /** User chose to skip → proceed without. */
+  const handleRegionSkip = useCallback(
+    () => confirmRegionsAndProcess(null),
+    [confirmRegionsAndProcess],
   );
 
   return (
@@ -62,14 +62,15 @@ export default function TattooStencilPage() {
       <div className="grid gap-8 lg:grid-cols-2">
         {/* LEFT – Upload & Options / Boundary selector */}
         <div className="flex flex-col gap-6">
-          {/* Show boundary selector when awaiting user input */}
-          {awaitingBoundary && image ? (
-            <BoundarySelector
+          {/* Show region editor when awaiting user input */}
+          {awaitingRegions && image ? (
+            <RegionEditor
               imageSrc={image.preview}
               imageWidth={image.width}
               imageHeight={image.height}
-              onConfirm={handleBoundaryConfirm}
-              onSkip={handleBoundarySkip}
+              onConfirm={handleRegionConfirm}
+              onSkip={handleRegionSkip}
+              initialRegions={regionResult}
             />
           ) : (
             <>
@@ -97,7 +98,7 @@ export default function TattooStencilPage() {
         {/* RIGHT – Result */}
         <div className="flex flex-col gap-6">
           {result ? (
-            <StencilPreview result={result} wrapBoundary={wrapBoundary} />
+            <StencilPreview result={result} />
           ) : (
             <EmptyResultPlaceholder />
           )}

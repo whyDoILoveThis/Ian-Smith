@@ -49,7 +49,7 @@ export const STEP_DESCRIPTIONS: Record<string, string> = {
   uploading: 'Preparing image…',
   'detecting-pose': 'Detecting body pose…',
   'isolating-limb': 'Isolating tattoo region…',
-  'awaiting-boundary': 'Draw the limb boundaries on the image…',
+  'awaiting-regions': 'Outline the limb and highlight the tattoo…',
   processing: 'Sending to processing pipeline…',
   flattening: 'Flattening surface curvature…',
   'generating-stencil': 'Generating stencil…',

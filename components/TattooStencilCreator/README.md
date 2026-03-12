@@ -9,16 +9,18 @@ app/
   tattoo-stencil/
     page.tsx                     ← Main route (client component)
   api/tattoo-stencil/
-    route.ts                     ← POST endpoint – image processing pipeline
+    route.ts                     ← POST endpoint – LAB color-space pipeline (v6)
 
 components/TattooStencilCreator/
   components/
     TattooUploader.tsx           ← Drag-and-drop upload + preview
-    StencilPreview.tsx           ← Result display + download
+    RegionEditor.tsx             ← Polygon limb outline + brush tattoo highlighter
+    StencilPreview.tsx           ← Result display + download + debug overlay
     ProcessingStatus.tsx         ← Animated progress indicator
     StencilOptions.tsx           ← User-configurable knobs
+    BoundarySelector.tsx         ← (deprecated) Old 4-point boundary editor
   hooks/
-    useTattooStencil.ts          ← Orchestration hook (upload → detect → API → result)
+    useTattooStencil.ts          ← Orchestration hook (upload → detect → regions → API → result)
   lib/
     constants.ts                 ← Shared configuration & MediaPipe paths
   types/
@@ -30,23 +32,30 @@ components/TattooStencilCreator/
     limbExtraction.ts            ← Limb region extraction from pose landmarks
 ```
 
-## Processing Pipeline
+## Processing Pipeline (v6 — LAB color-space)
 
-| Step | Where  | What                                                    |
-| ---- | ------ | ------------------------------------------------------- |
-| 1    | Client | MediaPipe Pose Landmarker detects 33 body keypoints     |
-| 2    | Client | Best limb (arm preferred) is isolated with bounding box |
-| 3    | Client | Image is compressed to JPEG (max 2048 px) for upload    |
-| 4    | Server | Crop to limb ROI                                        |
-| 5    | Server | Grayscale → median filter → normalise → contrast boost  |
-| 6    | Server | Unsharp-mask sharpening                                 |
-| 7    | Server | Laplacian edge detection                                |
-| 8    | Server | Threshold → binary stencil                              |
-| 9    | Server | Morphological dilation (edge thickness)                 |
-| 10   | Server | Negate (dark lines on white)                            |
-| 11   | Server | Rotate to correct limb axis (surface flattening)        |
-| 12   | Server | PNG output                                              |
-| 13   | Server | Optional SVG via Potrace                                |
+| Step | Where  | What                                                                     |
+| ---- | ------ | ------------------------------------------------------------------------ |
+| 1    | Client | MediaPipe Pose Landmarker detects 33 body keypoints                      |
+| 2    | Client | Best limb (arm preferred) is isolated with bounding box                  |
+| 3    | Client | User outlines the limb (polygon) and paints over the tattoo (brush mask) |
+| 4    | Client | Image is compressed to JPEG (max 1536 px) for upload                     |
+| 5    | Server | Flatten alpha → optional crop → resize → median denoise                  |
+| 6    | Server | Convert RGB → CIE-LAB color space per-pixel                              |
+| 7    | Server | Ink/skin separation: supervised (mask) or unsupervised (histogram)       |
+| 8    | Server | Cylindrical surface unwrap (PCA from polygon or AI landmarks)            |
+| 9    | Server | Otsu auto-threshold → binary stencil                                     |
+| 10   | Server | Cleanup: median filter + anti-alias blur + re-threshold                  |
+| 11   | Server | Rotate to correct limb axis                                              |
+| 12   | Server | PNG output + optional SVG via Potrace                                    |
+
+### Key algorithms
+
+- **CIE-LAB color space**: Separates lightness (L) from chrominance (a, b), making ink detection robust under varying illumination.
+- **Supervised separation**: When the user paints over the tattoo, ink/skin LAB statistics are computed from the mask. Each pixel is scored by standardised distance from the skin model.
+- **Unsupervised separation**: Without a mask, the dominant skin color is estimated via histogram peak in L channel, then per-pixel LAB distance is computed.
+- **Otsu's method**: Automatic threshold selection that maximises between-class variance — adapts to each image instead of using hard-coded values.
+- **PCA cylinder fitting**: A polygon outline of the limb gives cylinder axis via principal component analysis, replacing the old 4-point system.
 
 ## Dependencies
 
@@ -54,8 +63,9 @@ components/TattooStencilCreator/
 | ------------------------- | ---------------------------------------------- | ----------------------- |
 | `react-dropzone`          | Drag-and-drop file upload                      | Fully free / MIT        |
 | `@mediapipe/tasks-vision` | Client-side pose detection (WASM + CDN models) | Fully free / Apache-2.0 |
-| `sharp`                   | Server-side image processing                   | Fully free / Apache-2.0 |
+| `sharp`                   | Server-side image processing (libvips)         | Fully free / Apache-2.0 |
 | `potrace`                 | Bitmap → SVG vectorisation                     | Fully free / GPL-2.0    |
+| `lucide-react`            | Icons                                          | Fully free / ISC        |
 
 All processing runs **locally** – no third-party API keys or paid services required.
 
