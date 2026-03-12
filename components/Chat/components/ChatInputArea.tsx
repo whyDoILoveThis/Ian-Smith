@@ -189,7 +189,66 @@ export function ChatInputArea({
   screenName = "",
 }: ChatInputAreaProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const altFileInputRef = useRef<HTMLInputElement>(null);
   const wasSendingRef = useRef(false);
+
+  // ── Image-menu state ───────────────────────────────────────────────
+  const [showImageMenu, setShowImageMenu] = useState(false);
+  const imageMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close image menu on outside click
+  useEffect(() => {
+    if (!showImageMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        imageMenuRef.current &&
+        !imageMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowImageMenu(false);
+      }
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [showImageMenu]);
+
+  const handlePhotoLibraryPick = useCallback(async () => {
+    setShowImageMenu(false);
+    if (!slotId || isSending) return;
+    try {
+      if ("showOpenFilePicker" in window) {
+        const [handle] = await (
+          window as unknown as {
+            showOpenFilePicker: (
+              opts: unknown,
+            ) => Promise<{ getFile: () => Promise<File> }[]>;
+          }
+        ).showOpenFilePicker({
+          types: [
+            {
+              description: "Images",
+              accept: {
+                "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic"],
+              },
+            },
+          ],
+          multiple: false,
+        });
+        const file = await handle.getFile();
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        const mockEvent = {
+          target: { files: dt.files, value: "" },
+        } as unknown as React.ChangeEvent<HTMLInputElement>;
+        handleImageUpload(mockEvent);
+      } else {
+        // Fallback for browsers without showOpenFilePicker (e.g. Safari)
+        altFileInputRef.current?.click();
+      }
+    } catch {
+      // User cancelled
+    }
+  }, [slotId, isSending, handleImageUpload]);
 
   // ── Magic-menu state ───────────────────────────────────────────────
   const [showMagicMenu, setShowMagicMenu] = useState(false);
@@ -409,30 +468,76 @@ export function ChatInputArea({
           }}
           className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-${chatTheme}-400 border-opacity-70 disabled:opacity-50`}
         />
-        <label
-          className={`flex-shrink-0 rounded-full border border-${chatTheme}-400 p-2.5 text-white/85 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"}`}
-        >
+        {/* Image picker button + popup menu */}
+        <div className="relative">
+          {/* Hidden file inputs */}
           <input
+            ref={fileInputRef}
             type="file"
             accept="image/*,video/*"
             disabled={!slotId || isSending}
             onChange={handleImageUpload}
             className="hidden"
           />
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+          <input
+            ref={altFileInputRef}
+            type="file"
+            accept="image/*"
+            disabled={!slotId || isSending}
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+
+          {/* Image menu popup */}
+          {showImageMenu && (
+            <div
+              ref={imageMenuRef}
+              className="absolute bottom-full right-0 mb-2 w-48 rounded-xl border border-white/15 bg-neutral-900/95 shadow-xl shadow-black/50 backdrop-blur-md overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImageMenu(false);
+                  fileInputRef.current?.click();
+                }}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-white/90 transition hover:bg-white/10"
+              >
+                <span className="text-base leading-none">📁</span>
+                <span>Device Picker</span>
+              </button>
+              <div className="border-t border-white/10" />
+              <button
+                type="button"
+                onClick={handlePhotoLibraryPick}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-white/90 transition hover:bg-white/10"
+              >
+                <span className="text-base leading-none">🖼️</span>
+                <span>Photo Library</span>
+              </button>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowImageMenu((prev) => !prev)}
+            disabled={!slotId || isSending}
+            className={`flex-shrink-0 rounded-full border border-${chatTheme}-400 p-2.5 text-white/85 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"} disabled:opacity-50`}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-        </label>
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </button>
+        </div>
         {/* Ephemeral video record button */}
         <button
           type="button"
