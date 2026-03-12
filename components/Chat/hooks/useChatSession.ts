@@ -14,7 +14,7 @@ import {
 import { rtdb } from "@/lib/firebaseConfig";
 import { appwrImgDelete } from "@/appwrite/appwrStorage";
 import { comboToRoomPath, roomStorageKey } from "../constants";
-import { deriveKeyFromCombo, decryptMessage, encryptMessage } from "../crypto";
+import { deriveKeyFromCombo, decryptMessage, encryptMessage, hashPasskey } from "../crypto";
 import type { Slots, Message } from "../types";
 
 export function useChatSession(
@@ -284,8 +284,9 @@ export function useChatSession(
   const setSpotPasskey = useCallback(
     async (targetSlot: "1" | "2", passkey: string) => {
       try {
+        const hashed = await hashPasskey(passkey);
         await update(ref(rtdb, `${roomPath}/slots/${targetSlot}`), {
-          passkey: passkey.trim(),
+          passkey: hashed,
         });
       } catch {
         setError("Failed to set passkey.");
@@ -308,7 +309,8 @@ export function useChatSession(
           setError("No passkey has been set for that spot.");
           return false;
         }
-        if (slotData.passkey !== enteredPasskey.trim()) {
+        const enteredHash = await hashPasskey(enteredPasskey);
+        if (slotData.passkey !== enteredHash) {
           setError("Incorrect passkey.");
           return false;
         }
@@ -425,7 +427,8 @@ export function useChatSession(
           setError("No passkey has been set for that spot.");
           return false;
         }
-        if (slotData.passkey !== enteredPasskey.trim()) {
+        const enteredHash = await hashPasskey(enteredPasskey);
+        if (slotData.passkey !== enteredHash) {
           setError("Incorrect passkey.");
           return false;
         }

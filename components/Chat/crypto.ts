@@ -49,6 +49,15 @@ function base64ToBuffer(base64: string): ArrayBuffer {
   return bytes.buffer as ArrayBuffer;
 }
 
+// Hash a passkey with SHA-256 + salt so it's never stored in plaintext
+const PASSKEY_SALT = "twoWayChat:passkey:v1";
+
+export async function hashPasskey(passkey: string): Promise<string> {
+  const salted = `${PASSKEY_SALT}:${passkey.trim()}`;
+  const digest = await crypto.subtle.digest("SHA-256", encodeText(salted));
+  return bufferToHex(digest);
+}
+
 // Derive an AES key from the LockBox combo
 export async function deriveKeyFromCombo(
   combo: [number, number, number, number],
