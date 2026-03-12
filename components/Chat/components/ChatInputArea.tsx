@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Message, ThemeColors } from "../types";
+import { PhoneGalleryPicker } from "./PhoneGalleryPicker";
 
 // Default slot colors (same as touch indicators)
 const DEFAULT_SLOT_COLORS: Record<string, string> = {
@@ -190,11 +191,11 @@ export function ChatInputArea({
 }: ChatInputAreaProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const altFileInputRef = useRef<HTMLInputElement>(null);
   const wasSendingRef = useRef(false);
 
   // ── Image-menu state ───────────────────────────────────────────────
   const [showImageMenu, setShowImageMenu] = useState(false);
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
   const imageMenuRef = useRef<HTMLDivElement>(null);
 
   // Close image menu on outside click
@@ -212,43 +213,18 @@ export function ChatInputArea({
     return () => document.removeEventListener("pointerdown", handler);
   }, [showImageMenu]);
 
-  const handlePhotoLibraryPick = useCallback(async () => {
-    setShowImageMenu(false);
-    if (!slotId || isSending) return;
-    try {
-      if ("showOpenFilePicker" in window) {
-        const [handle] = await (
-          window as unknown as {
-            showOpenFilePicker: (
-              opts: unknown,
-            ) => Promise<{ getFile: () => Promise<File> }[]>;
-          }
-        ).showOpenFilePicker({
-          types: [
-            {
-              description: "Images",
-              accept: {
-                "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic"],
-              },
-            },
-          ],
-          multiple: false,
-        });
-        const file = await handle.getFile();
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        const mockEvent = {
-          target: { files: dt.files, value: "" },
-        } as unknown as React.ChangeEvent<HTMLInputElement>;
-        handleImageUpload(mockEvent);
-      } else {
-        // Fallback for browsers without showOpenFilePicker (e.g. Safari)
-        altFileInputRef.current?.click();
-      }
-    } catch {
-      // User cancelled
-    }
-  }, [slotId, isSending, handleImageUpload]);
+  const handleGallerySelect = useCallback(
+    (file: File) => {
+      setShowGalleryPicker(false);
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const mockEvent = {
+        target: { files: dt.files, value: "" },
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleImageUpload(mockEvent);
+    },
+    [handleImageUpload],
+  );
 
   // ── Magic-menu state ───────────────────────────────────────────────
   const [showMagicMenu, setShowMagicMenu] = useState(false);
@@ -403,125 +379,144 @@ export function ChatInputArea({
   };
 
   return (
-    <div className="flex-shrink-0 border-t border-white/10 bg-black/60 px-2 py-2 safe-area-inset-bottom">
-      {/* Reply preview bar */}
-      {replyingTo && (
-        <div className="mb-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-2 py-1.5 text-sm">
-          {replyingTo.imageUrl && (
-            <img
-              src={replyingTo.imageUrl}
-              alt="Reply"
-              className="w-10 h-10 rounded object-cover border border-white/10 flex-shrink-0"
+    <>
+      <div className="flex-shrink-0 border-t border-white/10 bg-black/60 px-2 py-2 safe-area-inset-bottom">
+        {/* Reply preview bar */}
+        {replyingTo && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-2 py-1.5 text-sm">
+            {replyingTo.imageUrl && (
+              <img
+                src={replyingTo.imageUrl}
+                alt="Reply"
+                className="w-10 h-10 rounded object-cover border border-white/10 flex-shrink-0"
+              />
+            )}
+            <div className={`flex-1 border-l-2 border-${chatTheme}-400 pl-2`}>
+              <p className={`text-[10px] text-${chatTheme}-400 font-semibold`}>
+                Replying to {replyingTo.sender}
+              </p>
+              <p className="text-[10px] text-neutral-400 truncate">
+                {replyingTo.decryptedText?.slice(0, 40) ||
+                  (replyingTo.imageUrl ? "📷 Image" : "") ||
+                  (replyingTo.drawingData?.length ? "🎨 Drawing" : "") ||
+                  (replyingTo.videoUrl ? "📹 Video" : "")}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              className="text-neutral-400 hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        <div className="relative flex items-center gap-2">
+          {/* Local keystroke pulse glow */}
+          {localPulseKey > 0 && (
+            <div
+              key={`local-${localPulseKey}`}
+              className="keystroke-pulse-glow absolute inset-0 rounded-full"
+              style={{
+                boxShadow: `0 0 14px 3px ${myColor}, inset 0 0 6px 1px ${myColor}40`,
+              }}
             />
           )}
-          <div className={`flex-1 border-l-2 border-${chatTheme}-400 pl-2`}>
-            <p className={`text-[10px] text-${chatTheme}-400 font-semibold`}>
-              Replying to {replyingTo.sender}
-            </p>
-            <p className="text-[10px] text-neutral-400 truncate">
-              {replyingTo.decryptedText?.slice(0, 40) ||
-                (replyingTo.imageUrl ? "📷 Image" : "") ||
-                (replyingTo.drawingData?.length ? "🎨 Drawing" : "") ||
-                (replyingTo.videoUrl ? "📹 Video" : "")}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setReplyingTo(null)}
-            className="text-neutral-400 hover:text-white transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-      <div className="relative flex items-center gap-2">
-        {/* Local keystroke pulse glow */}
-        {localPulseKey > 0 && (
-          <div
-            key={`local-${localPulseKey}`}
-            className="keystroke-pulse-glow absolute inset-0 rounded-full"
-            style={{
-              boxShadow: `0 0 14px 3px ${myColor}, inset 0 0 6px 1px ${myColor}40`,
-            }}
-          />
-        )}
-        {/* Remote keystroke pulse glow */}
-        {remotePulseKey > 0 && (
-          <div
-            key={`remote-${remotePulseKey}`}
-            className="keystroke-pulse-glow absolute inset-0 rounded-full"
-            style={{
-              boxShadow: `0 0 14px 3px ${otherColor}, inset 0 0 6px 1px ${otherColor}40`,
-            }}
-          />
-        )}
-        <input
-          ref={inputRef}
-          autoFocus
-          type="text"
-          placeholder={slotId ? "Message" : "Join to chat"}
-          value={messageText}
-          disabled={!slotId || isSending}
-          onChange={(e) => handleTypingChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") sendAndRefocus();
-          }}
-          className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-${chatTheme}-400 border-opacity-70 disabled:opacity-50`}
-        />
-        {/* Image picker button + popup menu */}
-        <div className="relative">
-          {/* Hidden file inputs */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            disabled={!slotId || isSending}
-            onChange={handleImageUpload}
-            className="hidden"
-          />
-          <input
-            ref={altFileInputRef}
-            type="file"
-            accept="image/*"
-            disabled={!slotId || isSending}
-            onChange={handleImageUpload}
-            className="hidden"
-          />
-
-          {/* Image menu popup */}
-          {showImageMenu && (
+          {/* Remote keystroke pulse glow */}
+          {remotePulseKey > 0 && (
             <div
-              ref={imageMenuRef}
-              className="absolute bottom-full right-0 mb-2 w-48 rounded-xl border border-white/15 bg-neutral-900/95 shadow-xl shadow-black/50 backdrop-blur-md overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setShowImageMenu(false);
-                  fileInputRef.current?.click();
-                }}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-white/90 transition hover:bg-white/10"
-              >
-                <span className="text-base leading-none">📁</span>
-                <span>Device Picker</span>
-              </button>
-              <div className="border-t border-white/10" />
-              <button
-                type="button"
-                onClick={handlePhotoLibraryPick}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-white/90 transition hover:bg-white/10"
-              >
-                <span className="text-base leading-none">🖼️</span>
-                <span>Photo Library</span>
-              </button>
-            </div>
+              key={`remote-${remotePulseKey}`}
+              className="keystroke-pulse-glow absolute inset-0 rounded-full"
+              style={{
+                boxShadow: `0 0 14px 3px ${otherColor}, inset 0 0 6px 1px ${otherColor}40`,
+              }}
+            />
           )}
+          <input
+            ref={inputRef}
+            autoFocus
+            type="text"
+            placeholder={slotId ? "Message" : "Join to chat"}
+            value={messageText}
+            disabled={!slotId || isSending}
+            onChange={(e) => handleTypingChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") sendAndRefocus();
+            }}
+            className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-${chatTheme}-400 border-opacity-70 disabled:opacity-50`}
+          />
+          {/* Image picker button + popup menu */}
+          <div className="relative">
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              disabled={!slotId || isSending}
+              onChange={handleImageUpload}
+              className="hidden"
+            />
 
+            {/* Image menu popup */}
+            {showImageMenu && (
+              <div
+                ref={imageMenuRef}
+                className="absolute bottom-full right-0 mb-2 w-48 rounded-xl border border-white/15 bg-neutral-900/95 shadow-xl shadow-black/50 backdrop-blur-md overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImageMenu(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-white/90 transition hover:bg-white/10"
+                >
+                  <span className="text-base leading-none">📁</span>
+                  <span>Device Picker</span>
+                </button>
+                <div className="border-t border-white/10" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImageMenu(false);
+                    setShowGalleryPicker(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-white/90 transition hover:bg-white/10"
+                >
+                  <span className="text-base leading-none">🖼️</span>
+                  <span>Photo Library</span>
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowImageMenu((prev) => !prev)}
+              disabled={!slotId || isSending}
+              className={`flex-shrink-0 rounded-full border border-${chatTheme}-400 p-2.5 text-white/85 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"} disabled:opacity-50`}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </button>
+          </div>
+          {/* Ephemeral video record button */}
           <button
             type="button"
-            onClick={() => setShowImageMenu((prev) => !prev)}
+            onClick={onOpenVideoRecorder}
             disabled={!slotId || isSending}
-            className={`flex-shrink-0 rounded-full border border-${chatTheme}-400 p-2.5 text-white/85 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"} disabled:opacity-50`}
+            className={`flex-shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 p-2.5 text-amber-400 transition ${slotId ? "hover:bg-amber-500/20" : "opacity-50"} disabled:opacity-50`}
+            title="Record ephemeral video"
           >
             <svg
               className="h-5 w-5"
@@ -533,70 +528,51 @@ export function ChatInputArea({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
               />
             </svg>
           </button>
-        </div>
-        {/* Ephemeral video record button */}
-        <button
-          type="button"
-          onClick={onOpenVideoRecorder}
-          disabled={!slotId || isSending}
-          className={`flex-shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 p-2.5 text-amber-400 transition ${slotId ? "hover:bg-amber-500/20" : "opacity-50"} disabled:opacity-50`}
-          title="Record ephemeral video"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-            />
-          </svg>
-        </button>
-        {/* Send / Magic button + popup menu */}
-        <div className="relative">
-          {/* Magic-menu popup (appears above the button) */}
-          {showMagicMenu && (
-            <div
-              ref={menuRef}
-              className="absolute bottom-full right-0 mb-2 w-52 rounded-xl border border-white/15 bg-neutral-900/95 shadow-xl shadow-black/50 backdrop-blur-md overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
-            >
-              {/* Header */}
-              <div className="px-3 py-2 border-b border-white/10">
-                <p className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider">
-                  {messageText.trim() ? "Rewrite with AI" : "Generate with AI"}
-                </p>
-              </div>
+          {/* Send / Magic button + popup menu */}
+          <div className="relative">
+            {/* Magic-menu popup (appears above the button) */}
+            {showMagicMenu && (
+              <div
+                ref={menuRef}
+                className="absolute bottom-full right-0 mb-2 w-52 rounded-xl border border-white/15 bg-neutral-900/95 shadow-xl shadow-black/50 backdrop-blur-md overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
+              >
+                {/* Header */}
+                <div className="px-3 py-2 border-b border-white/10">
+                  <p className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider">
+                    {messageText.trim()
+                      ? "Rewrite with AI"
+                      : "Generate with AI"}
+                  </p>
+                </div>
 
-              {/* Length selector */}
-              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
-                {LENGTH_CHIPS.map((chip) => (
-                  <button
-                    key={chip.value}
-                    type="button"
-                    onClick={() => setReplyLength(chip.value)}
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
-                      replyLength === chip.value
-                        ? "bg-purple-600 text-white"
-                        : "bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
+                {/* Length selector */}
+                <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
+                  {LENGTH_CHIPS.map((chip) => (
+                    <button
+                      key={chip.value}
+                      type="button"
+                      onClick={() => setReplyLength(chip.value)}
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
+                        replyLength === chip.value
+                          ? "bg-purple-600 text-white"
+                          : "bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
 
-              {/* Scrollable options list */}
-              <div className="max-h-52 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
-                {(messageText.trim() ? REWRITE_OPTIONS : GENERATE_OPTIONS).map(
-                  (opt) => (
+                {/* Scrollable options list */}
+                <div className="max-h-52 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
+                  {(messageText.trim()
+                    ? REWRITE_OPTIONS
+                    : GENERATE_OPTIONS
+                  ).map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
@@ -607,94 +583,102 @@ export function ChatInputArea({
                       <span className="text-base leading-none">{opt.icon}</span>
                       <span>{opt.label}</span>
                     </button>
-                  ),
-                )}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <button
-            onClick={() => {
-              // Suppress the click that fires after the hold-menu opened
-              if (justOpenedMenuRef.current) {
-                justOpenedMenuRef.current = false;
-                return;
+            <button
+              onClick={() => {
+                // Suppress the click that fires after the hold-menu opened
+                if (justOpenedMenuRef.current) {
+                  justOpenedMenuRef.current = false;
+                  return;
+                }
+                if (!showMagicMenu) sendAndRefocus();
+              }}
+              onPointerDown={onPointerDown}
+              onPointerUp={onPointerUpOrLeave}
+              onPointerLeave={onPointerUpOrLeave}
+              onContextMenu={(e) => e.preventDefault()}
+              disabled={
+                !slotId ||
+                isSending ||
+                isGenerating ||
+                (!showMagicMenu && !messageText.trim())
               }
-              if (!showMagicMenu) sendAndRefocus();
-            }}
-            onPointerDown={onPointerDown}
-            onPointerUp={onPointerUpOrLeave}
-            onPointerLeave={onPointerUpOrLeave}
-            onContextMenu={(e) => e.preventDefault()}
-            disabled={
-              !slotId ||
-              isSending ||
-              isGenerating ||
-              (!showMagicMenu && !messageText.trim())
-            }
-            className={`relative flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${themeColors.btn} ${themeColors.text} hover:opacity-80`}
-            title="Send (hold 5s for AI magic menu)"
-          >
-            {/* Hold-to-open ring animation */}
-            {isHolding && (
-              <svg
-                className="absolute inset-0 h-full w-full -rotate-90 pointer-events-none"
-                viewBox="0 0 40 40"
-              >
-                <circle
-                  cx="20"
-                  cy="20"
-                  r="18"
+              className={`relative flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${themeColors.btn} ${themeColors.text} hover:opacity-80`}
+              title="Send (hold 5s for AI magic menu)"
+            >
+              {/* Hold-to-open ring animation */}
+              {isHolding && (
+                <svg
+                  className="absolute inset-0 h-full w-full -rotate-90 pointer-events-none"
+                  viewBox="0 0 40 40"
+                >
+                  <circle
+                    cx="20"
+                    cy="20"
+                    r="18"
+                    fill="none"
+                    stroke="#a855f7"
+                    strokeWidth="2.5"
+                    strokeDasharray={`${2 * Math.PI * 18}`}
+                    strokeDashoffset={`${2 * Math.PI * 18}`}
+                    strokeLinecap="round"
+                    style={{
+                      animation: `magic-ring-fill ${HOLD_TO_MENU_MS}ms linear forwards`,
+                    }}
+                  />
+                </svg>
+              )}
+              {isSending || isGenerating ? (
+                <svg
+                  className="h-5 w-5 animate-spin"
+                  viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#a855f7"
-                  strokeWidth="2.5"
-                  strokeDasharray={`${2 * Math.PI * 18}`}
-                  strokeDashoffset={`${2 * Math.PI * 18}`}
-                  strokeLinecap="round"
-                  style={{
-                    animation: `magic-ring-fill ${HOLD_TO_MENU_MS}ms linear forwards`,
-                  }}
-                />
-              </svg>
-            )}
-            {isSending || isGenerating ? (
-              <svg
-                className="h-5 w-5 animate-spin"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
                   stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
-            )}
-          </button>
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* In-app Photo Gallery Picker */}
+      {showGalleryPicker && (
+        <PhoneGalleryPicker
+          onSelect={handleGallerySelect}
+          onClose={() => setShowGalleryPicker(false)}
+        />
+      )}
+    </>
   );
 }

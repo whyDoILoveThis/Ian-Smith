@@ -18,6 +18,7 @@ export { ColorWheelPicker } from "./ColorWheelPicker";
 export { EmojiReactionPicker, EmojiReactionsDisplay } from "./EmojiReactionPicker";
 export { PhotoGalleryOverlay } from "./PhotoGalleryOverlay";
 export { DrawingPlayer } from "./DrawingPlayer";
+export { PhoneGalleryPicker } from "./PhoneGalleryPicker";
 export { DrawingRecordPreview } from "./DrawingRecordPreview";
 export { DrawingGalleryOverlay } from "./DrawingGalleryOverlay";
 export { ErrorToast } from "./ErrorToast";
