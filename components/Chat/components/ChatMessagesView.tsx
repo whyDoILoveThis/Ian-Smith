@@ -97,6 +97,7 @@ export function ChatMessagesView({
 
   useEffect(() => {
     const grew = messages.length > prevMsgLenRef.current;
+    const wasEmpty = prevMsgLenRef.current === 0;
     const newFirstId = messages.length > 0 ? messages[0].id : null;
     const firstIdChanged = newFirstId !== prevFirstIdRef.current;
 
@@ -109,6 +110,17 @@ export function ChatMessagesView({
       // New messages at the end AND user is near the bottom — pin to newest.
       // If the user is scrolled far up, leave them where they are.
       setWinStart(Math.max(0, messages.length - MESSAGES_PER_PAGE));
+    }
+
+    // When messages first arrive (0 → N), force scroll to bottom after render
+    if (wasEmpty && messages.length > 0) {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({
+          behavior: "instant",
+          block: "end",
+        });
+        lastManualScrollTimeRef.current = 0;
+      });
     }
 
     prevMsgLenRef.current = messages.length;
@@ -252,14 +264,32 @@ export function ChatMessagesView({
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, []);
 
-  // Scroll to bottom on initial load
+  // Scroll to bottom on initial load — retry a few times to catch
+  // async decryption and image loads that change content height.
+  const initialScrollDoneRef = useRef(false);
   useEffect(() => {
-    const id = window.setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
-      // Initialize manual scroll time so auto-scroll works on first load
-      lastManualScrollTimeRef.current = 0;
-    }, 100);
-    return () => window.clearTimeout(id);
+    if (initialScrollDoneRef.current) return;
+    const delays = [50, 200, 500, 1200];
+    const timers = delays.map((ms) =>
+      window.setTimeout(() => {
+        bottomRef.current?.scrollIntoView({
+          behavior: "instant",
+          block: "end",
+        });
+        lastManualScrollTimeRef.current = 0;
+      }, ms),
+    );
+    // After the last attempt, mark done so this doesn't re-run
+    const finalTimer = window.setTimeout(
+      () => {
+        initialScrollDoneRef.current = true;
+      },
+      delays[delays.length - 1] + 50,
+    );
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(finalTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
