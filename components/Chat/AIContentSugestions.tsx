@@ -1008,6 +1008,10 @@ export default function AIContentSugestions() {
         messages={firebaseWithSlot.messages}
         slots={slots}
         onScrollToMessage={(id) => setScrollToMessageId(id + ":" + Date.now())}
+        hasMoreOnServer={firebaseWithSlot.hasMoreOnServer}
+        isLoadingAll={firebaseWithSlot.isLoadingAll}
+        loadAllProgress={firebaseWithSlot.loadAllProgress}
+        onLoadAll={firebaseWithSlot.loadAllFromServer}
       />
 
       {/* Active Call Banner (when minimized) */}

@@ -163,9 +163,28 @@ export function useChatSession(
     restoreAttemptedRef.current = true;
   }, [claimSlot, formatJoinError, isUnlocked, restoreSession, slotId, slots, storageKey, roomPath]);
 
-  const handleJoin = useCallback(async () => {
+  // ── Set a passkey on a spot ─────────────────────────────────────────
+  const setSpotPasskey = useCallback(
+    async (targetSlot: "1" | "2", passkey: string) => {
+      try {
+        const hashed = await hashPasskey(passkey);
+        await update(ref(rtdb, `${roomPath}/slots/${targetSlot}`), {
+          passkey: hashed,
+        });
+      } catch {
+        setError("Failed to set passkey.");
+      }
+    },
+    [roomPath],
+  );
+
+  const handleJoin = useCallback(async (passkey?: string) => {
     if (!screenName.trim()) {
       setError("Please enter a screen name.");
+      return;
+    }
+    if (!passkey || !passkey.trim()) {
+      setError("Please create a passkey for your spot.");
       return;
     }
     if (availability.isFull) {
@@ -193,12 +212,14 @@ export function useChatSession(
       const gotSlot1 = !availability.isSlot1Taken && (await attempt("1"));
       if (gotSlot1) {
         setSlotId("1");
+        await setSpotPasskey("1", passkey.trim());
         setIsJoining(false);
         return;
       }
       const gotSlot2 = !availability.isSlot2Taken && (await attempt("2"));
       if (gotSlot2) {
         setSlotId("2");
+        await setSpotPasskey("2", passkey.trim());
         setIsJoining(false);
         return;
       }
@@ -216,6 +237,7 @@ export function useChatSession(
     databaseUrl,
     formatJoinError,
     screenName,
+    setSpotPasskey,
   ]);
 
   // Save session to localStorage when slotId changes
@@ -279,21 +301,6 @@ export function useChatSession(
       window.localStorage.removeItem(storageKey);
     }
   }, [clearAllMessages, isLeaving, pendingImageUrl, slotId, storageKey, roomPath]);
-
-  // ── Set a passkey on a spot ─────────────────────────────────────────
-  const setSpotPasskey = useCallback(
-    async (targetSlot: "1" | "2", passkey: string) => {
-      try {
-        const hashed = await hashPasskey(passkey);
-        await update(ref(rtdb, `${roomPath}/slots/${targetSlot}`), {
-          passkey: hashed,
-        });
-      } catch {
-        setError("Failed to set passkey.");
-      }
-    },
-    [roomPath],
-  );
 
   // ── Kick a user from a spot (verify passkey, clear slot only) ───────
   const kickSpot = useCallback(

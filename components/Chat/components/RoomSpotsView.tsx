@@ -9,6 +9,7 @@ import { WordSearchGame } from "./WordSearchGame";
 import { ColorWheelPicker } from "./ColorWheelPicker";
 import { PhotoGalleryOverlay } from "./PhotoGalleryOverlay";
 import { DrawingGalleryOverlay } from "./DrawingGalleryOverlay";
+import { VideoGalleryOverlay } from "./VideoGalleryOverlay";
 
 // ─── Tic-Tac-Toe winning line overlay ───────────────────────────────────────
 function WinningLineOverlay({
@@ -108,7 +109,7 @@ type RoomSpotsViewProps = {
   isJoining: boolean;
   isLeaving: boolean;
   error: string | null;
-  handleJoin: () => void;
+  handleJoin: (passkey?: string) => void;
   handleLeave: () => void;
   tttState: TttState | null;
   handleTttMove: (index: number) => void;
@@ -176,20 +177,27 @@ export function RoomSpotsView({
   const [activeGame, setActiveGame] = useState<"ttt" | "wordsearch">("ttt");
   const [showPhotoGallery, setShowPhotoGallery] = useState(false);
   const [showDrawingGallery, setShowDrawingGallery] = useState(false);
+  const [showVideoGallery, setShowVideoGallery] = useState(false);
   const [showIndicatorColorPicker, setShowIndicatorColorPicker] =
     useState(false);
   const indicatorPickerRef = useRef<HTMLDivElement>(null);
   const indicatorButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Photo / Drawing loading state
+  // Photo / Drawing / Video loading state
   const [photoLoading, setPhotoLoading] = useState(false);
   const [drawingLoading, setDrawingLoading] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(false);
   const [photosReady, setPhotosReady] = useState(false);
   const [drawingsReady, setDrawingsReady] = useState(false);
+  const [videosReady, setVideosReady] = useState(false);
+  const [photoProgress, setPhotoProgress] = useState(0);
+  const [drawingProgress, setDrawingProgress] = useState(0);
+  const [videoProgress, setVideoProgress] = useState(0);
 
   // All messages fetched from DB for gallery use
   const [allPhotoMessages, setAllPhotoMessages] = useState<Message[]>([]);
   const [allDrawingMessages, setAllDrawingMessages] = useState<Message[]>([]);
+  const [allVideoMessages, setAllVideoMessages] = useState<Message[]>([]);
 
   // Counts — use full DB results when available, otherwise paginated
   const photoCount = photosReady
@@ -200,9 +208,15 @@ export function RoomSpotsView({
         (m) => m.drawingData && m.drawingData.length > 0,
       ).length
     : messages.filter((m) => m.drawingData && m.drawingData.length > 0).length;
+  const videoCount = videosReady
+    ? allVideoMessages.filter((m) => m.videoUrl && !m.isEphemeral).length
+    : messages.filter((m) => m.videoUrl && !m.isEphemeral).length;
 
   const LEAVE_CONFIRMATION = "yesireallywanttoactuallyleavefrfr";
   const canLeave = leaveConfirmText === LEAVE_CONFIRMATION;
+
+  // Join passkey
+  const [joinPasskey, setJoinPasskey] = useState("");
 
   // Passkey modal state
   const [passkeyModal, setPasskeyModal] = useState<{
@@ -253,25 +267,61 @@ export function RoomSpotsView({
 
   // (photo/drawing ready states are remembered once loaded)
 
-  // ── Fetch all messages from Firebase ────────────────────────────────────
-  const fetchAllMessagesFromDB = useCallback(async (): Promise<Message[]> => {
-    const messagesRef = ref(rtdb, `${roomPath}/messages`);
-    const snap = await get(query(messagesRef, orderByKey()));
-    const val = (snap.val() || {}) as Record<string, Omit<Message, "id">>;
-    return Object.entries(val)
-      .map(([id, data]) => ({ id, ...data }) as Message)
-      .sort((a, b) => {
-        const aTime = typeof a.createdAt === "number" ? a.createdAt : 0;
-        const bTime = typeof b.createdAt === "number" ? b.createdAt : 0;
-        return aTime - bTime;
-      });
-  }, [roomPath]);
+  // ── Fetch all messages from Firebase with progress ──────────────────────
+  const fetchAllMessagesFromDB = useCallback(
+    async (onProgress?: (pct: number) => void): Promise<Message[]> => {
+      // Smoothly animate progress during the network fetch (the slow part).
+      // The interval ticks from 0→80 using an ease-out curve so it feels
+      // responsive even though we can't know real download progress.
+      let current = 0;
+      const interval = onProgress
+        ? setInterval(() => {
+            // ease-out: big jumps early, slows as it approaches 80
+            current += (80 - current) * 0.08;
+            onProgress(Math.round(current));
+          }, 120)
+        : null;
+
+      let snap;
+      try {
+        const messagesRef = ref(rtdb, `${roomPath}/messages`);
+        snap = await get(query(messagesRef, orderByKey()));
+      } finally {
+        if (interval) clearInterval(interval);
+      }
+
+      onProgress?.(85);
+      const val = (snap.val() || {}) as Record<string, Omit<Message, "id">>;
+      const entries = Object.entries(val);
+      const total = entries.length;
+      if (total === 0) {
+        onProgress?.(100);
+        return [];
+      }
+
+      onProgress?.(90);
+      await new Promise((r) => setTimeout(r, 0));
+
+      const result: Message[] = entries
+        .map(([id, data]) => ({ id, ...data }) as Message)
+        .sort((a, b) => {
+          const aTime = typeof a.createdAt === "number" ? a.createdAt : 0;
+          const bTime = typeof b.createdAt === "number" ? b.createdAt : 0;
+          return aTime - bTime;
+        });
+
+      onProgress?.(100);
+      return result;
+    },
+    [roomPath],
+  );
 
   // ── Load photos handler (scan DB for all photos) ──────────────────────
   const handleLoadPhotos = useCallback(async () => {
     setPhotoLoading(true);
+    setPhotoProgress(0);
     try {
-      const allMsgs = await fetchAllMessagesFromDB();
+      const allMsgs = await fetchAllMessagesFromDB(setPhotoProgress);
       setAllPhotoMessages(allMsgs);
       setPhotosReady(true);
     } catch {
@@ -284,14 +334,30 @@ export function RoomSpotsView({
   // ── Load drawings handler (scan DB for all drawings) ───────────────────
   const handleLoadDrawings = useCallback(async () => {
     setDrawingLoading(true);
+    setDrawingProgress(0);
     try {
-      const allMsgs = await fetchAllMessagesFromDB();
+      const allMsgs = await fetchAllMessagesFromDB(setDrawingProgress);
       setAllDrawingMessages(allMsgs);
       setDrawingsReady(true);
     } catch {
       // silently fail
     } finally {
       setDrawingLoading(false);
+    }
+  }, [fetchAllMessagesFromDB]);
+
+  // ── Load videos handler (scan DB for all videos) ───────────────────────
+  const handleLoadVideos = useCallback(async () => {
+    setVideoLoading(true);
+    setVideoProgress(0);
+    try {
+      const allMsgs = await fetchAllMessagesFromDB(setVideoProgress);
+      setAllVideoMessages(allMsgs);
+      setVideosReady(true);
+    } catch {
+      // silently fail
+    } finally {
+      setVideoLoading(false);
     }
   }, [fetchAllMessagesFromDB]);
 
@@ -525,8 +591,19 @@ export function RoomSpotsView({
                 onChange={(e) => setScreenName(e.target.value)}
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
               />
+              <input
+                type="password"
+                placeholder="Create a passkey for your spot"
+                value={joinPasskey}
+                onChange={(e) => setJoinPasskey(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+              />
+              <p className="text-[10px] text-neutral-500 px-1">
+                This passkey lets you reclaim your spot from another device or
+                kick yourself if needed.
+              </p>
               <button
-                onClick={handleJoin}
+                onClick={() => handleJoin(joinPasskey)}
                 disabled={availability.isFull || isJoining}
                 className="w-full rounded-xl bg-emerald-400/90 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -683,7 +760,7 @@ export function RoomSpotsView({
             <div className="px-4 py-3 border-b border-white/[0.05]">
               <span className="text-xs font-semibold text-white">Media</span>
             </div>
-            <div className="p-3 grid grid-cols-2 gap-2">
+            <div className="p-3 grid grid-cols-3 gap-2">
               {/* Photos card */}
               <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 flex flex-col items-center gap-2">
                 <div className="flex items-center gap-1.5">
@@ -700,10 +777,14 @@ export function RoomSpotsView({
                 {photoLoading && (
                   <div className="w-full">
                     <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div className="h-full w-full bg-emerald-400/60 rounded-full animate-pulse" />
+                      <div
+                        className="h-full bg-emerald-400/80 rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${photoProgress}%` }}
+                      />
                     </div>
-                    <p className="text-[10px] text-neutral-500 text-center mt-1">
-                      Searching DB...
+                    <p className="text-[10px] text-neutral-500 text-center mt-1 tabular-nums">
+                      {photoProgress < 50 ? "Fetching..." : "Processing..."}{" "}
+                      {photoProgress}%
                     </p>
                   </div>
                 )}
@@ -749,10 +830,14 @@ export function RoomSpotsView({
                 {drawingLoading && (
                   <div className="w-full">
                     <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div className="h-full w-full bg-violet-400/60 rounded-full animate-pulse" />
+                      <div
+                        className="h-full bg-violet-400/80 rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${drawingProgress}%` }}
+                      />
                     </div>
-                    <p className="text-[10px] text-neutral-500 text-center mt-1">
-                      Searching DB...
+                    <p className="text-[10px] text-neutral-500 text-center mt-1 tabular-nums">
+                      {drawingProgress < 50 ? "Fetching..." : "Processing..."}{" "}
+                      {drawingProgress}%
                     </p>
                   </div>
                 )}
@@ -777,6 +862,57 @@ export function RoomSpotsView({
                     : drawingsReady
                       ? `Open Gallery (${allDrawingMessages.filter((m) => m.drawingData && m.drawingData.length > 0).length})`
                       : "Find All Drawings"}
+                </button>
+              </div>
+
+              {/* Videos card */}
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 flex flex-col items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-lg">🎬</span>
+                  <span className="text-xs font-medium text-white">Videos</span>
+                  {videoCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-[10px] text-neutral-300 font-medium tabular-nums">
+                      {videoCount}
+                    </span>
+                  )}
+                </div>
+
+                {/* Loading indicator */}
+                {videoLoading && (
+                  <div className="w-full">
+                    <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full bg-sky-400/80 rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${videoProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-neutral-500 text-center mt-1 tabular-nums">
+                      {videoProgress < 50 ? "Fetching..." : "Processing..."}{" "}
+                      {videoProgress}%
+                    </p>
+                  </div>
+                )}
+
+                {/* Load / Open button */}
+                <button
+                  type="button"
+                  onClick={
+                    videosReady
+                      ? () => setShowVideoGallery(true)
+                      : handleLoadVideos
+                  }
+                  disabled={videoLoading}
+                  className={`w-full rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all active:scale-[0.97] disabled:opacity-30 disabled:cursor-not-allowed ${
+                    videosReady
+                      ? "bg-sky-500/20 border border-sky-500/30 text-sky-300 hover:bg-sky-500/30"
+                      : "bg-white/[0.06] border border-white/10 text-neutral-300 hover:bg-white/10"
+                  }`}
+                >
+                  {videoLoading
+                    ? "Searching..."
+                    : videosReady
+                      ? `Open Gallery (${allVideoMessages.filter((m) => m.videoUrl && !m.isEphemeral).length})`
+                      : "Find All Videos"}
                 </button>
               </div>
             </div>
@@ -1200,6 +1336,15 @@ export function RoomSpotsView({
           }
           themeColors={themeColors}
           onClose={() => setShowDrawingGallery(false)}
+        />
+      )}
+
+      {/* Video Gallery — uses all messages fetched from DB */}
+      {showVideoGallery && (
+        <VideoGalleryOverlay
+          messages={allVideoMessages.length > 0 ? allVideoMessages : messages}
+          themeColors={themeColors}
+          onClose={() => setShowVideoGallery(false)}
         />
       )}
 

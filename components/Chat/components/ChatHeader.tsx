@@ -33,6 +33,10 @@ type ChatHeaderProps = {
   messages: Message[];
   slots: Slots;
   onScrollToMessage?: (messageId: string) => void;
+  hasMoreOnServer?: boolean;
+  isLoadingAll?: boolean;
+  loadAllProgress?: number;
+  onLoadAll?: () => void;
 };
 
 export function ChatHeader({
@@ -53,6 +57,10 @@ export function ChatHeader({
   messages,
   slots,
   onScrollToMessage,
+  hasMoreOnServer,
+  isLoadingAll,
+  loadAllProgress,
+  onLoadAll,
 }: ChatHeaderProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
@@ -566,7 +574,7 @@ export function ChatHeader({
             </button>
           </div>
 
-          {/* User filter pills */}
+          {/* User filter pills + Load All */}
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] text-neutral-500 uppercase tracking-wider">
               Filter:
@@ -593,6 +601,50 @@ export function ChatHeader({
             >
               {slot2Name}
             </button>
+
+            {/* Load All Messages button */}
+            {hasMoreOnServer && !isLoadingAll && (
+              <button
+                type="button"
+                onClick={onLoadAll}
+                className="ml-auto px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all border bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 flex items-center gap-1"
+              >
+                Find All Msgs
+              </button>
+            )}
+            {isLoadingAll && (
+              <div className="ml-auto flex items-center gap-2 min-w-[140px]">
+                <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400/80 rounded-full transition-all duration-300 ease-out"
+                    style={{
+                      width: `${Math.min(95, ((loadAllProgress || 0) / ((loadAllProgress || 0) + 200)) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-[10px] text-emerald-300 tabular-nums whitespace-nowrap">
+                  {loadAllProgress?.toLocaleString()} loaded
+                </span>
+              </div>
+            )}
+            {!hasMoreOnServer && !isLoadingAll && (
+              <span className="ml-auto text-[10px] text-emerald-400/60 flex items-center gap-1">
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                All {messages.length.toLocaleString()} msgs loaded
+              </span>
+            )}
           </div>
         </div>
       )}

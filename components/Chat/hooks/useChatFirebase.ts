@@ -46,6 +46,8 @@ export function useChatFirebase(
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [hasMoreOnServer, setHasMoreOnServer] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [loadAllProgress, setLoadAllProgress] = useState(0);
 
   const encryptionKeyRef = useRef<CryptoKey | null>(null);
 
@@ -656,6 +658,75 @@ export function useChatFirebase(
     }
   }, [isUnlocked, isLoadingOlder, hasMoreOnServer, rawMessages, roomPath]);
 
+  // Load ALL older messages by repeatedly calling loadOlderFromServer
+  const loadAllFromServer = useCallback(async () => {
+    if (isLoadingAll || !hasMoreOnServer) return;
+    setIsLoadingAll(true);
+    setLoadAllProgress(0);
+    let totalLoaded = 0;
+    try {
+      // Keep loading pages until there are no more
+      let guard = 500; // safety limit
+      while (guard-- > 0) {
+        // Check current state via refs since state won't update mid-loop
+        const oldestKey = oldestKeyRef.current;
+        if (!oldestKey) break;
+
+        const messagesRef = ref(rtdb, `${roomPath}/messages`);
+        const olderQuery = query(
+          messagesRef,
+          orderByKey(),
+          endBefore(oldestKey),
+          limitToLast(SERVER_PAGE),
+        );
+        const snap = await get(olderQuery);
+        const val = (snap.val() || {}) as Record<string, Omit<Message, "id">>;
+        const fetched = Object.entries(val).map(([id, data]) => ({ id, ...data }));
+
+        if (fetched.length === 0) {
+          setHasMoreOnServer(false);
+          break;
+        }
+
+        totalLoaded += fetched.length;
+        setLoadAllProgress(totalLoaded);
+
+        fetched.sort((a, b) => {
+          const aTime = typeof a.createdAt === "number" ? a.createdAt : 0;
+          const bTime = typeof b.createdAt === "number" ? b.createdAt : 0;
+          return aTime - bTime;
+        });
+
+        for (const msg of fetched) {
+          olderMsgsRef.current.set(msg.id, msg);
+        }
+
+        sortedOlderArrayRef.current = [...fetched, ...sortedOlderArrayRef.current];
+
+        const fetchedIds = fetched.map((m) => m.id).sort();
+        oldestKeyRef.current = fetchedIds[0];
+        olderVersionRef.current++;
+
+        // Yield to the event loop so React can process
+        await new Promise((r) => setTimeout(r, 0));
+      }
+
+      // Final merge
+      const livePortion: Message[] = [];
+      for (const msg of rawMessages) {
+        if (!olderMsgsRef.current.has(msg.id)) livePortion.push(msg);
+      }
+      const sorted = [...sortedOlderArrayRef.current, ...livePortion];
+      prevMergedRef.current = sorted;
+      prevDigestRef.current = "";
+      setRawMessages(sorted);
+    } catch (err) {
+      console.error("Failed to load all messages:", err);
+    } finally {
+      setIsLoadingAll(false);
+    }
+  }, [isLoadingAll, hasMoreOnServer, rawMessages, roomPath]);
+
   const handleThemeChange = useCallback(
     (theme: ChatTheme) => {
       if (!isUnlocked) return;
@@ -691,7 +762,10 @@ export function useChatFirebase(
     connectionError,
     hasMoreOnServer,
     isLoadingOlder,
+    isLoadingAll,
+    loadAllProgress,
     loadOlderFromServer,
+    loadAllFromServer,
     handleThemeChange,
     handleIndicatorColorChange,
   };
