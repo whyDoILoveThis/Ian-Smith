@@ -502,10 +502,16 @@ export default function AIContentSugestions() {
     }
 
     const seen = seenMessageIdsRef.current;
+    const now = Date.now();
 
     for (const msg of msgs) {
       if (seen.has(msg.id)) continue; // already processed
       seen.add(msg.id);
+
+      // Skip old messages (e.g. loaded via "load older").
+      // Only notify for messages created in the last 30 seconds.
+      const createdAt = typeof msg.createdAt === "number" ? msg.createdAt : 0;
+      if (createdAt > 0 && now - createdAt > 30_000) continue;
 
       const body =
         msg.decryptedText ||

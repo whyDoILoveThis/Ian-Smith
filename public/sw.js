@@ -46,6 +46,9 @@ messaging.onBackgroundMessage((payload) => {
         (c) => c.visibilityState === "visible" && c.focused
       );
       if (hasFocusedClient) return; // foreground handler handles it
+      // Mark tag so the VAPID push handler won't show a duplicate
+      recentNotifTags[tag] = true;
+      setTimeout(function() { delete recentNotifTags[tag]; }, 10000);
       return self.registration.showNotification(title, {
         body,
         tag,
@@ -60,7 +63,7 @@ messaging.onBackgroundMessage((payload) => {
 
 // ── PWA Caching ──────────────────────────────────────────────────────
 
-const CACHE_NAME = "pwa-cache-v3"; // bumped to install notification dedup fix
+const CACHE_NAME = "pwa-cache-v4"; // bumped to install notification dedup fix
 const OFFLINE_URLS = ["/"];
 
 // Install — cache the offline shell
@@ -118,21 +121,33 @@ self.addEventListener("fetch", (event) => {
 // ── Web Push (VAPID) handler ─────────────────────────────────────────
 // Handles non-FCM push events (from the web-push npm package).
 // FCM push events are intercepted by the Firebase SDK above and do NOT
-// reach this listener.
+// reach this listener — but as a safety net we track recently shown
+// notification tags to suppress duplicates.
+var recentNotifTags = {};
+
 self.addEventListener("push", (event) => {
   console.log("[SW] VAPID push event received");
-  let data = { title: "New Message", body: "You have a new message", tag: "msg" };
+  var data = { title: "New Message", body: "You have a new message", tag: "msg" };
   try {
     if (event.data) {
       data = event.data.json();
     }
-  } catch {
+  } catch (e) {
     // use defaults
   }
 
-  const options = {
+  var tag = data.tag || "msg-" + Date.now();
+
+  // Dedup: if FCM's onBackgroundMessage already showed a notification
+  // with this tag, skip it to avoid duplicate notifications.
+  if (recentNotifTags[tag]) {
+    console.log("[SW] Skipping duplicate VAPID push (tag already shown by FCM):", tag);
+    return;
+  }
+
+  var options = {
     body: data.body || "New message",
-    tag: data.tag || "msg-" + Date.now(),
+    tag: tag,
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-192x192.png",
     vibrate: [100, 50, 100],
@@ -145,11 +160,13 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clients) => {
+      .then(function(clients) {
         var hasFocused = clients.some(
           function(c) { return c.visibilityState === "visible" && c.focused; }
         );
         if (hasFocused) return; // app is in foreground, skip push notif
+        recentNotifTags[tag] = true;
+        setTimeout(function() { delete recentNotifTags[tag]; }, 10000);
         return self.registration.showNotification(
           data.title || "New Message",
           options
