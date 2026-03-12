@@ -19,6 +19,41 @@ import Image from "next/image";
 import ReplyIcon from "@/components/sub/ReplyIcon";
 import { DrawingPlayer } from "./DrawingPlayer";
 
+/** Returns true when the string contains ONLY emoji (and optional whitespace). */
+function isEmojiOnly(text: string): boolean {
+  const stripped = text.replace(/\s/g, "");
+  if (!stripped) return false;
+  return [...stripped].every((ch) => {
+    const cp = ch.codePointAt(0)!;
+    return (
+      (cp >= 0x1f600 && cp <= 0x1f64f) || // Emoticons
+      (cp >= 0x1f300 && cp <= 0x1f5ff) || // Misc Symbols & Pictographs
+      (cp >= 0x1f680 && cp <= 0x1f6ff) || // Transport & Map
+      (cp >= 0x1f1e0 && cp <= 0x1f1ff) || // Regional Indicators (flags)
+      (cp >= 0x2600 && cp <= 0x26ff) || // Misc Symbols
+      (cp >= 0x2700 && cp <= 0x27bf) || // Dingbats
+      (cp >= 0x1f900 && cp <= 0x1f9ff) || // Supplemental Symbols
+      (cp >= 0x1fa00 && cp <= 0x1fa6f) || // Chess Symbols
+      (cp >= 0x1fa70 && cp <= 0x1faff) || // Symbols Extended-A
+      (cp >= 0xfe00 && cp <= 0xfe0f) || // Variation Selectors
+      (cp >= 0x231a && cp <= 0x23ff) || // Misc Technical
+      cp === 0x200d || // ZWJ
+      cp === 0x20e3 || // Combining Enclosing Keycap
+      cp === 0x2b05 ||
+      cp === 0x2b06 ||
+      cp === 0x2b07 ||
+      cp === 0x2b1b ||
+      cp === 0x2b1c ||
+      cp === 0x2b50 ||
+      cp === 0x2b55 ||
+      cp === 0x3030 ||
+      cp === 0x303d ||
+      cp === 0x3297 ||
+      cp === 0x3299
+    );
+  });
+}
+
 type ChatMessagesViewProps = {
   messages: Message[];
   slotId: "1" | "2" | null;
@@ -768,7 +803,11 @@ export function ChatMessagesView({
                 </p>
                 {msg.decryptedText && (
                   <p
-                    className={`mt-1 whitespace-pre-line break-words ${isLockedOut ? "select-none" : ""}`}
+                    className={`mt-1 whitespace-pre-line break-words ${isLockedOut ? "select-none" : ""} ${
+                      !isLockedOut && isEmojiOnly(msg.decryptedText)
+                        ? "text-4xl leading-snug"
+                        : ""
+                    }`}
                   >
                     {isLockedOut
                       ? msg.text || "\u2022\u2022\u2022\u2022\u2022\u2022"
