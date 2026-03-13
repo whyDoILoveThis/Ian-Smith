@@ -190,3 +190,24 @@ export const DEFAULT_STENCIL_OPTIONS: StencilOptions = {
   noiseReduction: 'medium',
   curvatureStrength: 1.0,
 };
+
+/** Payload for POST /api/tattoo-stencil-repair */
+export interface StencilRepairPayload {
+  mode: 'analyze' | 'repair';
+  stencilBase64: string;
+  /** Required for 'repair' mode — green = reference (good) area. */
+  referenceMaskBase64?: string;
+}
+
+/** Response from POST /api/tattoo-stencil-repair */
+export interface StencilRepairResponse {
+  success: boolean;
+  /** Returned for 'analyze' mode — AI-detected good side. */
+  analysis?: {
+    goodSide: 'left' | 'right' | 'top' | 'bottom';
+    confidence: number;
+  };
+  /** Returned for 'repair' mode — the fixed stencil PNG. */
+  repairedBase64?: string;
+  error?: string;
+}

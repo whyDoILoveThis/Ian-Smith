@@ -51,7 +51,7 @@ const UNWRAP_AGGRESSION = 1.35;
 
 /** Angular edge-fade start (radians). Score is attenuated from here to ±90°
  *  to prevent dark-spot artifacts at the cylinder boundary. */
-const EDGE_FADE_START = 75 * Math.PI / 180;
+const EDGE_FADE_START = 60 * Math.PI / 180;
 
 // ── Server-local types ───────────────────────────────────────
 
@@ -281,12 +281,14 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < scorePixels; i++) hist[scoreRaw[i]]++;
 
     // When cylindrical unwrap was applied, pixels outside the cylinder
-    // are zero-filled. Exclude bin 0 from Otsu so the huge zero-spike
-    // doesn't drag the threshold to near-zero.
+    // are zero-filled and edge-faded pixels may have very low values.
+    // Exclude bins 0–3 from Otsu so these don't skew the threshold.
     let otsuTotal = scorePixels;
     if (unwrapDebug.applied) {
-      otsuTotal -= hist[0];
-      hist[0] = 0;
+      for (let b = 0; b <= 3; b++) {
+        otsuTotal -= hist[b];
+        hist[b] = 0;
+      }
     }
     const autoThresh = otsuThreshold(hist, otsuTotal);
     const bias = THRESHOLD_BIAS[options.contrastLevel];
@@ -297,8 +299,8 @@ export async function POST(request: NextRequest) {
 
     const binaryBuf = Buffer.alloc(scorePixels, 255); // default white
     for (let i = 0; i < scorePixels; i++) {
-      // Skip zero-filled pixels from unwrap (leave white)
-      if (unwrapDebug.applied && scoreRaw[i] === 0) continue;
+      // Skip zero/near-zero pixels from unwrap edge-fade (leave white)
+      if (unwrapDebug.applied && scoreRaw[i] <= 3) continue;
       binaryBuf[i] = scoreRaw[i] >= finalThresh ? 0 : 255;
     }
 
@@ -927,31 +929,41 @@ async function applyCylindricalUnwrap(
       const theta = across / radius;
       const absTheta = Math.abs(theta);
 
-      // Edge-fade: attenuate toward ±90° to suppress dark-spot artefacts
+      // Cosine edge-fade: smooth roll-off from EDGE_FADE_START to ±90°
       let fade = 1;
       if (absTheta > EDGE_FADE_START) {
-        fade = 1 - (absTheta - EDGE_FADE_START) / (thetaLimit - EDGE_FADE_START);
-        if (fade <= 0) continue;
+        const t = (absTheta - EDGE_FADE_START) / (thetaLimit - EDGE_FADE_START);
+        fade = 0.5 * (1 + Math.cos(Math.PI * Math.min(t, 1)));
+        if (fade <= 0.001) continue;
       }
 
       const inputAcross = radius * Math.sin(theta);
       const srcX = midX + along * cosA - inputAcross * sinA;
       const srcY = midY + along * sinA + inputAcross * cosA;
 
-      const ix = Math.floor(srcX);
-      const iy = Math.floor(srcY);
-      if (ix < 0 || ix >= W - 1 || iy < 0 || iy >= H - 1) continue;
-
-      const fx = srcX - ix;
-      const fy = srcY - iy;
-      const i = iy * W + ix;
+      // Clamp-sample at boundaries instead of skipping (prevents black edge pixels)
+      const cX = Math.max(0, Math.min(W - 1.001, srcX));
+      const cY = Math.max(0, Math.min(H - 1.001, srcY));
+      const ix = Math.floor(cX);
+      const iy = Math.floor(cY);
+      const fx = cX - ix;
+      const fy = cY - iy;
+      const ix1 = Math.min(ix + 1, W - 1);
+      const iy1 = Math.min(iy + 1, H - 1);
       const v =
-        raw[i]         * (1 - fx) * (1 - fy) +
-        raw[i + 1]     * fx       * (1 - fy) +
-        raw[i + W]     * (1 - fx) * fy +
-        raw[i + W + 1] * fx       * fy;
+        raw[iy  * W + ix]  * (1 - fx) * (1 - fy) +
+        raw[iy  * W + ix1] * fx       * (1 - fy) +
+        raw[iy1 * W + ix]  * (1 - fx) * fy +
+        raw[iy1 * W + ix1] * fx       * fy;
 
-      out[py * outW + px] = Math.round(v * fade);
+      // If the source was far out of bounds, apply extra fade to avoid border artifacts
+      let boundaryFade = 1;
+      const oobX = Math.max(0, -srcX, srcX - (W - 1));
+      const oobY = Math.max(0, -srcY, srcY - (H - 1));
+      const oob = Math.max(oobX, oobY);
+      if (oob > 0) boundaryFade = Math.max(0, 1 - oob / 8);
+
+      out[py * outW + px] = Math.round(v * fade * boundaryFade);
     }
   }
 
@@ -1041,10 +1053,11 @@ async function applyCylindricalUnwrapVariable(
         const theta = across / localRadius;
         const absTheta = Math.abs(theta);
 
-        // Edge-fade to suppress dark-spot artefacts
+        // Cosine edge-fade: smooth roll-off from EDGE_FADE_START to ±90°
         if (absTheta > EDGE_FADE_START) {
-          fade = 1 - (absTheta - EDGE_FADE_START) / (thetaLimit - EDGE_FADE_START);
-          if (fade <= 0) continue;
+          const et = (absTheta - EDGE_FADE_START) / (thetaLimit - EDGE_FADE_START);
+          fade = 0.5 * (1 + Math.cos(Math.PI * Math.min(et, 1)));
+          if (fade <= 0.001) continue;
         }
 
         const inputAcross = localRadius * Math.sin(theta);
@@ -1052,20 +1065,29 @@ async function applyCylindricalUnwrapVariable(
         srcY = midY + along * sinA + inputAcross * cosA;
       }
 
-      const ix = Math.floor(srcX);
-      const iy = Math.floor(srcY);
-      if (ix < 0 || ix >= W - 1 || iy < 0 || iy >= H - 1) continue;
-
-      const fx = srcX - ix;
-      const fy = srcY - iy;
-      const i = iy * W + ix;
+      // Clamp-sample at boundaries instead of skipping (prevents black edge pixels)
+      const cX = Math.max(0, Math.min(W - 1.001, srcX));
+      const cY = Math.max(0, Math.min(H - 1.001, srcY));
+      const ix = Math.floor(cX);
+      const iy = Math.floor(cY);
+      const fx = cX - ix;
+      const fy = cY - iy;
+      const ix1 = Math.min(ix + 1, W - 1);
+      const iy1 = Math.min(iy + 1, H - 1);
       const v =
-        raw[i]         * (1 - fx) * (1 - fy) +
-        raw[i + 1]     * fx       * (1 - fy) +
-        raw[i + W]     * (1 - fx) * fy +
-        raw[i + W + 1] * fx       * fy;
+        raw[iy  * W + ix]  * (1 - fx) * (1 - fy) +
+        raw[iy  * W + ix1] * fx       * (1 - fy) +
+        raw[iy1 * W + ix]  * (1 - fx) * fy +
+        raw[iy1 * W + ix1] * fx       * fy;
 
-      out[py * outW + px] = Math.round(v * fade);
+      // Extra fade when source coordinate was out of bounds (clamped)
+      let boundaryFade = 1;
+      const oobX = Math.max(0, -srcX, srcX - (W - 1));
+      const oobY = Math.max(0, -srcY, srcY - (H - 1));
+      const oob = Math.max(oobX, oobY);
+      if (oob > 0) boundaryFade = Math.max(0, 1 - oob / 8);
+
+      out[py * outW + px] = Math.round(v * fade * boundaryFade);
     }
   }
 

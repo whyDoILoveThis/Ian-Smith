@@ -20,9 +20,11 @@ import {
   ZoomIn,
   ZoomOut,
   Bug,
+  Wand2,
 } from "lucide-react";
 import type { StencilResult } from "../types";
 import { downloadPng, downloadSvg } from "../utils/imageProcessing";
+import StencilRepairEditor from "./StencilRepairEditor";
 
 interface Props {
   result: StencilResult;
@@ -33,10 +35,18 @@ type PreviewMode = "png" | "svg" | "debug";
 export default function StencilPreview({ result }: Props) {
   const [mode, setMode] = useState<PreviewMode>("png");
   const [zoomed, setZoomed] = useState(false);
+  const [isRepairMode, setIsRepairMode] = useState(false);
+  const [currentPngBase64, setCurrentPngBase64] = useState(result.pngBase64);
+
+  // Keep in sync if result changes (e.g. re-generation)
+  useEffect(() => {
+    setCurrentPngBase64(result.pngBase64);
+    setIsRepairMode(false);
+  }, [result.pngBase64]);
 
   const pngSrc = useMemo(
-    () => `data:image/png;base64,${result.pngBase64}`,
-    [result.pngBase64],
+    () => `data:image/png;base64,${currentPngBase64}`,
+    [currentPngBase64],
   );
 
   const preStencilSrc = useMemo(
@@ -99,8 +109,30 @@ export default function StencilPreview({ result }: Props) {
         </div>
       </div>
 
-      {/* ── Debug view OR Preview area ─────────────────── */}
-      {mode === "debug" && hasDebug ? (
+      {/* ── Repair Edges button ───────────────────────── */}
+      {!isRepairMode && (
+        <button
+          onClick={() => setIsRepairMode(true)}
+          className="flex items-center gap-1.5 self-start rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+        >
+          <Wand2 className="h-3.5 w-3.5" />
+          AI Edge Repair
+        </button>
+      )}
+
+      {/* ── Repair editor OR Debug view OR Preview area ── */}
+      {isRepairMode ? (
+        <StencilRepairEditor
+          stencilBase64={currentPngBase64}
+          stencilWidth={meta.stencilWidth}
+          stencilHeight={meta.stencilHeight}
+          onRepaired={(repaired) => {
+            setCurrentPngBase64(repaired);
+            setIsRepairMode(false);
+          }}
+          onCancel={() => setIsRepairMode(false)}
+        />
+      ) : mode === "debug" && hasDebug ? (
         <DebugOverlay
           preStencilSrc={preStencilSrc!}
           unwrapDebug={meta.unwrapDebug}
@@ -166,21 +198,23 @@ export default function StencilPreview({ result }: Props) {
       </div>
 
       {/* ── Download buttons ──────────────────────────────── */}
-      <div className="flex flex-wrap gap-3">
-        <DownloadBtn
-          label="Download PNG"
-          icon={<ImageIcon className="h-4 w-4" />}
-          onClick={() => downloadPng(result.pngBase64)}
-        />
-        {hasSvg && (
+      {!isRepairMode && (
+        <div className="flex flex-wrap gap-3">
           <DownloadBtn
-            label="Download SVG"
-            icon={<FileCode className="h-4 w-4" />}
-            onClick={() => downloadSvg(result.svgData!)}
-            secondary
+            label="Download PNG"
+            icon={<ImageIcon className="h-4 w-4" />}
+            onClick={() => downloadPng(currentPngBase64)}
           />
-        )}
-      </div>
+          {hasSvg && (
+            <DownloadBtn
+              label="Download SVG"
+              icon={<FileCode className="h-4 w-4" />}
+              onClick={() => downloadSvg(result.svgData!)}
+              secondary
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

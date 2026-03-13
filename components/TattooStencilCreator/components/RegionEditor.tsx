@@ -28,16 +28,51 @@ import React, {
 } from "react";
 import {
   Check,
+  ChevronDown,
   Eraser,
   HelpCircle,
   Paintbrush,
+  Pencil,
   PenTool,
+  Redo2,
   RotateCcw,
+  Save,
   SkipForward,
+  Trash2,
   Undo2,
   Waves,
 } from "lucide-react";
 import type { Point2D, RegionEditorResult } from "../types";
+
+// ── Preset / saved-set types ─────────────────────────────────
+
+const PRESETS_STORAGE_KEY = "tattoo-stencil-region-presets";
+
+interface SavedPreset {
+  id: string;
+  name: string;
+  createdAt: number;
+  outlinePoints: Point2D[];
+  outlineClosed: boolean;
+  highlightMaskBase64: string | null;
+  curveMaskBase64: string | null;
+  curvaturePercent: number;
+  curveAngle: number;
+}
+
+function loadPresets(): SavedPreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as SavedPreset[];
+  } catch {
+    return [];
+  }
+}
+
+function savePresetsToStorage(presets: SavedPreset[]) {
+  localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+}
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -101,10 +136,43 @@ export default function RegionEditor({
   const dragIdxRef = useRef<number | null>(null);
   const lastPaintPt = useRef<{ x: number; y: number } | null>(null);
 
-  /** Undo stack: stores mask ImageData snapshots before each stroke. */
+  /** Undo / redo stacks for the tattoo highlight mask. */
   const undoStackRef = useRef<ImageData[]>([]);
-  /** Undo stack for the curve mask. */
+  const redoStackRef = useRef<ImageData[]>([]);
+  /** Undo / redo stacks for the curve mask. */
   const curveUndoStackRef = useRef<ImageData[]>([]);
+  const curveRedoStackRef = useRef<ImageData[]>([]);
+  /** Undo / redo stacks for the polygon outline. */
+  const outlineUndoRef = useRef<{ pts: Point2D[]; closed: boolean }[]>([]);
+  const outlineRedoRef = useRef<{ pts: Point2D[]; closed: boolean }[]>([]);
+
+  /** Saved presets state */
+  const [presets, setPresets] = useState<SavedPreset[]>([]);
+  const [showPresetMenu, setShowPresetMenu] = useState(false);
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const presetMenuRef = useRef<HTMLDivElement>(null);
+
+  // Load presets from localStorage on mount
+  useEffect(() => {
+    setPresets(loadPresets());
+  }, []);
+
+  // Close preset menu on outside click
+  useEffect(() => {
+    if (!showPresetMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        presetMenuRef.current &&
+        !presetMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowPresetMenu(false);
+        setEditingPresetId(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showPresetMenu]);
   /** Offscreen canvas for the curve highlight mask (yellow). */
   const curveMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   /** Initial highlight base64 to restore on canvas init. */
@@ -177,8 +245,9 @@ export default function RegionEditor({
       initialHighlightRef.current = null; // only restore once
     }
 
-    // Clear undo stack on re-init
+    // Clear undo/redo stacks on re-init
     undoStackRef.current = [];
+    redoStackRef.current = [];
 
     // Create offscreen curve-mask canvas at same resolution
     if (!curveMaskCanvasRef.current) {
@@ -210,6 +279,9 @@ export default function RegionEditor({
       initialCurveAngleRef.current = null;
     }
     curveUndoStackRef.current = [];
+    curveRedoStackRef.current = [];
+    outlineUndoRef.current = [];
+    outlineRedoRef.current = [];
 
     redraw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -395,6 +467,15 @@ export default function RegionEditor({
     [outlinePoints],
   );
 
+  const pushOutlineUndo = useCallback(() => {
+    outlineUndoRef.current.push({
+      pts: [...outlinePoints],
+      closed: outlineClosed,
+    });
+    if (outlineUndoRef.current.length > 50) outlineUndoRef.current.shift();
+    outlineRedoRef.current = [];
+  }, [outlinePoints, outlineClosed]);
+
   const handleOutlinePointerDown = useCallback(
     (e: ReactPointerEvent) => {
       const norm = toNorm(e);
@@ -404,11 +485,14 @@ export default function RegionEditor({
       if (outlineClosed) {
         const idx = findNearVertex(norm);
         if (idx !== null) {
+          pushOutlineUndo();
           dragIdxRef.current = idx;
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
         }
         return;
       }
+
+      pushOutlineUndo();
 
       // If near first vertex → close
       if (outlinePoints.length >= 3) {
@@ -422,7 +506,7 @@ export default function RegionEditor({
       // Add new vertex
       setOutlinePoints((prev) => [...prev, norm]);
     },
-    [toNorm, outlineClosed, outlinePoints, findNearVertex],
+    [toNorm, outlineClosed, outlinePoints, findNearVertex, pushOutlineUndo],
   );
 
   const handleOutlinePointerMove = useCallback(
@@ -445,9 +529,10 @@ export default function RegionEditor({
 
   const handleOutlineDoubleClick = useCallback(() => {
     if (outlinePoints.length >= 3 && !outlineClosed) {
+      pushOutlineUndo();
       setOutlineClosed(true);
     }
-  }, [outlinePoints, outlineClosed]);
+  }, [outlinePoints, outlineClosed, pushOutlineUndo]);
 
   // ── highlight mode handlers ────────────────────────────────
 
@@ -506,6 +591,8 @@ export default function RegionEditor({
         undoStackRef.current.push(snapshot);
         // Cap undo stack at 30 to avoid memory issues
         if (undoStackRef.current.length > 30) undoStackRef.current.shift();
+        // New stroke invalidates redo history
+        redoStackRef.current = [];
       }
 
       paintingRef.current = true;
@@ -599,6 +686,7 @@ export default function RegionEditor({
         curveUndoStackRef.current.push(snapshot);
         if (curveUndoStackRef.current.length > 30)
           curveUndoStackRef.current.shift();
+        curveRedoStackRef.current = [];
       }
 
       paintingRef.current = true;
@@ -696,9 +784,32 @@ export default function RegionEditor({
   }, [outlinePoints, outlineClosed, curvaturePercent, curveAngle, onConfirm]);
 
   const resetOutline = useCallback(() => {
+    pushOutlineUndo();
     setOutlinePoints([]);
     setOutlineClosed(false);
-  }, []);
+  }, [pushOutlineUndo]);
+
+  const undoOutline = useCallback(() => {
+    if (outlineUndoRef.current.length === 0) return;
+    outlineRedoRef.current.push({
+      pts: [...outlinePoints],
+      closed: outlineClosed,
+    });
+    const prev = outlineUndoRef.current.pop()!;
+    setOutlinePoints(prev.pts);
+    setOutlineClosed(prev.closed);
+  }, [outlinePoints, outlineClosed]);
+
+  const redoOutline = useCallback(() => {
+    if (outlineRedoRef.current.length === 0) return;
+    outlineUndoRef.current.push({
+      pts: [...outlinePoints],
+      closed: outlineClosed,
+    });
+    const next = outlineRedoRef.current.pop()!;
+    setOutlinePoints(next.pts);
+    setOutlineClosed(next.closed);
+  }, [outlinePoints, outlineClosed]);
 
   const resetMask = useCallback(() => {
     const mask = maskCanvasRef.current;
@@ -714,9 +825,24 @@ export default function RegionEditor({
   const undoLastStroke = useCallback(() => {
     const mask = maskCanvasRef.current;
     if (!mask || undoStackRef.current.length === 0) return;
-    const prev = undoStackRef.current.pop()!;
     const mctx = mask.getContext("2d")!;
+    // Save current state to redo stack before restoring
+    redoStackRef.current.push(mctx.getImageData(0, 0, mask.width, mask.height));
+    if (redoStackRef.current.length > 30) redoStackRef.current.shift();
+    const prev = undoStackRef.current.pop()!;
     mctx.putImageData(prev, 0, 0);
+    redraw();
+  }, [redraw]);
+
+  const redoLastStroke = useCallback(() => {
+    const mask = maskCanvasRef.current;
+    if (!mask || redoStackRef.current.length === 0) return;
+    const mctx = mask.getContext("2d")!;
+    // Save current state to undo stack before restoring
+    undoStackRef.current.push(mctx.getImageData(0, 0, mask.width, mask.height));
+    if (undoStackRef.current.length > 30) undoStackRef.current.shift();
+    const next = redoStackRef.current.pop()!;
+    mctx.putImageData(next, 0, 0);
     redraw();
   }, [redraw]);
 
@@ -734,11 +860,132 @@ export default function RegionEditor({
   const undoCurveStroke = useCallback(() => {
     const mask = curveMaskCanvasRef.current;
     if (!mask || curveUndoStackRef.current.length === 0) return;
-    const prev = curveUndoStackRef.current.pop()!;
     const mctx = mask.getContext("2d")!;
+    curveRedoStackRef.current.push(
+      mctx.getImageData(0, 0, mask.width, mask.height),
+    );
+    if (curveRedoStackRef.current.length > 30)
+      curveRedoStackRef.current.shift();
+    const prev = curveUndoStackRef.current.pop()!;
     mctx.putImageData(prev, 0, 0);
     redraw();
   }, [redraw]);
+
+  const redoCurveStroke = useCallback(() => {
+    const mask = curveMaskCanvasRef.current;
+    if (!mask || curveRedoStackRef.current.length === 0) return;
+    const mctx = mask.getContext("2d")!;
+    curveUndoStackRef.current.push(
+      mctx.getImageData(0, 0, mask.width, mask.height),
+    );
+    if (curveUndoStackRef.current.length > 30)
+      curveUndoStackRef.current.shift();
+    const next = curveRedoStackRef.current.pop()!;
+    mctx.putImageData(next, 0, 0);
+    redraw();
+  }, [redraw]);
+
+  // ── preset CRUD ─────────────────────────────────────────────
+
+  const saveCurrentAsPreset = useCallback(() => {
+    const mask = maskCanvasRef.current;
+    const curveMask = curveMaskCanvasRef.current;
+
+    const hlBase64 = mask ? mask.toDataURL("image/png").split(",")[1] : null;
+    const cvBase64 = curveMask
+      ? curveMask.toDataURL("image/png").split(",")[1]
+      : null;
+
+    const preset: SavedPreset = {
+      id: crypto.randomUUID(),
+      name: `Preset ${presets.length + 1}`,
+      createdAt: Date.now(),
+      outlinePoints: [...outlinePoints],
+      outlineClosed,
+      highlightMaskBase64: hlBase64,
+      curveMaskBase64: cvBase64,
+      curvaturePercent,
+      curveAngle,
+    };
+    const updated = [...presets, preset];
+    setPresets(updated);
+    savePresetsToStorage(updated);
+  }, [presets, outlinePoints, outlineClosed, curvaturePercent, curveAngle]);
+
+  const loadPreset = useCallback(
+    (id: string) => {
+      const preset = presets.find((p) => p.id === id);
+      if (!preset) return;
+
+      setOutlinePoints(preset.outlinePoints);
+      setOutlineClosed(preset.outlineClosed);
+      setCurvaturePercent(preset.curvaturePercent);
+      setCurveAngle(preset.curveAngle);
+
+      // Restore highlight mask
+      const mask = maskCanvasRef.current;
+      if (mask) {
+        const mctx = mask.getContext("2d")!;
+        mctx.fillStyle = "#000";
+        mctx.fillRect(0, 0, mask.width, mask.height);
+        if (preset.highlightMaskBase64) {
+          const img = new Image();
+          img.onload = () => {
+            mctx.drawImage(img, 0, 0, mask.width, mask.height);
+            redraw();
+          };
+          img.src = `data:image/png;base64,${preset.highlightMaskBase64}`;
+        }
+      }
+
+      // Restore curve mask
+      const curveMask = curveMaskCanvasRef.current;
+      if (curveMask) {
+        const cctx = curveMask.getContext("2d")!;
+        cctx.fillStyle = "#000";
+        cctx.fillRect(0, 0, curveMask.width, curveMask.height);
+        if (preset.curveMaskBase64) {
+          const img2 = new Image();
+          img2.onload = () => {
+            cctx.drawImage(img2, 0, 0, curveMask.width, curveMask.height);
+            redraw();
+          };
+          img2.src = `data:image/png;base64,${preset.curveMaskBase64}`;
+        }
+      }
+
+      // Clear undo/redo stacks on load
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      curveUndoStackRef.current = [];
+      curveRedoStackRef.current = [];
+      outlineUndoRef.current = [];
+      outlineRedoRef.current = [];
+
+      setShowPresetMenu(false);
+      redraw();
+    },
+    [presets, redraw],
+  );
+
+  const renamePreset = useCallback(
+    (id: string, name: string) => {
+      const updated = presets.map((p) => (p.id === id ? { ...p, name } : p));
+      setPresets(updated);
+      savePresetsToStorage(updated);
+      setEditingPresetId(null);
+    },
+    [presets],
+  );
+
+  const deletePreset = useCallback(
+    (id: string) => {
+      const updated = presets.filter((p) => p.id !== id);
+      setPresets(updated);
+      savePresetsToStorage(updated);
+    },
+    [presets],
+  );
 
   // ── render ─────────────────────────────────────────────────
 
@@ -819,6 +1066,80 @@ export default function RegionEditor({
         </button>
 
         <div className="ml-auto flex gap-2">
+          {/* Preset dropdown */}
+          <div className="relative" ref={presetMenuRef}>
+            <button
+              onClick={() => setShowPresetMenu((v) => !v)}
+              className="flex items-center gap-1 rounded-md bg-zinc-800 px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700"
+              title="Saved presets"
+            >
+              <Save size={14} /> Presets <ChevronDown size={12} />
+            </button>
+            {showPresetMenu && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
+                <button
+                  onClick={saveCurrentAsPreset}
+                  className="mb-2 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-xs font-medium text-emerald-400 hover:bg-zinc-800"
+                >
+                  <Save size={12} /> Save current as preset
+                </button>
+                {presets.length === 0 ? (
+                  <p className="px-2 py-1 text-xs text-zinc-500">
+                    No saved presets yet
+                  </p>
+                ) : (
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                    {presets.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-xs hover:bg-zinc-800"
+                      >
+                        {editingPresetId === p.id ? (
+                          <input
+                            autoFocus
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onBlur={() => renamePreset(p.id, editingName)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter")
+                                renamePreset(p.id, editingName);
+                              if (e.key === "Escape") setEditingPresetId(null);
+                            }}
+                            className="flex-1 rounded bg-zinc-800 px-1 py-0.5 text-xs text-zinc-200 outline-none ring-1 ring-cyan-600"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => loadPreset(p.id)}
+                            className="flex-1 truncate text-left text-zinc-300 hover:text-white"
+                            title="Load this preset"
+                          >
+                            {p.name}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setEditingPresetId(p.id);
+                            setEditingName(p.name);
+                          }}
+                          className="p-0.5 text-zinc-500 hover:text-zinc-300"
+                          title="Rename"
+                        >
+                          <Pencil size={10} />
+                        </button>
+                        <button
+                          onClick={() => deletePreset(p.id)}
+                          className="p-0.5 text-zinc-500 hover:text-red-400"
+                          title="Delete"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           {!showHelp && (
             <button
               onClick={() => setShowHelp(true)}
@@ -878,6 +1199,12 @@ export default function RegionEditor({
           >
             <Undo2 size={12} /> Undo
           </button>
+          <button
+            onClick={redoLastStroke}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+          >
+            <Redo2 size={12} /> Redo
+          </button>
         </div>
       )}
 
@@ -929,6 +1256,12 @@ export default function RegionEditor({
               className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
             >
               <Undo2 size={12} /> Undo
+            </button>
+            <button
+              onClick={redoCurveStroke}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+            >
+              <Redo2 size={12} /> Redo
             </button>
           </div>
           <div className="flex items-center gap-3 text-sm text-zinc-300">
@@ -1035,6 +1368,18 @@ export default function RegionEditor({
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
           >
             <RotateCcw size={12} /> Reset outline
+          </button>
+          <button
+            onClick={undoOutline}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+          >
+            <Undo2 size={12} /> Undo
+          </button>
+          <button
+            onClick={redoOutline}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+          >
+            <Redo2 size={12} /> Redo
           </button>
         </div>
       )}
