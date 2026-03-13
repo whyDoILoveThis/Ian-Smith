@@ -136,6 +136,7 @@ type RoomSpotsViewProps = {
   ) => Promise<boolean>;
   privacyMode?: boolean;
   onPrivacyModeChange?: (enabled: boolean) => void;
+  isAdmin?: boolean;
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -171,6 +172,7 @@ export function RoomSpotsView({
   onSetDisguiseTimeout,
   privacyMode = false,
   onPrivacyModeChange,
+  isAdmin = false,
 }: RoomSpotsViewProps) {
   // ── State ──────────────────────────────────────────────────────────────
   const [leaveConfirmText, setLeaveConfirmText] = useState("");
@@ -686,9 +688,11 @@ export function RoomSpotsView({
                   </span>
                 </div>
                 {/* Spot actions */}
-                {(isMySpot || (isTaken && hasPasskey)) && (
+                {(isMySpot ||
+                  (isTaken && hasPasskey) ||
+                  (isAdmin && isTaken)) && (
                   <div className="flex items-center gap-1.5 mt-2.5 pt-2.5 border-t border-white/[0.06]">
-                    {isMySpot && (
+                    {(isMySpot || (isAdmin && isTaken)) && (
                       <button
                         type="button"
                         onClick={() => {
@@ -698,7 +702,11 @@ export function RoomSpotsView({
                         }}
                         className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11px] text-neutral-400 hover:bg-white/10 hover:text-white active:scale-[0.97] transition-all"
                       >
-                        {hasPasskey ? "🔒 Change Key" : "🔑 Set Key"}
+                        {isAdmin && !isMySpot
+                          ? "🔐 Change Key"
+                          : hasPasskey
+                            ? "🔒 Change Key"
+                            : "🔑 Set Key"}
                       </button>
                     )}
                     {isTaken && hasPasskey && !isMySpot && (

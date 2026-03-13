@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useAuth } from "@clerk/nextjs";
 import {
   COMBO_STORAGE_KEY,
   PASSPHRASE_STORAGE_KEY,
@@ -27,6 +28,7 @@ import { rtdb } from "@/lib/firebaseConfig";
 import { deriveKeyFromCombo, encryptMessage, decryptMessage } from "./crypto";
 
 const DISGUISE_TIMEOUT_KEY = "twoWayChatDisguiseTimeout";
+const ADMIN_CLERK_ID = process.env.NEXT_PUBLIC_IANS_CLERK_USERID;
 import {
   useChatFirebase,
   useChatSession,
@@ -60,6 +62,10 @@ import type { Toast } from "./components";
 import type { RecordedDrawingStroke } from "./types";
 
 export default function AIContentSugestions() {
+  // Admin detection
+  const { userId } = useAuth();
+  const isAdmin = !!userId && !!ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID;
+
   // Core state for app flow
   const [showLockBox, setShowLockBox] = useState(false);
   const [showRealChat, setShowRealChat] = useState(false);
@@ -1030,6 +1036,7 @@ export default function AIContentSugestions() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {activeTab === "room" ? (
           <RoomSpotsView
+            isAdmin={isAdmin}
             slots={slots}
             slotId={slotId}
             screenName={screenName}
