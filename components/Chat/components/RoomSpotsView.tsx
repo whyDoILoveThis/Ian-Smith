@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { ref, get, query, orderByKey } from "firebase/database";
+import { ref, get, query, orderByKey, update } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { RING_COLORS, THEME_COLORS } from "../constants";
 import type { Message, Slots, TttState, ThemeColors } from "../types";
@@ -241,6 +241,21 @@ export function RoomSpotsView({
     migrated: number;
     total: number;
   } | null>(null);
+
+  // Storage migration state
+  const [showStorageMigrateModal, setShowStorageMigrateModal] = useState(false);
+  const [smDestEndpoint, setSmDestEndpoint] = useState("");
+  const [smDestProjectId, setSmDestProjectId] = useState("");
+  const [smDestBucketId, setSmDestBucketId] = useState("");
+  const [smDestApiKey, setSmDestApiKey] = useState("");
+  const [smBusy, setSmBusy] = useState(false);
+  const [smProgress, setSmProgress] = useState<{
+    done: number;
+    total: number;
+    failed: number;
+  } | null>(null);
+  const [smResult, setSmResult] = useState<string | null>(null);
+  const smAbortRef = useRef(false);
 
   // Disguise custom timeout
   const [showCustomTimeout, setShowCustomTimeout] = useState(false);
@@ -1253,6 +1268,52 @@ export function RoomSpotsView({
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════
+            MIGRATE APPWRITE STORAGE — admin only
+           ═══════════════════════════════════════════════════════════════ */}
+        {isAdmin && slotId && (
+          <button
+            type="button"
+            onClick={() => {
+              setSmDestEndpoint("");
+              setSmDestProjectId("");
+              setSmDestBucketId("");
+              setSmDestApiKey("");
+              setSmProgress(null);
+              setSmResult(null);
+              smAbortRef.current = false;
+              setShowStorageMigrateModal(true);
+            }}
+            className="group relative w-full flex items-center justify-center gap-2.5 rounded-xl px-4 py-3.5 text-xs font-medium text-[#FD366E] active:scale-[0.98] transition-all overflow-hidden"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(253,54,110,0.08), rgba(254,149,103,0.05))",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(253,54,110,0.15)",
+            }}
+          >
+            <svg
+              className="w-[18px] h-[18px] shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <path
+                d="M12 2L2 7v10l10 5 10-5V7L12 2Z"
+                stroke="#FD366E"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M12 2v20M2 7l10 5 10-5"
+                stroke="#FD366E"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>Migrate Appwrite Storage</span>
+          </button>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════
             LEAVE ROOM — danger zone (collapsible)
            ═══════════════════════════════════════════════════════════════ */}
         {slotId && (
@@ -1472,6 +1533,456 @@ export function RoomSpotsView({
                   "Kick"
                 ) : (
                   "Claim"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Storage Migration Modal */}
+      {showStorageMigrateModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div
+            className="mx-4 w-full max-w-sm rounded-2xl p-0 max-h-[85vh] overflow-y-auto"
+            style={{
+              background: "#19191D",
+              border: "1px solid transparent",
+              backgroundClip: "padding-box",
+              boxShadow:
+                "0 0 0 1px rgba(253,54,110,0.15), 0 25px 50px -12px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.04)",
+            }}
+          >
+            {/* Header */}
+            <div
+              className="px-5 pt-5 pb-3"
+              style={{
+                borderBottom: "1px solid #2D2D31",
+                background:
+                  "linear-gradient(180deg, rgba(253,54,110,0.04) 0%, transparent 100%)",
+              }}
+            >
+              <div className="flex items-center justify-center gap-2 mb-1.5">
+                <svg
+                  className="w-5 h-5 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="M12 2L2 7v10l10 5 10-5V7L12 2Z"
+                    stroke="#FD366E"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M12 2v20M2 7l10 5 10-5"
+                    stroke="#FD366E"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <h3 className="text-sm font-semibold text-white">
+                  Migrate Storage
+                </h3>
+              </div>
+              <p className="text-[11px] text-[#616B7C] text-center leading-relaxed">
+                Transfer all images &amp; videos to a secure Appwrite bucket.
+                Messages will be updated with the new URLs.
+              </p>
+            </div>
+
+            {/* Form */}
+            <div className="px-5 py-4 space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
+                  Endpoint
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="https://cloud.appwrite.io/v1"
+                  value={smDestEndpoint}
+                  onChange={(e) => setSmDestEndpoint(e.target.value.trim())}
+                  className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#3E3E44] focus:outline-none transition-colors"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.3)",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(253,54,110,0.5)";
+                    e.currentTarget.style.boxShadow =
+                      "inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 2px rgba(253,54,110,0.15)";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#2D2D31";
+                    e.currentTarget.style.boxShadow =
+                      "inset 0 1px 2px rgba(0,0,0,0.3)";
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
+                  Project ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 68c0df35001a5700a437"
+                  value={smDestProjectId}
+                  onChange={(e) => setSmDestProjectId(e.target.value.trim())}
+                  className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#3E3E44] focus:outline-none transition-colors"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.3)",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(253,54,110,0.5)";
+                    e.currentTarget.style.boxShadow =
+                      "inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 2px rgba(253,54,110,0.15)";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#2D2D31";
+                    e.currentTarget.style.boxShadow =
+                      "inset 0 1px 2px rgba(0,0,0,0.3)";
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
+                  Bucket ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 68c149fa0003ec08c1dc"
+                  value={smDestBucketId}
+                  onChange={(e) => setSmDestBucketId(e.target.value.trim())}
+                  className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#3E3E44] focus:outline-none transition-colors"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.3)",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(253,54,110,0.5)";
+                    e.currentTarget.style.boxShadow =
+                      "inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 2px rgba(253,54,110,0.15)";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#2D2D31";
+                    e.currentTarget.style.boxShadow =
+                      "inset 0 1px 2px rgba(0,0,0,0.3)";
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
+                  API Key
+                </label>
+                <input
+                  type="password"
+                  placeholder="Server API key with storage write scope"
+                  value={smDestApiKey}
+                  onChange={(e) => setSmDestApiKey(e.target.value.trim())}
+                  className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#3E3E44] focus:outline-none transition-colors"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.3)",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(253,54,110,0.5)";
+                    e.currentTarget.style.boxShadow =
+                      "inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 2px rgba(253,54,110,0.15)";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#2D2D31";
+                    e.currentTarget.style.boxShadow =
+                      "inset 0 1px 2px rgba(0,0,0,0.3)";
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Progress / Result */}
+            {(smProgress || smResult) && (
+              <div className="px-5 pb-3 space-y-2">
+                {smProgress && (
+                  <div className="space-y-1.5">
+                    <div
+                      className="w-full h-1.5 rounded-full overflow-hidden"
+                      style={{ background: "#2D2D31" }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all duration-300 ease-out"
+                        style={{
+                          width: `${smProgress.total > 0 ? Math.round((smProgress.done / smProgress.total) * 100) : 0}%`,
+                          background:
+                            smProgress.failed > 0
+                              ? "linear-gradient(90deg, #FD366E, #FF6B6B)"
+                              : "linear-gradient(90deg, #FD366E, #FE9567)",
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-[#616B7C]">
+                        {smProgress.done} / {smProgress.total} files
+                        {smProgress.failed > 0 && (
+                          <span className="text-[#FF6B6B] ml-1">
+                            · {smProgress.failed} failed
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[10px] font-medium text-[#FD366E] tabular-nums">
+                        {Math.round((smProgress.done / smProgress.total) * 100)}
+                        %
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {smResult && (
+                  <div
+                    className={`rounded-lg px-3 py-2 text-[11px] text-center ${
+                      smResult.startsWith("✅")
+                        ? "text-emerald-400"
+                        : "text-[#FD366E]"
+                    }`}
+                    style={{
+                      background: smResult.startsWith("✅")
+                        ? "rgba(52,211,153,0.08)"
+                        : "rgba(253,54,110,0.08)",
+                      border: smResult.startsWith("✅")
+                        ? "1px solid rgba(52,211,153,0.15)"
+                        : "1px solid rgba(253,54,110,0.15)",
+                    }}
+                  >
+                    {smResult}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div
+              className="px-5 pb-5 pt-3 flex gap-2"
+              style={{ borderTop: "1px solid #2D2D31" }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  smAbortRef.current = true;
+                  setShowStorageMigrateModal(false);
+                }}
+                disabled={smBusy}
+                className="flex-1 rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                style={{
+                  background: "#1C1C21",
+                  border: "1px solid #2D2D31",
+                  boxShadow:
+                    "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+                }}
+              >
+                {smBusy ? "Stop" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                disabled={
+                  smBusy ||
+                  !smDestEndpoint ||
+                  !smDestProjectId ||
+                  !smDestBucketId ||
+                  !smDestApiKey
+                }
+                onClick={async () => {
+                  setSmBusy(true);
+                  setSmResult(null);
+                  smAbortRef.current = false;
+
+                  try {
+                    // 1. Fetch all messages from Firebase to find files
+                    const messagesRef = ref(rtdb, `${roomPath}/messages`);
+                    const snap = await get(query(messagesRef, orderByKey()));
+                    const val = (snap.val() || {}) as Record<
+                      string,
+                      Record<string, unknown>
+                    >;
+
+                    // Collect all files that need migrating
+                    const filesToMigrate: Array<{
+                      msgId: string;
+                      fileId: string;
+                      field: "image" | "video";
+                    }> = [];
+
+                    for (const [msgId, msg] of Object.entries(val)) {
+                      if (
+                        msg.imageFileId &&
+                        typeof msg.imageFileId === "string"
+                      ) {
+                        filesToMigrate.push({
+                          msgId,
+                          fileId: msg.imageFileId,
+                          field: "image",
+                        });
+                      }
+                      if (
+                        msg.videoFileId &&
+                        typeof msg.videoFileId === "string"
+                      ) {
+                        filesToMigrate.push({
+                          msgId,
+                          fileId: msg.videoFileId,
+                          field: "video",
+                        });
+                      }
+                    }
+
+                    if (filesToMigrate.length === 0) {
+                      setSmResult("No files to migrate in this room.");
+                      setSmBusy(false);
+                      return;
+                    }
+
+                    setSmProgress({
+                      done: 0,
+                      total: filesToMigrate.length,
+                      failed: 0,
+                    });
+
+                    const CHUNK_SIZE = 3;
+                    let done = 0;
+                    let failed = 0;
+
+                    for (
+                      let i = 0;
+                      i < filesToMigrate.length;
+                      i += CHUNK_SIZE
+                    ) {
+                      if (smAbortRef.current) break;
+
+                      const chunk = filesToMigrate.slice(i, i + CHUNK_SIZE);
+
+                      const res = await fetch("/api/migrate-storage", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          srcEndpoint:
+                            process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
+                          srcProjectId:
+                            process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
+                          srcBucketId:
+                            process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID,
+                          destEndpoint: smDestEndpoint,
+                          destProjectId: smDestProjectId,
+                          destBucketId: smDestBucketId,
+                          destApiKey: smDestApiKey,
+                          files: chunk.map((f) => ({ fileId: f.fileId })),
+                        }),
+                      });
+
+                      if (!res.ok) {
+                        failed += chunk.length;
+                        done += chunk.length;
+                        setSmProgress({
+                          done,
+                          total: filesToMigrate.length,
+                          failed,
+                        });
+                        continue;
+                      }
+
+                      const { results } = (await res.json()) as {
+                        results: Array<{
+                          srcFileId: string;
+                          destFileId: string | null;
+                          destUrl: string | null;
+                          error?: string;
+                        }>;
+                      };
+
+                      // Update Firebase messages with new URLs
+                      for (const result of results) {
+                        const original = chunk.find(
+                          (f) => f.fileId === result.srcFileId,
+                        );
+                        if (original && result.destFileId && result.destUrl) {
+                          const msgUpdates: Record<string, unknown> = {};
+                          if (original.field === "image") {
+                            msgUpdates.imageUrl = result.destUrl;
+                            msgUpdates.imageFileId = result.destFileId;
+                          } else {
+                            msgUpdates.videoUrl = result.destUrl;
+                            msgUpdates.videoFileId = result.destFileId;
+                          }
+                          await update(
+                            ref(rtdb, `${roomPath}/messages/${original.msgId}`),
+                            msgUpdates,
+                          );
+                        } else {
+                          failed++;
+                        }
+                        done++;
+                        setSmProgress({
+                          done,
+                          total: filesToMigrate.length,
+                          failed,
+                        });
+                      }
+                    }
+
+                    if (smAbortRef.current) {
+                      setSmResult(
+                        `Stopped. ${done - failed} of ${filesToMigrate.length} migrated.`,
+                      );
+                    } else if (failed > 0) {
+                      setSmResult(
+                        `✅ Done — ${done - failed} migrated, ${failed} failed.`,
+                      );
+                    } else {
+                      setSmResult(
+                        `✅ All ${filesToMigrate.length} files migrated!`,
+                      );
+                    }
+                  } catch (err) {
+                    setSmResult(
+                      `❌ Error: ${err instanceof Error ? err.message : "Unknown"}`,
+                    );
+                  } finally {
+                    setSmBusy(false);
+                  }
+                }}
+                className="flex-1 rounded-lg px-3 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-40"
+                style={{
+                  background: "#FD366E",
+                  boxShadow:
+                    "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)",
+                }}
+              >
+                {smBusy ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <svg
+                      className="h-3.5 w-3.5 animate-spin"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Migrating...
+                  </span>
+                ) : (
+                  "Start Migration"
                 )}
               </button>
             </div>

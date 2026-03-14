@@ -803,7 +803,7 @@ export function ChatMessagesView({
                 </p>
                 {msg.decryptedText && (
                   <p
-                    className={`mt-1 whitespace-pre-line break-words ${isLockedOut ? "select-none" : ""} ${
+                    className={`emoji mt-1 whitespace-pre-line break-words ${isLockedOut ? "select-none" : ""} ${
                       !isLockedOut && isEmojiOnly(msg.decryptedText)
                         ? "text-4xl leading-snug"
                         : ""

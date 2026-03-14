@@ -46,6 +46,7 @@ export function isTextReaction(key: string): boolean {
 }
 
 const TEXT_REACTION_COLORS = [
+  "#ffffff", // white
   "#ef4444", // red
   "#f97316", // orange
   "#eab308", // yellow
@@ -55,7 +56,6 @@ const TEXT_REACTION_COLORS = [
   "#8b5cf6", // purple
   "#ec4899", // pink
   "#f43f5e", // rose
-  "#ffffff", // white
 ];
 
 const QUICK_EMOJIS = [
@@ -64,16 +64,42 @@ const QUICK_EMOJIS = [
   "😍",
   "🥰",
   "😘",
+
+  ":)",
+  ":P",
+  ":(",
+  ":/",
+  ":|",
+  ">:)",
+  ">:(",
+  "xD",
+  "xO",
+  "xP",
+
   "😂",
   "🤣",
   "😆",
   "😁",
-  "😢",
+
+  "🙄",
+  "🤷‍♂️",
   "🤦‍♂️",
   "🙆‍♂️",
+  "🤷‍♀️",
+  "🤦‍♀️",
+  "🙆‍♀️",
+
+  "🤑",
   "🔥",
   "💯",
+  "💰",
+  "💸",
+  "👌",
   "👍",
+
+  "👎",
+  "😓",
+  "😢",
   "🖕",
   "💩",
 ];
@@ -591,7 +617,7 @@ export function EmojiReactionPicker({
                 e.stopPropagation();
                 handleEmojiClick(emoji);
               }}
-              className={`emoji w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 hover:scale-125 transition-all duration-150 text-base ${
+              className={`emoji w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 hover:scale-125 transition-all duration-150 text-white ${
                 hasReacted(emoji) ? "bg-white/15 scale-110" : ""
               }`}
             >
@@ -839,8 +865,8 @@ export function EmojiReactionsDisplay({
                 e.stopPropagation();
                 onReact(messageId, key);
               }}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all duration-150 hover:scale-105 border ${
-                iReacted ? "ring-1 ring-white/40" : ""
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-sm font-medium transition-all duration-150 hover:scale-105 border ${
+                iReacted ? `border-[3px]` : ""
               }`}
               style={{
                 backgroundColor: textData.color + "30",
@@ -848,7 +874,9 @@ export function EmojiReactionsDisplay({
                 borderColor: textData.color + "50",
               }}
             >
-              <span className="leading-none">{textData.text}</span>
+              <span className="leading-none">
+                {textData.text === ":/" ? ":&#47;" : textData.text}
+              </span>
               {count > 1 && (
                 <span className="text-[10px] leading-none opacity-80">
                   {count}
@@ -867,13 +895,15 @@ export function EmojiReactionsDisplay({
               e.stopPropagation();
               onReact(messageId, key);
             }}
-            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs transition-all duration-150 hover:scale-105 ${
+            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-white/8 border border-white/10 text-neutral-300 hover:bg-white/15 rounded-full text-xs transition-all duration-150 hover:scale-105 ${
               iReacted
-                ? "bg-blue-500/25 border border-blue-400/40 text-white"
+                ? "border-[3px] border-white/20 text-white"
                 : "bg-white/8 border border-white/10 text-neutral-300 hover:bg-white/15"
             }`}
           >
-            <span className="emoji text-sm leading-none">{key}</span>
+            <span className="emoji text-sm leading-none">
+              {key === ":/" ? ":&#47;" : key}
+            </span>
             {count > 1 && (
               <span className="text-[10px] leading-none opacity-80">
                 {count}
