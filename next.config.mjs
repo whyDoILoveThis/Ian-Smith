@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     images: {
-        domains: ['firebasestorage.googleapis.com', 'fra.cloud.appwrite.io', 'img.clerk.com', 'picsum.photos'],
+        domains: ['firebasestorage.googleapis.com', 'fra.cloud.appwrite.io', 'nyc.cloud.appwrite.io', 'img.clerk.com', 'picsum.photos'],
       },
     headers: async () => [
       {
