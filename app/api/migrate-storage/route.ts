@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Allow large request bodies and long execution for video migration
-export const maxDuration = 300; // 5 minutes
+export const maxDuration = 60; // 1 minute
 export const dynamic = "force-dynamic";
 
 /**
