@@ -251,19 +251,48 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       logDebug("Audio warmup skipped", "No audio element available", "warn");
       return;
     }
-    logDebug("Audio warmup", "Attempting to unlock audio playback");
-    // A play() during a user gesture "unlocks" the element on iOS / Android
+    // If a real remote stream is already attached, just make sure it's playing.
+    if (audio.srcObject) {
+      logDebug("Audio warmup", "srcObject already set, ensuring playback");
+      audio.play().catch(() => {});
+      return;
+    }
+    // iOS Safari requires play() to succeed on a *real* source inside a user
+    // gesture to "unlock" the element for later programmatic playback.
+    // Strategy: use AudioContext.createMediaStreamDestination() to produce a
+    // real silent MediaStream. This is the same type (MediaStream) that the
+    // remote WebRTC track will use, so iOS treats the unlock identically.
+    // Falls back to a WAV data URI with actual audio samples if no AudioContext.
+    const ctx = audioContextRef.current;
+    if (ctx) {
+      try {
+        logDebug("Audio warmup", "Creating silent MediaStream via AudioContext");
+        const dest = ctx.createMediaStreamDestination();
+        // Store reference so it isn't garbage collected before ontrack fires
+        (audio as unknown as Record<string, unknown>).__warmupDest = dest;
+        audio.srcObject = dest.stream;
+        audio.volume = 0;
+        audio.play().then(() => {
+          logDebug("Audio warmup success", "Unlocked with silent MediaStream");
+        }).catch((e) => {
+          logDebug("Audio warmup (stream) failed", e?.message || "Unknown", "warn");
+        });
+        return;
+      } catch (e) {
+        logDebug("Audio warmup (stream) error", (e as Error)?.message, "warn");
+      }
+    }
+    // Fallback: tiny WAV with 1 real (silent) sample so iOS counts it as
+    // real playback.  The previous 0-byte data chunk WAV was ignored by iOS.
+    logDebug("Audio warmup", "Falling back to silent WAV with sample data");
+    audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+    audio.loop = true;
+    audio.volume = 0;
     audio.play().then(() => {
-      logDebug("Audio warmup success", "Audio element unlocked");
+      logDebug("Audio warmup success", "Unlocked with silent WAV");
     }).catch((e) => {
       logDebug("Audio warmup failed", e?.message || "Unknown error", "warn");
     });
-    // Only pause if no srcObject is set yet (pure warm-up scenario).
-    // If srcObject is already attached (e.g. ontrack already fired for the
-    // callee), pausing here would silence the remote stream permanently.
-    if (!audio.srcObject) {
-      audio.pause();
-    }
   }, [logDebug]);
 
   // Flush any ICE candidates that were queued before remote description
@@ -447,12 +476,20 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       }
     }
 
-    logDebug("PeerConnection", "Creating new RTCPeerConnection");
+    const hasTurn = ICE_SERVERS.iceServers?.some(s => {
+      const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+      return urls.some(u => u.startsWith("turn:") || u.startsWith("turns:"));
+    }) ?? false;
+    logDebug("PeerConnection", `Creating new RTCPeerConnection (TURN: ${hasTurn ? "yes" : "NO — calls across NAT will fail!"})`);
+    if (!hasTurn) {
+      logDebug("PeerConnection", "TURN servers not configured. Set NEXT_PUBLIC_TURN_URL, NEXT_PUBLIC_TURN_USERNAME, NEXT_PUBLIC_TURN_CREDENTIAL env vars.", "warn");
+    }
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
     pc.onicecandidate = (event) => {
       if (event.candidate && slotId) {
-        logDebug("ICE candidate (local)", `type: ${event.candidate.type}, protocol: ${event.candidate.protocol}`);
+        const cType = event.candidate.type;
+        logDebug("ICE candidate (local)", `type: ${cType}, protocol: ${event.candidate.protocol}${cType === "relay" ? " ✓ TURN relay" : ""}`);
         const signalRef = ref(rtdb, `${roomPath}/callSignals`);
         push(signalRef, {
           from: slotId,
@@ -528,8 +565,18 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       }));
 
       // Always assign the raw stream to the audio element for reliable playback.
+      // Setting srcObject overrides any src / previous srcObject.
+      // The element is already "unlocked" from warmUpAudio's play() inside
+      // the user gesture, so playback continues seamlessly on iOS.
       remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.muted = false;
       remoteAudioRef.current.volume = 1.0;
+      remoteAudioRef.current.loop = false;
+      // Release warmup destination node reference (no longer needed)
+      delete (remoteAudioRef.current as unknown as Record<string, unknown>).__warmupDest;
+      // NOTE: do NOT call removeAttribute("src") here — on iOS Safari it
+      // triggers a new media load algorithm that can reset the element's
+      // "unlocked" status.  srcObject takes priority over src per spec.
 
       // If the connection is already established (ontrack can fire late),
       // re-wire the analyser so level metering reads from the live stream.
@@ -1231,6 +1278,8 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     const audio = document.createElement("audio");
     audio.autoplay = true;
     audio.volume = 1.0;
+    // playsInline as both property and attribute — Safari needs the property
+    (audio as unknown as Record<string, boolean>).playsInline = true;
     audio.setAttribute("playsinline", "true");
     // Allow audio to play when phone is on silent (iOS)
     audio.setAttribute("x-webkit-airplay", "allow");
