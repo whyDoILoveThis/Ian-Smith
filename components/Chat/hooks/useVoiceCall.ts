@@ -379,51 +379,37 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     }
   }, [logDebug]);
 
-  // Apply the Web Audio gain-boost pipeline to the remote stream.
-  // Safe to call multiple times – it no-ops if already wired up.
+  // Set up audio-level metering for the remote stream visualisation.
+  // IMPORTANT: This does NOT replace the audio element's srcObject.
+  // The raw remote stream stays on the <audio> element for reliable playback.
+  // The AudioContext is used only for the analyser (level meter).
   const setupAudioBoost = useCallback(() => {
     const stream = remoteStreamRef.current;
     const audio = remoteAudioRef.current;
     const ctx = audioContextRef.current;
     if (!stream || !audio || !ctx) {
-      logDebug("Audio boost skipped", `stream: ${!!stream}, audio: ${!!audio}, ctx: ${!!ctx}`);
+      logDebug("Audio meter skipped", `stream: ${!!stream}, audio: ${!!audio}, ctx: ${!!ctx}`);
       return;
     }
-    if (gainNodeRef.current) {
-      logDebug("Audio boost skipped", "Already set up");
+    if (analyserRef.current) {
+      logDebug("Audio meter skipped", "Already set up");
       return;
     }
 
     try {
-      logDebug("Audio boost", "Setting up gain pipeline");
+      logDebug("Audio meter", "Setting up analyser for level visualisation");
       if (ctx.state === "suspended") {
         ctx.resume().catch(() => {});
       }
 
       const source = ctx.createMediaStreamSource(stream);
 
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = 3.0;
-      gainNodeRef.current = gainNode;
-
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       analyserRef.current = analyser;
 
-      source.connect(gainNode);
-      gainNode.connect(analyser);
-
-      // Route boosted audio to audio element only (avoid double output)
-      if (typeof ctx.createMediaStreamDestination === "function") {
-        const dest = ctx.createMediaStreamDestination();
-        gainNode.connect(dest);
-        audio.srcObject = dest.stream;
-        logDebug("Audio boost", "Using MediaStreamDestination");
-      } else {
-        // Fallback – direct output through AudioContext speakers
-        gainNode.connect(ctx.destination);
-        logDebug("Audio boost", "Using direct AudioContext destination (fallback)");
-      }
+      // Connect source → analyser only (no output node — audio element handles playback)
+      source.connect(analyser);
 
       // Audio-level visualisation loop
       const updateLevel = () => {
@@ -436,15 +422,16 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       };
       updateLevel();
 
+      // Ensure the audio element is playing the raw remote stream
       audio.volume = 1.0;
       audio.play().then(() => {
-        logDebug("Audio boost", "Playback started successfully");
+        logDebug("Audio meter", "Playback confirmed");
       }).catch((e) => {
-        logDebug("Audio boost playback failed", (e as Error)?.message, "warn");
+        logDebug("Audio meter playback issue", (e as Error)?.message, "warn");
       });
-      logDebug("Audio boost complete", "Gain pipeline active");
+      logDebug("Audio meter complete", "Analyser active");
     } catch (e) {
-      logDebug("Audio boost setup failed", (e as Error)?.message || "Unknown error", "warn");
+      logDebug("Audio meter setup failed", (e as Error)?.message || "Unknown error", "warn");
     }
   }, [logDebug]);
 
@@ -540,16 +527,14 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
         remoteTracksCount: remoteStream.getTracks().length,
       }));
 
-      // Always assign the raw stream to the audio element.
-      // If the gain-boost pipeline was already wired up (setupAudioBoost ran
-      // first), we re-run it below to re-wire with the new stream.
+      // Always assign the raw stream to the audio element for reliable playback.
       remoteAudioRef.current.srcObject = remoteStream;
       remoteAudioRef.current.volume = 1.0;
 
       // If the connection is already established (ontrack can fire late),
-      // re-apply the gain-boost pipeline so it reads from the live stream.
+      // re-wire the analyser so level metering reads from the live stream.
       if (pc.connectionState === "connected") {
-        gainNodeRef.current = null;          // reset so setupAudioBoost re-runs
+        analyserRef.current = null;          // reset so setupAudioBoost re-runs
         setupAudioBoost();
       }
 
@@ -1038,14 +1023,10 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
   const toggleSpeaker = useCallback(() => {
     setIsSpeaker((prev) => {
       const next = !prev;
-      // Speaker = full boost, Handset = lower gain for earpiece use
-      if (gainNodeRef.current) {
-        gainNodeRef.current.gain.value = next ? 3.0 : 0.5;
-      }
       if (remoteAudioRef.current) {
         remoteAudioRef.current.volume = next ? 1.0 : 0.3;
       }
-      logDebug("Speaker toggled", `Speaker: ${next}, gain: ${next ? 3.0 : 0.5}`);
+      logDebug("Speaker toggled", `Speaker: ${next}, volume: ${next ? 1.0 : 0.3}`);
       return next;
     });
   }, [logDebug]);
