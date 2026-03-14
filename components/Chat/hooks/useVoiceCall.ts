@@ -12,17 +12,32 @@ import {
 import { rtdb } from "@/lib/firebaseConfig";
 import type { CallStatus, CallSignal, CallError, CallErrorCode, CallDebugState, CallDebugEvent } from "../types";
 
-// ICE servers – multiple STUN endpoints for reliability.
-// For calls across strict mobile-carrier NATs you may need a TURN server.
-const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [
+// ICE servers – STUN + TURN for reliable connectivity.
+// TURN is critical: without it, calls fail across symmetric NATs
+// (mobile networks, VPNs, corporate firewalls, etc.).
+// Set NEXT_PUBLIC_TURN_URL, NEXT_PUBLIC_TURN_USERNAME, NEXT_PUBLIC_TURN_CREDENTIAL
+// in your .env.local. Free tier: https://www.metered.ca/stun-turn (500 GB/mo).
+const buildIceServers = (): RTCIceServer[] => {
+  const servers: RTCIceServer[] = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun3.l.google.com:19302" },
-    { urls: "stun:stun4.l.google.com:19302" },
-  ],
+  ];
+  const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+  const turnUser = process.env.NEXT_PUBLIC_TURN_USERNAME;
+  const turnCred = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
+  if (turnUrl && turnUser && turnCred) {
+    // Support comma-separated URLs (e.g. "turn:host:3478,turns:host:5349")
+    const urls = turnUrl.split(",").map((u) => u.trim());
+    servers.push({ urls, username: turnUser, credential: turnCred });
+  }
+  return servers;
+};
+
+const ICE_SERVERS: RTCConfiguration = {
+  iceServers: buildIceServers(),
   iceCandidatePoolSize: 10,
+  bundlePolicy: "max-bundle",
 };
 
 // Connection timeout (30 seconds)
@@ -88,6 +103,9 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
   const processedSignalsRef = useRef<Set<string>>(new Set());
   // Use a ref for callStatus so listeners always see the latest value
   const callStatusRef = useRef<CallStatus>("idle");
+  // Resolves when the remote offer has been set on the callee PeerConnection
+  const offerReadyResolveRef = useRef<(() => void) | null>(null);
+  const offerReadyPromiseRef = useRef<Promise<void> | null>(null);
 
   const otherSlotId = slotId === "1" ? "2" : "1";
 
@@ -322,6 +340,8 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
     callStartTimeRef.current = null;
     remoteStreamRef.current = null;
     signalCountersRef.current = { sent: 0, received: 0 };
+    offerReadyResolveRef.current = null;
+    offerReadyPromiseRef.current = null;
     setCallDuration(0);
     setRemoteAudioLevel(0);
     setDebugState(createInitialDebugState);
@@ -520,31 +540,32 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
         remoteTracksCount: remoteStream.getTracks().length,
       }));
 
-      // Assign the raw stream directly – the gain-boost pipeline is applied
-      // later (in the "connected" handler) to avoid interfering with the
-      // WebRTC signalling / ICE process and to ensure the AudioContext is
-      // created inside a user-gesture so it isn't suspended on iOS.
+      // Always assign the raw stream to the audio element.
+      // If the gain-boost pipeline was already wired up (setupAudioBoost ran
+      // first), we re-run it below to re-wire with the new stream.
       remoteAudioRef.current.srcObject = remoteStream;
       remoteAudioRef.current.volume = 1.0;
 
-      // Try to play immediately, then retry after a short delay for mobile
-      remoteAudioRef.current
-        .play()
-        .then(() => {
-          logDebug("Remote audio", "Playback started successfully");
+      // If the connection is already established (ontrack can fire late),
+      // re-apply the gain-boost pipeline so it reads from the live stream.
+      if (pc.connectionState === "connected") {
+        gainNodeRef.current = null;          // reset so setupAudioBoost re-runs
+        setupAudioBoost();
+      }
+
+      // Try to play – retry a few times for mobile browsers
+      const tryPlay = (attempt: number) => {
+        remoteAudioRef.current?.play().then(() => {
+          logDebug("Remote audio", `Playback started (attempt ${attempt})`);
           setDebugState(prev => ({ ...prev, remoteAudioPlaying: true }));
-        })
-        .catch((e) => {
-          logDebug("Remote audio blocked", (e as Error)?.message || "Unknown error", "warn");
-          setTimeout(() => {
-            remoteAudioRef.current?.play().then(() => {
-              logDebug("Remote audio", "Playback started on retry");
-              setDebugState(prev => ({ ...prev, remoteAudioPlaying: true }));
-            }).catch(() => {
-              logDebug("Remote audio", "Still blocked after retry", "warn");
-            });
-          }, 300);
+        }).catch((e) => {
+          logDebug("Remote audio blocked", `attempt ${attempt}: ${(e as Error)?.message}`, "warn");
+          if (attempt < 3) {
+            setTimeout(() => tryPlay(attempt + 1), 500);
+          }
         });
+      };
+      tryPlay(1);
     };
 
     pc.onconnectionstatechange = () => {
@@ -557,8 +578,14 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
         clearConnectionTimeout();
         setCallStatus("connected");
         clearError();
-        // Apply gain-boost now that the connection is stable
+        // Apply gain-boost now that the connection is stable.
+        // If ontrack hasn't fired yet setupAudioBoost will no-op; ontrack
+        // will set up the pipeline later when it fires.
         setupAudioBoost();
+        // Ensure audio is playing – belt-and-suspenders for mobile browsers
+        if (remoteAudioRef.current && remoteAudioRef.current.srcObject) {
+          remoteAudioRef.current.play().catch(() => {});
+        }
         callStartTimeRef.current = Date.now();
         durationIntervalRef.current = window.setInterval(() => {
           if (callStartTimeRef.current) {
@@ -657,11 +684,19 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
         logDebug("Local track added", `kind: ${track.kind}, id: ${track.id.slice(0, 8)}...`);
       });
 
+      // Ensure all audio transceivers are sendrecv so the offer SDP
+      // requests bidirectional audio from the remote side.
+      for (const t of pc.getTransceivers()) {
+        if (t.sender.track?.kind === "audio" && t.direction !== "sendrecv") {
+          t.direction = "sendrecv";
+        }
+      }
+
       // Create and send offer
       logDebug("startCall", "Creating offer...");
       let offer: RTCSessionDescriptionInit;
       try {
-        offer = await pc.createOffer();
+        offer = await pc.createOffer({ offerToReceiveAudio: true });
         logDebug("Offer created", `type: ${offer.type}, sdp length: ${offer.sdp?.length ?? 0}`);
       } catch (offerErr) {
         setError("OFFER_FAILED", "Failed to create offer", (offerErr as Error)?.message);
@@ -801,11 +836,32 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
       }
       localStreamRef.current = stream;
 
-      // *** KEY FIX: reuse the PeerConnection that was created when the
-      // offer signal arrived (it already has remoteDescription set). ***
+      // Wait for the remote offer to be set on the PeerConnection.
+      // The offer signal is processed asynchronously by the onChildAdded
+      // listener; if the user taps "Answer" very quickly the PC may not
+      // have its remoteDescription yet.
       let pc = peerConnectionRef.current;
+      if (!pc || !pc.remoteDescription) {
+        logDebug("answerCall", "Waiting for remote offer to be processed...");
+        if (offerReadyPromiseRef.current) {
+          const timeout = new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error("Offer did not arrive in time")), 10_000),
+          );
+          try {
+            await Promise.race([offerReadyPromiseRef.current, timeout]);
+          } catch (e) {
+            setError("SIGNALING_FAILED", "No offer received", (e as Error)?.message);
+            cleanup();
+            setCallStatus("idle");
+            setCallerId(null);
+            return;
+          }
+        }
+        pc = peerConnectionRef.current;
+      }
+
       if (!pc || pc.signalingState === "closed") {
-        logDebug("answerCall", "No existing PC with offer – creating fresh one", "warn");
+        logDebug("answerCall", "No existing PC with offer \u2013 creating fresh one", "warn");
         pc = createPeerConnection();
       } else {
         logDebug("answerCall", `Reusing PC in state: ${pc.signalingState}, remoteDesc: ${!!pc.remoteDescription}`);
@@ -1024,6 +1080,17 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
         callStatusRef.current === "idle"
       ) {
         logDebug("Incoming call", `From slot ${state.callerId}`);
+        // Create a promise that answerCall can await – it will be resolved
+        // by the signal handler once the remote offer has been set.
+        offerReadyPromiseRef.current = new Promise<void>((resolve) => {
+          offerReadyResolveRef.current = resolve;
+        });
+        // If the offer was already processed by the signal handler before
+        // this callState listener fired, resolve immediately.
+        if (peerConnectionRef.current?.remoteDescription) {
+          offerReadyResolveRef.current?.();
+          offerReadyResolveRef.current = null;
+        }
         setCallStatus("ringing");
         setCallerId(state.callerId);
       }
@@ -1080,6 +1147,11 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
               });
               logDebug("Remote offer set", `signalingState: ${pc.signalingState}`);
               updateDebugStateFromPC();
+              // Notify answerCall that the remote offer is ready
+              if (offerReadyResolveRef.current) {
+                offerReadyResolveRef.current();
+                offerReadyResolveRef.current = null;
+              }
             } catch (e) {
               logDebug("Failed to set remote offer", (e as Error)?.message, "error");
               setError("SIGNALING_FAILED", "Failed to process incoming call", (e as Error)?.message);
@@ -1092,22 +1164,25 @@ export function useVoiceCall(slotId: "1" | "2" | null, roomPath: string) {
           case "answer": {
             logDebug("Processing answer", `SDP length: ${signal.sdp?.length ?? 0}`);
             const pc = peerConnectionRef.current;
-            if (pc && pc.signalingState === "have-local-offer") {
-              try {
-                await pc.setRemoteDescription({
-                  type: "answer",
-                  sdp: signal.sdp,
-                });
-                logDebug("Remote answer set", `signalingState: ${pc.signalingState}`);
-                updateDebugStateFromPC();
-              } catch (e) {
-                logDebug("Failed to set remote answer", (e as Error)?.message, "error");
-                setError("SIGNALING_FAILED", "Failed to process call answer", (e as Error)?.message);
-              }
+            if (!pc) {
+              logDebug("Answer ignored", "No PeerConnection exists", "warn");
+              break;
+            }
+            // Try to set the remote answer. If the PC isn't in the right
+            // state the browser will throw, which we catch below.
+            try {
+              await pc.setRemoteDescription({
+                type: "answer",
+                sdp: signal.sdp,
+              });
+              logDebug("Remote answer set", `signalingState: ${pc.signalingState}`);
+              updateDebugStateFromPC();
               // Flush any ICE candidates that arrived before the answer
               await flushPendingCandidates();
-            } else {
-              logDebug("Answer ignored", `PC signalingState: ${pc?.signalingState ?? "no PC"}`, "warn");
+            } catch (e) {
+              logDebug("Failed to set remote answer",
+                `signalingState was ${pc.signalingState}: ${(e as Error)?.message}`, "error");
+              setError("SIGNALING_FAILED", "Failed to process call answer", (e as Error)?.message);
             }
             break;
           }
