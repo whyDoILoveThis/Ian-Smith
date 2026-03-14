@@ -256,6 +256,30 @@ export function RoomSpotsView({
   } | null>(null);
   const [smResult, setSmResult] = useState<string | null>(null);
   const smAbortRef = useRef(false);
+  const [smMissing, setSmMissing] = useState<
+    Array<{ msgId: string; fileId: string; field: "image" | "video" }>
+  >([]);
+  const [smLogs, setSmLogs] = useState<string[]>([]);
+  const smLogsEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Source file browser state
+  const [showSrcBrowser, setShowSrcBrowser] = useState(false);
+  const [smSrcApiKey, setSmSrcApiKey] = useState("");
+  const [smSrcBucketId, setSmSrcBucketId] = useState("");
+  const [srcFiles, setSrcFiles] = useState<
+    Array<{
+      $id: string;
+      name: string;
+      mimeType: string;
+      sizeOriginal: number;
+      $createdAt: string;
+      previewUrl: string;
+    }>
+  >([]);
+  const [srcSelected, setSrcSelected] = useState<Set<string>>(new Set());
+  const [srcLoading, setSrcLoading] = useState(false);
+  const [srcDeleting, setSrcDeleting] = useState(false);
+  const [srcResult, setSrcResult] = useState<string | null>(null);
 
   // Disguise custom timeout
   const [showCustomTimeout, setShowCustomTimeout] = useState(false);
@@ -1268,9 +1292,9 @@ export function RoomSpotsView({
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════
-            MIGRATE APPWRITE STORAGE — admin only
+            MIGRATE APPWRITE STORAGE
            ═══════════════════════════════════════════════════════════════ */}
-        {isAdmin && slotId && (
+        {slotId && (
           <button
             type="button"
             onClick={() => {
@@ -1280,6 +1304,8 @@ export function RoomSpotsView({
               setSmDestApiKey("");
               setSmProgress(null);
               setSmResult(null);
+              setSmMissing([]);
+              setSmLogs([]);
               smAbortRef.current = false;
               setShowStorageMigrateModal(true);
             }}
@@ -1762,19 +1788,429 @@ export function RoomSpotsView({
               </div>
             )}
 
+            {/* Log Box */}
+            {smLogs.length > 0 && (
+              <div className="px-5 pb-2">
+                <div
+                  className="rounded-lg overflow-hidden"
+                  style={{
+                    background: "#111114",
+                    border: "1px solid #2D2D31",
+                  }}
+                >
+                  <div
+                    className="px-2.5 py-1.5 flex items-center gap-1.5"
+                    style={{ borderBottom: "1px solid #2D2D31" }}
+                  >
+                    <div
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{
+                        background: smBusy
+                          ? "#FE9567"
+                          : smLogs.some((l) => l.startsWith("❌"))
+                            ? "#FF6B6B"
+                            : "#34d399",
+                      }}
+                    />
+                    <span className="text-[9px] font-medium text-[#616B7C] uppercase tracking-wider">
+                      Log
+                    </span>
+                  </div>
+                  <div className="max-h-[120px] overflow-y-auto p-2 space-y-0.5 font-mono">
+                    {smLogs.map((log, i) => (
+                      <p
+                        key={i}
+                        className={`text-[9px] leading-relaxed ${
+                          log.startsWith("❌") || log.startsWith("ERR")
+                            ? "text-[#FF6B6B]"
+                            : log.startsWith("✅")
+                              ? "text-emerald-400"
+                              : "text-[#616B7C]"
+                        }`}
+                      >
+                        {log}
+                      </p>
+                    ))}
+                    <div ref={smLogsEndRef} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Check Missing */}
+            {smMissing.length > 0 && !smBusy && (
+              <div className="px-5 pb-2">
+                <div
+                  className="rounded-lg px-3 py-2 text-[11px] text-[#FE9567] text-center"
+                  style={{
+                    background: "rgba(254,149,103,0.08)",
+                    border: "1px solid rgba(254,149,103,0.15)",
+                  }}
+                >
+                  {smMissing.length} file{smMissing.length !== 1 ? "s" : ""}{" "}
+                  missing from destination bucket
+                </div>
+              </div>
+            )}
+
             {/* Actions */}
             <div
-              className="px-5 pb-5 pt-3 flex gap-2"
+              className="px-5 pb-5 pt-3 flex flex-col gap-2"
               style={{ borderTop: "1px solid #2D2D31" }}
             >
+              {/* Check / Migrate Missing row */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={
+                    smBusy ||
+                    !smDestEndpoint ||
+                    !smDestProjectId ||
+                    !smDestBucketId ||
+                    !smDestApiKey
+                  }
+                  onClick={async () => {
+                    setSmBusy(true);
+                    setSmResult(null);
+                    setSmMissing([]);
+                    setSmProgress(null);
+                    setSmLogs([]);
+                    const addLog = (msg: string) => {
+                      setSmLogs((prev) => [...prev, msg]);
+                      setTimeout(
+                        () =>
+                          smLogsEndRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                          }),
+                        50,
+                      );
+                    };
+
+                    try {
+                      addLog("Fetching messages from Firebase...");
+                      const messagesRef = ref(rtdb, `${roomPath}/messages`);
+                      const snap = await get(query(messagesRef, orderByKey()));
+                      const val = (snap.val() || {}) as Record<
+                        string,
+                        Record<string, unknown>
+                      >;
+
+                      const allFiles: Array<{
+                        msgId: string;
+                        fileId: string;
+                        field: "image" | "video";
+                      }> = [];
+
+                      for (const [msgId, msg] of Object.entries(val)) {
+                        if (
+                          msg.imageFileId &&
+                          typeof msg.imageFileId === "string"
+                        ) {
+                          allFiles.push({
+                            msgId,
+                            fileId: msg.imageFileId,
+                            field: "image",
+                          });
+                        }
+                        if (
+                          msg.videoFileId &&
+                          typeof msg.videoFileId === "string"
+                        ) {
+                          allFiles.push({
+                            msgId,
+                            fileId: msg.videoFileId,
+                            field: "video",
+                          });
+                        }
+                      }
+
+                      if (allFiles.length === 0) {
+                        addLog("No media files found.");
+                        setSmResult("No media files in this room.");
+                        setSmBusy(false);
+                        return;
+                      }
+
+                      addLog(
+                        `Found ${allFiles.length} media files. Checking destination bucket...`,
+                      );
+
+                      setSmProgress({
+                        done: 0,
+                        total: allFiles.length,
+                        failed: 0,
+                      });
+
+                      // Check in chunks of 20
+                      const CHUNK = 20;
+                      const missingFiles: typeof allFiles = [];
+                      let checked = 0;
+
+                      for (let i = 0; i < allFiles.length; i += CHUNK) {
+                        const chunk = allFiles.slice(i, i + CHUNK);
+                        addLog(
+                          `Checking batch ${Math.floor(i / CHUNK) + 1}/${Math.ceil(allFiles.length / CHUNK)} (${chunk.length} files)...`,
+                        );
+
+                        const res = await fetch("/api/check-storage", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            endpoint: smDestEndpoint,
+                            projectId: smDestProjectId,
+                            bucketId: smDestBucketId,
+                            apiKey: smDestApiKey,
+                            fileIds: chunk.map((f) => f.fileId),
+                          }),
+                        });
+
+                        if (res.ok) {
+                          const { missing } = (await res.json()) as {
+                            missing: string[];
+                          };
+                          for (const id of missing) {
+                            const entry = chunk.find((f) => f.fileId === id);
+                            if (entry) {
+                              missingFiles.push(entry);
+                              addLog(`❌ Missing: ${id} (${entry.field})`);
+                            }
+                          }
+                          if (missing.length === 0) {
+                            addLog(`✅ Batch OK — all ${chunk.length} present`);
+                          }
+                        } else {
+                          addLog(
+                            `ERR Batch check failed (HTTP ${res.status}) — marking ${chunk.length} as missing`,
+                          );
+                          missingFiles.push(...chunk);
+                        }
+
+                        checked = Math.min(i + CHUNK, allFiles.length);
+                        setSmProgress({
+                          done: checked,
+                          total: allFiles.length,
+                          failed: missingFiles.length,
+                        });
+                      }
+
+                      setSmMissing(missingFiles);
+                      setSmProgress(null);
+
+                      if (missingFiles.length === 0) {
+                        addLog(`✅ All ${allFiles.length} files verified!`);
+                        setSmResult(
+                          `✅ All ${allFiles.length} files verified in destination bucket.`,
+                        );
+                      } else {
+                        addLog(
+                          `Done. ${missingFiles.length} missing out of ${allFiles.length}.`,
+                        );
+                        setSmResult(
+                          `Found ${missingFiles.length} missing file${missingFiles.length !== 1 ? "s" : ""} out of ${allFiles.length}.`,
+                        );
+                      }
+                    } catch (err) {
+                      const msg =
+                        err instanceof Error ? err.message : "Unknown";
+                      addLog(`❌ Fatal error: ${msg}`);
+                      setSmResult(`❌ Error: ${msg}`);
+                    } finally {
+                      setSmBusy(false);
+                    }
+                  }}
+                  className="flex-1 rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-40"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+                  }}
+                >
+                  {smBusy && smMissing.length === 0 && !smProgress?.failed
+                    ? "Checking..."
+                    : "Check Missing"}
+                </button>
+
+                {smMissing.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={smBusy}
+                    onClick={async () => {
+                      setSmBusy(true);
+                      setSmResult(null);
+                      smAbortRef.current = false;
+                      const addLog = (msg: string) => {
+                        setSmLogs((prev) => [...prev, msg]);
+                        setTimeout(
+                          () =>
+                            smLogsEndRef.current?.scrollIntoView({
+                              behavior: "smooth",
+                            }),
+                          50,
+                        );
+                      };
+                      addLog(
+                        `Starting migration of ${smMissing.length} missing files (one at a time with retries)...`,
+                      );
+
+                      try {
+                        setSmProgress({
+                          done: 0,
+                          total: smMissing.length,
+                          failed: 0,
+                        });
+
+                        const CHUNK_SIZE = 1;
+                        let done = 0;
+                        let failed = 0;
+
+                        for (let i = 0; i < smMissing.length; i += CHUNK_SIZE) {
+                          if (smAbortRef.current) {
+                            addLog("Aborted by user.");
+                            break;
+                          }
+
+                          const chunk = smMissing.slice(i, i + CHUNK_SIZE);
+                          addLog(
+                            `Migrating file ${i + 1}/${smMissing.length}: ${chunk[0].fileId} (${chunk[0].field})...`,
+                          );
+
+                          const res = await fetch("/api/migrate-storage", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              srcEndpoint:
+                                process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
+                              srcProjectId:
+                                process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
+                              srcBucketId:
+                                process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID,
+                              destEndpoint: smDestEndpoint,
+                              destProjectId: smDestProjectId,
+                              destBucketId: smDestBucketId,
+                              destApiKey: smDestApiKey,
+                              files: chunk.map((f) => ({ fileId: f.fileId })),
+                            }),
+                          });
+
+                          if (!res.ok) {
+                            addLog(`ERR Batch failed: HTTP ${res.status}`);
+                            failed += chunk.length;
+                            done += chunk.length;
+                            setSmProgress({
+                              done,
+                              total: smMissing.length,
+                              failed,
+                            });
+                            continue;
+                          }
+
+                          const { results } = (await res.json()) as {
+                            results: Array<{
+                              srcFileId: string;
+                              destFileId: string | null;
+                              destUrl: string | null;
+                              error?: string;
+                              attempts?: number;
+                            }>;
+                          };
+
+                          for (const result of results) {
+                            const original = chunk.find(
+                              (f) => f.fileId === result.srcFileId,
+                            );
+                            if (
+                              original &&
+                              result.destFileId &&
+                              result.destUrl
+                            ) {
+                              const msgUpdates: Record<string, unknown> = {};
+                              if (original.field === "image") {
+                                msgUpdates.imageUrl = result.destUrl;
+                                msgUpdates.imageFileId = result.destFileId;
+                              } else {
+                                msgUpdates.videoUrl = result.destUrl;
+                                msgUpdates.videoFileId = result.destFileId;
+                              }
+                              await update(
+                                ref(
+                                  rtdb,
+                                  `${roomPath}/messages/${original.msgId}`,
+                                ),
+                                msgUpdates,
+                              );
+                              addLog(
+                                `✅ ${result.srcFileId} → ${result.destFileId}`,
+                              );
+                            } else {
+                              failed++;
+                              const retryNote =
+                                result.attempts && result.attempts > 1
+                                  ? ` (after ${result.attempts} attempts)`
+                                  : "";
+                              addLog(
+                                `❌ ${result.srcFileId}: ${result.error || "Upload failed"}${retryNote}`,
+                              );
+                            }
+                            done++;
+                            setSmProgress({
+                              done,
+                              total: smMissing.length,
+                              failed,
+                            });
+                          }
+                        }
+
+                        if (smAbortRef.current) {
+                          addLog(
+                            `Stopped. ${done - failed} of ${smMissing.length} migrated.`,
+                          );
+                          setSmResult(
+                            `Stopped. ${done - failed} of ${smMissing.length} migrated.`,
+                          );
+                        } else if (failed > 0) {
+                          addLog(
+                            `Done — ${done - failed} migrated, ${failed} failed.`,
+                          );
+                          setSmResult(
+                            `✅ Done — ${done - failed} migrated, ${failed} failed.`,
+                          );
+                        } else {
+                          addLog(
+                            `✅ All ${smMissing.length} missing files migrated!`,
+                          );
+                          setSmResult(
+                            `✅ All ${smMissing.length} missing files migrated!`,
+                          );
+                          setSmMissing([]);
+                        }
+                      } catch (err) {
+                        const msg =
+                          err instanceof Error ? err.message : "Unknown";
+                        addLog(`❌ Fatal error: ${msg}`);
+                        setSmResult(`❌ Error: ${msg}`);
+                      } finally {
+                        setSmBusy(false);
+                      }
+                    }}
+                    className="flex-1 rounded-lg px-3 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-40"
+                    style={{
+                      background: "linear-gradient(135deg, #FD366E, #FE9567)",
+                      boxShadow:
+                        "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    Migrate {smMissing.length} Missing
+                  </button>
+                )}
+              </div>
+
+              {/* Browse Source Files button */}
               <button
                 type="button"
-                onClick={() => {
-                  smAbortRef.current = true;
-                  setShowStorageMigrateModal(false);
-                }}
                 disabled={smBusy}
-                className="flex-1 rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                onClick={() => setShowSrcBrowser(true)}
+                className="w-full rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
                 style={{
                   background: "#1C1C21",
                   border: "1px solid #2D2D31",
@@ -1782,210 +2218,614 @@ export function RoomSpotsView({
                     "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
                 }}
               >
-                {smBusy ? "Stop" : "Cancel"}
+                🗂️ Browse Source Files
               </button>
-              <button
-                type="button"
-                disabled={
-                  smBusy ||
-                  !smDestEndpoint ||
-                  !smDestProjectId ||
-                  !smDestBucketId ||
-                  !smDestApiKey
-                }
-                onClick={async () => {
-                  setSmBusy(true);
-                  setSmResult(null);
-                  smAbortRef.current = false;
 
-                  try {
-                    // 1. Fetch all messages from Firebase to find files
-                    const messagesRef = ref(rtdb, `${roomPath}/messages`);
-                    const snap = await get(query(messagesRef, orderByKey()));
-                    const val = (snap.val() || {}) as Record<
-                      string,
-                      Record<string, unknown>
-                    >;
+              {/* Cancel / Start row */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    smAbortRef.current = true;
+                    setShowStorageMigrateModal(false);
+                  }}
+                  disabled={smBusy}
+                  className="flex-1 rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+                  }}
+                >
+                  {smBusy ? "Stop" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    smBusy ||
+                    !smDestEndpoint ||
+                    !smDestProjectId ||
+                    !smDestBucketId ||
+                    !smDestApiKey
+                  }
+                  onClick={async () => {
+                    setSmBusy(true);
+                    setSmResult(null);
+                    setSmLogs([]);
+                    smAbortRef.current = false;
+                    const addLog = (msg: string) => {
+                      setSmLogs((prev) => [...prev, msg]);
+                      setTimeout(
+                        () =>
+                          smLogsEndRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                          }),
+                        50,
+                      );
+                    };
 
-                    // Collect all files that need migrating
-                    const filesToMigrate: Array<{
-                      msgId: string;
-                      fileId: string;
-                      field: "image" | "video";
-                    }> = [];
+                    try {
+                      addLog("Fetching messages from Firebase...");
+                      // 1. Fetch all messages from Firebase to find files
+                      const messagesRef = ref(rtdb, `${roomPath}/messages`);
+                      const snap = await get(query(messagesRef, orderByKey()));
+                      const val = (snap.val() || {}) as Record<
+                        string,
+                        Record<string, unknown>
+                      >;
 
-                    for (const [msgId, msg] of Object.entries(val)) {
-                      if (
-                        msg.imageFileId &&
-                        typeof msg.imageFileId === "string"
-                      ) {
-                        filesToMigrate.push({
-                          msgId,
-                          fileId: msg.imageFileId,
-                          field: "image",
-                        });
+                      // Collect all files that need migrating
+                      const filesToMigrate: Array<{
+                        msgId: string;
+                        fileId: string;
+                        field: "image" | "video";
+                      }> = [];
+
+                      for (const [msgId, msg] of Object.entries(val)) {
+                        if (
+                          msg.imageFileId &&
+                          typeof msg.imageFileId === "string"
+                        ) {
+                          filesToMigrate.push({
+                            msgId,
+                            fileId: msg.imageFileId,
+                            field: "image",
+                          });
+                        }
+                        if (
+                          msg.videoFileId &&
+                          typeof msg.videoFileId === "string"
+                        ) {
+                          filesToMigrate.push({
+                            msgId,
+                            fileId: msg.videoFileId,
+                            field: "video",
+                          });
+                        }
                       }
-                      if (
-                        msg.videoFileId &&
-                        typeof msg.videoFileId === "string"
-                      ) {
-                        filesToMigrate.push({
-                          msgId,
-                          fileId: msg.videoFileId,
-                          field: "video",
-                        });
+
+                      if (filesToMigrate.length === 0) {
+                        addLog("No media files found.");
+                        setSmResult("No files to migrate in this room.");
+                        setSmBusy(false);
+                        return;
                       }
-                    }
 
-                    if (filesToMigrate.length === 0) {
-                      setSmResult("No files to migrate in this room.");
-                      setSmBusy(false);
-                      return;
-                    }
-
-                    setSmProgress({
-                      done: 0,
-                      total: filesToMigrate.length,
-                      failed: 0,
-                    });
-
-                    const CHUNK_SIZE = 3;
-                    let done = 0;
-                    let failed = 0;
-
-                    for (
-                      let i = 0;
-                      i < filesToMigrate.length;
-                      i += CHUNK_SIZE
-                    ) {
-                      if (smAbortRef.current) break;
-
-                      const chunk = filesToMigrate.slice(i, i + CHUNK_SIZE);
-
-                      const res = await fetch("/api/migrate-storage", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          srcEndpoint:
-                            process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
-                          srcProjectId:
-                            process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
-                          srcBucketId:
-                            process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID,
-                          destEndpoint: smDestEndpoint,
-                          destProjectId: smDestProjectId,
-                          destBucketId: smDestBucketId,
-                          destApiKey: smDestApiKey,
-                          files: chunk.map((f) => ({ fileId: f.fileId })),
-                        }),
+                      addLog(
+                        `Found ${filesToMigrate.length} files. Starting migration...`,
+                      );
+                      setSmProgress({
+                        done: 0,
+                        total: filesToMigrate.length,
+                        failed: 0,
                       });
 
-                      if (!res.ok) {
-                        failed += chunk.length;
-                        done += chunk.length;
-                        setSmProgress({
-                          done,
-                          total: filesToMigrate.length,
-                          failed,
-                        });
-                        continue;
-                      }
+                      const CHUNK_SIZE = 3;
+                      let done = 0;
+                      let failed = 0;
 
-                      const { results } = (await res.json()) as {
-                        results: Array<{
-                          srcFileId: string;
-                          destFileId: string | null;
-                          destUrl: string | null;
-                          error?: string;
-                        }>;
-                      };
-
-                      // Update Firebase messages with new URLs
-                      for (const result of results) {
-                        const original = chunk.find(
-                          (f) => f.fileId === result.srcFileId,
-                        );
-                        if (original && result.destFileId && result.destUrl) {
-                          const msgUpdates: Record<string, unknown> = {};
-                          if (original.field === "image") {
-                            msgUpdates.imageUrl = result.destUrl;
-                            msgUpdates.imageFileId = result.destFileId;
-                          } else {
-                            msgUpdates.videoUrl = result.destUrl;
-                            msgUpdates.videoFileId = result.destFileId;
-                          }
-                          await update(
-                            ref(rtdb, `${roomPath}/messages/${original.msgId}`),
-                            msgUpdates,
-                          );
-                        } else {
-                          failed++;
+                      for (
+                        let i = 0;
+                        i < filesToMigrate.length;
+                        i += CHUNK_SIZE
+                      ) {
+                        if (smAbortRef.current) {
+                          addLog("Aborted by user.");
+                          break;
                         }
-                        done++;
-                        setSmProgress({
-                          done,
-                          total: filesToMigrate.length,
-                          failed,
-                        });
-                      }
-                    }
 
-                    if (smAbortRef.current) {
-                      setSmResult(
-                        `Stopped. ${done - failed} of ${filesToMigrate.length} migrated.`,
-                      );
-                    } else if (failed > 0) {
-                      setSmResult(
-                        `✅ Done — ${done - failed} migrated, ${failed} failed.`,
-                      );
-                    } else {
-                      setSmResult(
-                        `✅ All ${filesToMigrate.length} files migrated!`,
-                      );
+                        const chunk = filesToMigrate.slice(i, i + CHUNK_SIZE);
+                        addLog(
+                          `Migrating batch ${Math.floor(i / CHUNK_SIZE) + 1}/${Math.ceil(filesToMigrate.length / CHUNK_SIZE)} (${chunk.length} files)...`,
+                        );
+
+                        const res = await fetch("/api/migrate-storage", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            srcEndpoint:
+                              process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
+                            srcProjectId:
+                              process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
+                            srcBucketId:
+                              process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID,
+                            destEndpoint: smDestEndpoint,
+                            destProjectId: smDestProjectId,
+                            destBucketId: smDestBucketId,
+                            destApiKey: smDestApiKey,
+                            files: chunk.map((f) => ({ fileId: f.fileId })),
+                          }),
+                        });
+
+                        if (!res.ok) {
+                          addLog(`ERR Batch failed: HTTP ${res.status}`);
+                          failed += chunk.length;
+                          done += chunk.length;
+                          setSmProgress({
+                            done,
+                            total: filesToMigrate.length,
+                            failed,
+                          });
+                          continue;
+                        }
+
+                        const { results } = (await res.json()) as {
+                          results: Array<{
+                            srcFileId: string;
+                            destFileId: string | null;
+                            destUrl: string | null;
+                            error?: string;
+                          }>;
+                        };
+
+                        // Update Firebase messages with new URLs
+                        for (const result of results) {
+                          const original = chunk.find(
+                            (f) => f.fileId === result.srcFileId,
+                          );
+                          if (original && result.destFileId && result.destUrl) {
+                            const msgUpdates: Record<string, unknown> = {};
+                            if (original.field === "image") {
+                              msgUpdates.imageUrl = result.destUrl;
+                              msgUpdates.imageFileId = result.destFileId;
+                            } else {
+                              msgUpdates.videoUrl = result.destUrl;
+                              msgUpdates.videoFileId = result.destFileId;
+                            }
+                            await update(
+                              ref(
+                                rtdb,
+                                `${roomPath}/messages/${original.msgId}`,
+                              ),
+                              msgUpdates,
+                            );
+                            addLog(
+                              `✅ ${result.srcFileId} → ${result.destFileId}`,
+                            );
+                          } else {
+                            failed++;
+                            addLog(
+                              `❌ ${result.srcFileId}: ${result.error || "Upload failed"}`,
+                            );
+                          }
+                          done++;
+                          setSmProgress({
+                            done,
+                            total: filesToMigrate.length,
+                            failed,
+                          });
+                        }
+                      }
+
+                      if (smAbortRef.current) {
+                        addLog(
+                          `Stopped. ${done - failed} of ${filesToMigrate.length} migrated.`,
+                        );
+                        setSmResult(
+                          `Stopped. ${done - failed} of ${filesToMigrate.length} migrated.`,
+                        );
+                      } else if (failed > 0) {
+                        addLog(
+                          `Done — ${done - failed} migrated, ${failed} failed.`,
+                        );
+                        setSmResult(
+                          `✅ Done — ${done - failed} migrated, ${failed} failed.`,
+                        );
+                      } else {
+                        addLog(
+                          `✅ All ${filesToMigrate.length} files migrated!`,
+                        );
+                        setSmResult(
+                          `✅ All ${filesToMigrate.length} files migrated!`,
+                        );
+                      }
+                    } catch (err) {
+                      const msg =
+                        err instanceof Error ? err.message : "Unknown";
+                      addLog(`❌ Fatal error: ${msg}`);
+                      setSmResult(`❌ Error: ${msg}`);
+                    } finally {
+                      setSmBusy(false);
                     }
+                  }}
+                  className="flex-1 rounded-lg px-3 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-40"
+                  style={{
+                    background: "#FD366E",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)",
+                  }}
+                >
+                  {smBusy ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <svg
+                        className="h-3.5 w-3.5 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Migrating...
+                    </span>
+                  ) : (
+                    "Start Migration"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Browse Source Files Modal */}
+      {showSrcBrowser && (
+        <div className="fixed inset-0 z-[301] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div
+            className="mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border p-5"
+            style={{
+              background: "#19191D",
+              borderColor: "#2D2D31",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)",
+            }}
+          >
+            {/* Header */}
+            <div className="mb-4 flex items-center justify-between">
+              <h3
+                className="text-sm font-semibold"
+                style={{ color: "#F4F4F6" }}
+              >
+                Source Bucket Files
+              </h3>
+              <button
+                onClick={() => {
+                  setShowSrcBrowser(false);
+                  setSrcResult(null);
+                }}
+                className="rounded-lg p-1 text-[#818999] transition-colors hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Source API Key input */}
+            <div className="mb-3 space-y-2">
+              <label
+                className="block text-[10px] font-medium uppercase tracking-wider"
+                style={{ color: "#818999" }}
+              >
+                Source Bucket ID
+              </label>
+              <input
+                type="text"
+                value={smSrcBucketId}
+                onChange={(e) => setSmSrcBucketId(e.target.value)}
+                placeholder="Bucket ID"
+                className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder-[#616B7C] outline-none"
+                style={{
+                  background: "#1C1C21",
+                  border: "1px solid #2D2D31",
+                }}
+              />
+              <label
+                className="block text-[10px] font-medium uppercase tracking-wider"
+                style={{ color: "#818999" }}
+              >
+                Source API Key
+              </label>
+              <input
+                type="password"
+                value={smSrcApiKey}
+                onChange={(e) => setSmSrcApiKey(e.target.value)}
+                placeholder="Enter API key for source bucket"
+                className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder-[#616B7C] outline-none"
+                style={{
+                  background: "#1C1C21",
+                  border: "1px solid #2D2D31",
+                }}
+              />
+              <button
+                type="button"
+                disabled={srcLoading || !smSrcApiKey || !smSrcBucketId}
+                onClick={async () => {
+                  setSrcLoading(true);
+                  setSrcResult(null);
+                  setSrcSelected(new Set());
+                  try {
+                    const res = await fetch("/api/list-storage", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        endpoint: process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
+                        projectId: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
+                        bucketId: smSrcBucketId,
+                        apiKey: smSrcApiKey,
+                      }),
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    setSrcFiles(data.files);
+                    setSrcResult(`Loaded ${data.files.length} files`);
                   } catch (err) {
-                    setSmResult(
-                      `❌ Error: ${err instanceof Error ? err.message : "Unknown"}`,
+                    setSrcResult(
+                      `Error: ${err instanceof Error ? err.message : "Unknown"}`,
                     );
                   } finally {
-                    setSmBusy(false);
+                    setSrcLoading(false);
                   }
                 }}
-                className="flex-1 rounded-lg px-3 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-40"
+                className="w-full rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-40"
                 style={{
-                  background: "#FD366E",
+                  background: "linear-gradient(135deg, #FD366E, #FE9567)",
                   boxShadow:
                     "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)",
                 }}
               >
-                {smBusy ? (
-                  <span className="flex items-center justify-center gap-1.5">
-                    <svg
-                      className="h-3.5 w-3.5 animate-spin"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Migrating...
-                  </span>
-                ) : (
-                  "Start Migration"
-                )}
+                {srcLoading ? "Loading..." : "Load Files"}
               </button>
             </div>
+
+            {/* Result message */}
+            {srcResult && (
+              <p
+                className="mb-2 text-[11px]"
+                style={{
+                  color: srcResult.startsWith("Error") ? "#FD366E" : "#A1E66B",
+                }}
+              >
+                {srcResult}
+              </p>
+            )}
+
+            {/* Select All / Deselect All + counts */}
+            {srcFiles.length > 0 && (
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px]" style={{ color: "#818999" }}>
+                  {srcSelected.size} of {srcFiles.length} selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (srcSelected.size === srcFiles.length) {
+                      setSrcSelected(new Set());
+                    } else {
+                      setSrcSelected(new Set(srcFiles.map((f) => f.$id)));
+                    }
+                  }}
+                  className="rounded px-2 py-1 text-[10px] font-medium transition-colors"
+                  style={{
+                    color: "#C3C8D4",
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                  }}
+                >
+                  {srcSelected.size === srcFiles.length
+                    ? "Deselect All"
+                    : "Select All"}
+                </button>
+              </div>
+            )}
+
+            {/* Image grid */}
+            <div
+              className="flex-1 overflow-y-auto rounded-lg p-1"
+              style={{ background: "#1C1C21" }}
+            >
+              {srcFiles.length === 0 ? (
+                <p
+                  className="py-8 text-center text-xs"
+                  style={{ color: "#616B7C" }}
+                >
+                  No files loaded. Enter your API key and click Load Files.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {srcFiles.map((file) => {
+                    const selected = srcSelected.has(file.$id);
+                    const isVideo = file.mimeType.startsWith("video/");
+                    return (
+                      <button
+                        key={file.$id}
+                        type="button"
+                        onClick={() => {
+                          setSrcSelected((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(file.$id)) {
+                              next.delete(file.$id);
+                            } else {
+                              next.add(file.$id);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="group relative aspect-square overflow-hidden rounded-lg transition-all"
+                        style={{
+                          border: selected
+                            ? "2px solid #FD366E"
+                            : "2px solid transparent",
+                          outline: selected
+                            ? "1px solid rgba(253,54,110,0.4)"
+                            : "none",
+                        }}
+                      >
+                        {/* Thumbnail */}
+                        {isVideo ? (
+                          <div
+                            className="relative h-full w-full"
+                            style={{ background: "#2D2D31" }}
+                          >
+                            <video
+                              src={file.previewUrl}
+                              muted
+                              preload="metadata"
+                              className="h-full w-full object-cover"
+                              onLoadedData={(e) => {
+                                const v = e.currentTarget;
+                                v.currentTime = Math.min(1, v.duration / 2);
+                              }}
+                            />
+                            <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[9px] text-white">
+                              ▶
+                            </span>
+                          </div>
+                        ) : (
+                          <img
+                            src={file.previewUrl}
+                            alt={file.name}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        )}
+                        {/* Selected overlay */}
+                        {selected && (
+                          <div
+                            className="absolute inset-0 flex items-center justify-center"
+                            style={{
+                              background: "rgba(253,54,110,0.25)",
+                            }}
+                          >
+                            <span className="rounded-full bg-[#FD366E] p-1 text-xs text-white">
+                              ✓
+                            </span>
+                          </div>
+                        )}
+                        {/* File name tooltip on hover */}
+                        <div
+                          className="absolute inset-x-0 bottom-0 truncate px-1 py-0.5 text-[9px] opacity-0 transition-opacity group-hover:opacity-100"
+                          style={{
+                            background:
+                              "linear-gradient(transparent, rgba(0,0,0,0.8))",
+                            color: "#F4F4F6",
+                          }}
+                        >
+                          {file.name}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Delete Selected button */}
+            {srcSelected.size > 0 && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  disabled={srcDeleting}
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        `Delete ${srcSelected.size} file${srcSelected.size !== 1 ? "s" : ""} from the source bucket? This cannot be undone.`,
+                      )
+                    )
+                      return;
+                    setSrcDeleting(true);
+                    setSrcResult(null);
+                    try {
+                      const res = await fetch("/api/delete-storage", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          endpoint: process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
+                          projectId:
+                            process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
+                          bucketId: smSrcBucketId,
+                          apiKey: smSrcApiKey,
+                          fileIds: Array.from(srcSelected),
+                        }),
+                      });
+                      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                      const data = await res.json();
+                      // Remove deleted files from the grid
+                      const deletedSet = new Set(data.deleted as string[]);
+                      setSrcFiles((prev) =>
+                        prev.filter((f) => !deletedSet.has(f.$id)),
+                      );
+                      setSrcSelected(new Set());
+                      const failCount = data.failed?.length ?? 0;
+                      setSrcResult(
+                        failCount > 0
+                          ? `Deleted ${data.deleted.length}, ${failCount} failed`
+                          : `✅ Deleted ${data.deleted.length} files`,
+                      );
+                    } catch (err) {
+                      setSrcResult(
+                        `Error: ${err instanceof Error ? err.message : "Unknown"}`,
+                      );
+                    } finally {
+                      setSrcDeleting(false);
+                    }
+                  }}
+                  className="w-full rounded-lg px-3 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-40"
+                  style={{
+                    background: "#FD366E",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)",
+                  }}
+                >
+                  {srcDeleting ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <svg
+                        className="h-3.5 w-3.5 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Deleting...
+                    </span>
+                  ) : (
+                    `🗑️ Delete ${srcSelected.size} Selected`
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Allow large request bodies and long execution for video migration
+export const maxDuration = 300; // 5 minutes
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/migrate-storage
  *
@@ -12,7 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
  *   files: Array<{ fileId: string; fileName?: string }>
  * }
  *
- * Returns: { results: Array<{ srcFileId, destFileId, destUrl, error? }> }
+ * Returns: { results: Array<{ srcFileId, destFileId, destUrl, error?, attempts? }> }
  */
 export async function POST(req: NextRequest) {
   try {
@@ -58,6 +62,7 @@ export async function POST(req: NextRequest) {
       destFileId: string | null;
       destUrl: string | null;
       error?: string;
+      attempts?: number;
     }> = [];
 
     for (const file of files) {
@@ -85,33 +90,125 @@ export async function POST(req: NextRequest) {
           if (match) fileName = match[1];
         }
 
-        // 2. Upload to destination bucket using Appwrite REST API
-        const formData = new FormData();
-        formData.append("fileId", "unique()");
-        formData.append("file", blob, fileName);
-
+        // 2. Upload to destination bucket — chunked for large files
         const uploadUrl = `${destEndpoint}/storage/buckets/${destBucketId}/files`;
-        const uploadRes = await fetch(uploadUrl, {
-          method: "POST",
-          headers: {
-            "X-Appwrite-Project": destProjectId,
-            "X-Appwrite-Key": destApiKey,
-          },
-          body: formData,
-        });
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per chunk (S3 multipart minimum)
+        const totalSize = blob.size;
+        const buffer = new Uint8Array(await blob.arrayBuffer());
+        let uploaded: { $id: string } | null = null;
+        let lastUploadErr = "";
 
-        if (!uploadRes.ok) {
-          const errText = await uploadRes.text();
+        if (totalSize <= CHUNK_SIZE) {
+          // Small file — single upload with retry
+          const MAX_RETRIES = 3;
+          const RETRY_DELAYS = [3000, 8000, 15000];
+
+          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+              await new Promise((r) =>
+                setTimeout(r, RETRY_DELAYS[attempt - 1]),
+              );
+            }
+
+            const formData = new FormData();
+            formData.append("fileId", "unique()");
+            formData.append(
+              "file",
+              new Blob([buffer], { type: blob.type }),
+              fileName,
+            );
+
+            const uploadRes = await fetch(uploadUrl, {
+              method: "POST",
+              headers: {
+                "X-Appwrite-Project": destProjectId,
+                "X-Appwrite-Key": destApiKey,
+              },
+              body: formData,
+            });
+
+            if (uploadRes.ok) {
+              uploaded = await uploadRes.json();
+              break;
+            }
+
+            const errText = await uploadRes.text();
+            lastUploadErr = `Upload failed: ${uploadRes.status} ${errText.slice(0, 200)}`;
+            if (uploadRes.status < 500) break;
+          }
+        } else {
+          // Large file — chunked upload
+          let fileId = "unique()";
+          let offset = 0;
+
+          while (offset < totalSize) {
+            const end = Math.min(offset + CHUNK_SIZE, totalSize);
+            const chunkBuf = buffer.slice(offset, end);
+            const isLast = end >= totalSize;
+
+            const formData = new FormData();
+            formData.append("fileId", fileId);
+            formData.append(
+              "file",
+              new Blob([chunkBuf], { type: blob.type }),
+              fileName,
+            );
+
+            // Retry each chunk up to 3 times
+            let chunkOk = false;
+            for (let attempt = 0; attempt < 4; attempt++) {
+              if (attempt > 0) {
+                await new Promise((r) =>
+                  setTimeout(r, [3000, 8000, 15000][attempt - 1]),
+                );
+              }
+
+              const uploadRes = await fetch(uploadUrl, {
+                method: "POST",
+                headers: {
+                  "X-Appwrite-Project": destProjectId,
+                  "X-Appwrite-Key": destApiKey,
+                  "Content-Range": `bytes ${offset}-${end - 1}/${totalSize}`,
+                  ...(fileId !== "unique()"
+                    ? { "x-appwrite-id": fileId }
+                    : {}),
+                },
+                body: formData,
+              });
+
+              if (uploadRes.ok) {
+                const json = await uploadRes.json();
+                // After first chunk, use the server-assigned ID
+                if (offset === 0 && json.$id) {
+                  fileId = json.$id;
+                }
+                if (isLast) {
+                  uploaded = json;
+                }
+                chunkOk = true;
+                break;
+              }
+
+              const errText = await uploadRes.text();
+              lastUploadErr = `Chunk upload failed at ${offset}-${end - 1}: ${uploadRes.status} ${errText.slice(0, 200)}`;
+              if (uploadRes.status < 500) break;
+            }
+
+            if (!chunkOk) break;
+            offset = end;
+          }
+        }
+
+        if (!uploaded) {
           results.push({
             srcFileId: file.fileId,
             destFileId: null,
             destUrl: null,
-            error: `Upload failed: ${uploadRes.status} ${errText.slice(0, 200)}`,
+            error: lastUploadErr,
           });
           continue;
         }
 
-        const uploaded = await uploadRes.json();
         const destFileId = uploaded.$id;
         const destUrl = `${destEndpoint}/storage/buckets/${destBucketId}/files/${destFileId}/view?project=${destProjectId}`;
 
