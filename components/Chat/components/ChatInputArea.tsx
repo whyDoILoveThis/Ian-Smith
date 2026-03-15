@@ -437,8 +437,7 @@ export function ChatInputArea({
           <input
             ref={inputRef}
             style={{
-              borderColor: chatTheme,
-              opacity: !slotId || isSending ? 0.5 : 0.7,
+              borderColor: themeColors.border,
             }}
             autoFocus
             type="text"
@@ -449,7 +448,7 @@ export function ChatInputArea({
             onKeyDown={(e) => {
               if (e.key === "Enter") sendAndRefocus();
             }}
-            className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-opacity-70 disabled:opacity-50`}
+            className={`flex-1 rounded-full border bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none disabled:opacity-50`}
           />
 
           {/* Image picker button + popup menu */}
@@ -500,7 +499,8 @@ export function ChatInputArea({
               type="button"
               onClick={() => setShowImageMenu((prev) => !prev)}
               disabled={!slotId || isSending}
-              className={`flex-shrink-0 rounded-full border border-${chatTheme}-400 p-2.5 text-white/85 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"} disabled:opacity-50`}
+              style={{ borderColor: themeColors.border }}
+              className={`flex-shrink-0 rounded-full border p-2.5 text-white/85 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"} disabled:opacity-50`}
             >
               <svg
                 className="h-5 w-5"

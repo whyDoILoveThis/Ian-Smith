@@ -169,6 +169,7 @@ export type ThemeColors = {
   accent: string;
   ring: string;
   btn: string;
+  border: string;
 };
 
 // Word Search Game Types

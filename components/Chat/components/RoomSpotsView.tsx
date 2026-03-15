@@ -290,6 +290,10 @@ export function RoomSpotsView({
   const [srcDeleting, setSrcDeleting] = useState(false);
   const [srcResult, setSrcResult] = useState<string | null>(null);
 
+  // Spot name editing
+  const [editingSpotName, setEditingSpotName] = useState(false);
+  const [editingSpotNameValue, setEditingSpotNameValue] = useState("");
+
   // Disguise custom timeout
   const [showCustomTimeout, setShowCustomTimeout] = useState(false);
   const [customTimeoutValue, setCustomTimeoutValue] = useState("");
@@ -727,13 +731,80 @@ export function RoomSpotsView({
                       </span>
                     )}
                   </div>
-                  <span
-                    className={`text-xs font-medium ${
-                      isTaken ? "text-amber-300/80" : "text-emerald-300/60"
-                    }`}
-                  >
-                    {spotName}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {isMySpot && editingSpotName ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingSpotNameValue}
+                        onChange={(e) =>
+                          setEditingSpotNameValue(e.target.value)
+                        }
+                        onKeyDown={async (e) => {
+                          if (
+                            e.key === "Enter" &&
+                            editingSpotNameValue.trim()
+                          ) {
+                            await update(
+                              ref(rtdb, `${roomPath}/slots/${spotId}`),
+                              { name: editingSpotNameValue.trim() },
+                            );
+                            setScreenName(editingSpotNameValue.trim());
+                            setEditingSpotName(false);
+                          }
+                          if (e.key === "Escape") setEditingSpotName(false);
+                        }}
+                        onBlur={async () => {
+                          if (
+                            editingSpotNameValue.trim() &&
+                            editingSpotNameValue.trim() !== spotName
+                          ) {
+                            await update(
+                              ref(rtdb, `${roomPath}/slots/${spotId}`),
+                              { name: editingSpotNameValue.trim() },
+                            );
+                            setScreenName(editingSpotNameValue.trim());
+                          }
+                          setEditingSpotName(false);
+                        }}
+                        size={Math.max(1, editingSpotNameValue.length)}
+                        className="min-w-[1ch] rounded-md border border-emerald-400/30 bg-black/40 px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-400/40"
+                      />
+                    ) : (
+                      <span
+                        className={`text-xs font-medium ${
+                          isTaken ? "text-amber-300/80" : "text-emerald-300/60"
+                        }`}
+                      >
+                        {spotName}
+                      </span>
+                    )}
+                    {isMySpot && !editingSpotName && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSpotNameValue(spotName);
+                          setEditingSpotName(true);
+                        }}
+                        className="p-0.5 text-neutral-500 hover:text-white transition-colors"
+                        title="Edit name"
+                      >
+                        <svg
+                          className="w-3 h-3"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {/* Spot actions */}
                 {(isMySpot ||
@@ -1647,7 +1718,9 @@ export function RoomSpotsView({
             {/* Form */}
             <div className="px-5 py-4 space-y-3">
               {/* ── Source ── */}
-              <p className="text-[10px] font-semibold text-[#FD366E] uppercase tracking-widest">Source</p>
+              <p className="text-[10px] font-semibold text-[#FD366E] uppercase tracking-widest">
+                Source
+              </p>
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
                   Source Endpoint
@@ -1690,7 +1763,9 @@ export function RoomSpotsView({
                   type="text"
                   placeholder="e.g. 68c149fa0003ec08c1dc"
                   value={smSrcBucketIdMigrate}
-                  onChange={(e) => setSmSrcBucketIdMigrate(e.target.value.trim())}
+                  onChange={(e) =>
+                    setSmSrcBucketIdMigrate(e.target.value.trim())
+                  }
                   className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#3E3E44] focus:outline-none transition-colors"
                   style={{
                     background: "#1C1C21",
@@ -1701,8 +1776,13 @@ export function RoomSpotsView({
               </div>
 
               {/* ── Destination ── */}
-              <div className="pt-2" style={{ borderTop: "1px solid #2D2D31" }} />
-              <p className="text-[10px] font-semibold text-[#FE9567] uppercase tracking-widest">Destination</p>
+              <div
+                className="pt-2"
+                style={{ borderTop: "1px solid #2D2D31" }}
+              />
+              <p className="text-[10px] font-semibold text-[#FE9567] uppercase tracking-widest">
+                Destination
+              </p>
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
                   Endpoint
