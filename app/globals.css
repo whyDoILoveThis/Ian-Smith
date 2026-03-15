@@ -558,6 +558,16 @@ input[type="file"]::-webkit-file-upload-button {
   pointer-events: none;
 }
 
+/* Backspace red flash for chat input */
+@keyframes backspace-flash {
+  0% { background-color: rgba(239, 68, 68, 0.12); }
+  100% { background-color: transparent; }
+}
+
+.backspace-flash {
+  animation: backspace-flash 350ms ease-out forwards;
+}
+
 /* Magic-wand hold-to-toggle ring fill */
 @keyframes magic-ring-fill {
   0% { stroke-dashoffset: 113.1; }

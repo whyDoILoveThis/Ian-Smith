@@ -165,6 +165,10 @@ type ChatInputAreaProps = {
   localPulseKey?: number;
   /** Keystroke pulse timestamps from Firebase { "1"?: number, "2"?: number } */
   keystrokePulse?: { "1"?: number; "2"?: number };
+  /** Backspace pulse timestamps from Firebase { "1"?: number, "2"?: number } */
+  backspacePulse?: { "1"?: number; "2"?: number };
+  /** Called when the user presses backspace (broadcasts to Firebase) */
+  onBackspace?: () => void;
   /** Custom indicator colors per slot (hex strings) */
   indicatorColors?: { "1"?: string; "2"?: string };
   /** All decrypted messages in the room – needed for AI magic-wand replies */
@@ -188,6 +192,8 @@ export function ChatInputArea({
   gradientColors,
   localPulseKey = 0,
   keystrokePulse,
+  backspacePulse,
+  onBackspace,
   indicatorColors,
   messages = [],
   screenName = "",
@@ -347,6 +353,19 @@ export function ChatInputArea({
     }
   }, [otherPulseAt]);
 
+  // Backspace red flash
+  const [backspacePulseKey, setBackspacePulseKey] = useState(0);
+
+  // Track remote backspace pulse from the OTHER slot
+  const otherBackspaceAt = backspacePulse?.[otherSlot];
+  const [remoteBackspacePulseKey, setRemoteBackspacePulseKey] = useState(0);
+
+  useEffect(() => {
+    if (otherBackspaceAt) {
+      setRemoteBackspacePulseKey((k) => k + 1);
+    }
+  }, [otherBackspaceAt]);
+
   // Resolve colors for each slot (custom → default)
   const myColor = slotId
     ? indicatorColors?.[slotId] || DEFAULT_SLOT_COLORS[slotId]
@@ -435,6 +454,20 @@ export function ChatInputArea({
               }}
             />
           )}
+          {/* Backspace red flash (local) */}
+          {backspacePulseKey > 0 && (
+            <div
+              key={`backspace-${backspacePulseKey}`}
+              className="backspace-flash absolute inset-0 rounded-full pointer-events-none"
+            />
+          )}
+          {/* Backspace red flash (remote) */}
+          {remoteBackspacePulseKey > 0 && (
+            <div
+              key={`backspace-remote-${remoteBackspacePulseKey}`}
+              className="backspace-flash absolute inset-0 rounded-full pointer-events-none"
+            />
+          )}
 
           <input
             ref={inputRef}
@@ -459,6 +492,10 @@ export function ChatInputArea({
             onChange={(e) => handleTypingChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") sendAndRefocus();
+              if (e.key === "Backspace") {
+                setBackspacePulseKey((k) => k + 1);
+                onBackspace?.();
+              }
             }}
             className={`flex-1 rounded-full border bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none disabled:opacity-50`}
           />

@@ -44,6 +44,7 @@ export function useChatFirebase(
   const [lastSeen, setLastSeen] = useState<{ "1"?: number; "2"?: number }>({});
   const [indicatorColors, setIndicatorColors] = useState<{ "1"?: string; "2"?: string }>({});
   const [keystrokePulse, setKeystrokePulse] = useState<{ "1"?: number; "2"?: number }>({});
+  const [backspacePulse, setBackspacePulse] = useState<{ "1"?: number; "2"?: number }>({});
   const [isLoading, setIsLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [hasMoreOnServer, setHasMoreOnServer] = useState(true);
@@ -88,6 +89,7 @@ export function useChatFirebase(
     setLastSeen({});
     setIndicatorColors({});
     setKeystrokePulse({});
+    setBackspacePulse({});
     setIsOtherTyping(false);
     setTttState(null);
     olderMsgsRef.current.clear();
@@ -323,6 +325,19 @@ export function useChatFirebase(
     const unsub = onValue(pulseRef, (snap) => {
       const val = (snap.val() || {}) as { "1"?: number; "2"?: number };
       setKeystrokePulse(val);
+    });
+
+    return () => unsub();
+  }, [isUnlocked, roomPath]);
+
+  // Subscribe to backspace pulses
+  useEffect(() => {
+    if (!isUnlocked) return;
+
+    const bpRef = ref(rtdb, `${roomPath}/backspacePulse`);
+    const unsub = onValue(bpRef, (snap) => {
+      const val = (snap.val() || {}) as { "1"?: number; "2"?: number };
+      setBackspacePulse(val);
     });
 
     return () => unsub();
@@ -805,6 +820,7 @@ export function useChatFirebase(
     lastSeen,
     indicatorColors,
     keystrokePulse,
+    backspacePulse,
     isLoading,
     connectionError,
     hasMoreOnServer,

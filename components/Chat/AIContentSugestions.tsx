@@ -1151,6 +1151,8 @@ export default function AIContentSugestions() {
               onOpenVideoRecorder={() => setIsVideoRecorderOpen(true)}
               localPulseKey={chatMessages.localPulseKey}
               keystrokePulse={firebaseWithSlot.keystrokePulse}
+              backspacePulse={firebaseWithSlot.backspacePulse}
+              onBackspace={chatMessages.sendBackspacePulse}
               indicatorColors={firebaseWithSlot.indicatorColors}
               messages={firebaseWithSlot.messages}
               screenName={screenName}

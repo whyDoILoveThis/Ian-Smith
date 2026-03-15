@@ -228,6 +228,11 @@ export function useChatMessages(
     set(ref(rtdb, `${roomPath}/keystrokePulse/${slotId}`), Date.now()).catch(() => {});
   }, [slotId, roomPath]);
 
+  const sendBackspacePulse = useCallback(() => {
+    if (!slotId) return;
+    set(ref(rtdb, `${roomPath}/backspacePulse/${slotId}`), Date.now()).catch(() => {});
+  }, [slotId, roomPath]);
+
   const handleTypingChange = useCallback(
     (value: string) => {
       setMessageText(value);
@@ -436,6 +441,7 @@ export function useChatMessages(
     markReceiptAsSeen,
     handleTypingChange,
     localPulseKey,
+    sendBackspacePulse,
     handleSendEphemeralVideo,
     handleSendDrawing,
     markEphemeralViewed,

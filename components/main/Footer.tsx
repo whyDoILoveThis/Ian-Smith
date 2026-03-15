@@ -52,10 +52,10 @@ const Footer = () => {
         <div
           className={`absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent ${isBlack ? "via-gray-400 dark:via-gray-700" : "via-slate-400 dark:via-slate-500"} to-transparent`}
         />
-        <Link className="font-bold text-2xl" href={"/"}>
+        <Link className="absolute left-4 top-4 font-bold text-2xl" href={"/"}>
           <ITSLogo />
         </Link>
-        <div className="flex items-center justify-center gap-x-8 gap-y-3 flex-wrap">
+        <div className="mt-[80px] flex items-center justify-center gap-x-8 gap-y-3 flex-wrap">
           {LINKS.map((link) => (
             <LinkUnderlineAnim
               key={link.name}
@@ -106,7 +106,7 @@ const Footer = () => {
           </div>
         )}
         <p
-          className={`text-center text-xs tracking-wide ${isBlack ? "text-gray-400 dark:text-gray-600" : "text-slate-400 dark:text-slate-500"}`}
+          className={`mt-[45px] text-center text-xs tracking-wide ${isBlack ? "text-gray-400 dark:text-gray-600" : "text-slate-400 dark:text-slate-500"}`}
         >
           © {new Date().getFullYear()} Ian Thai Smith. All rights reserved.
         </p>
