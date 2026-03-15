@@ -266,17 +266,31 @@ const noAttribution: CSSProperties = {
 
 /* ── SVG Icons ─────────────────────────────────────────────────────── */
 
-function GaugeIcon() {
+function GaugeIcon({ fps = 0 }: { fps?: number }) {
+  // Clamp 0–60, map to needle angle: -90° (left, 0fps) to +90° (right, 60fps)
+  const clamped = Math.min(60, Math.max(0, fps));
+  const angle = -90 + (clamped / 60) * 180;
+
+  // Needle endpoint (length 6.5 from center 12,12)
+  const rad = (angle - 90) * (Math.PI / 180);
+  const nx = 12 + 6.5 * Math.cos(rad);
+  const ny = 12 + 6.5 * Math.sin(rad);
+
+  // Color: red <20, yellow 20-44, green 45+
+  const color =
+    clamped >= 45 ? "#22c55e" : clamped >= 20 ? "#eab308" : "#ef4444";
+
   return (
     <svg
       width="18"
       height="18"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="currentColor"
+      stroke={color}
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
+      style={{ transition: "stroke 0.4s ease" }}
     >
       {/* Outer arc (speedometer face — 180° top half) */}
       <path d="M4.93 4.93A10 10 0 0 1 22 12" />
@@ -287,17 +301,10 @@ function GaugeIcon() {
       <path d="M12 4v1.5" strokeWidth="1.4" />
       <path d="M17.66 6.34l-1.06 1.06" strokeWidth="1.4" />
       <path d="M20 12h-1.5" strokeWidth="1.4" />
-      {/* Needle pointing upper-right (~45°) */}
-      <line
-        x1="12"
-        y1="12"
-        x2="16.5"
-        y2="7.5"
-        stroke="#f59e0b"
-        strokeWidth="2"
-      />
+      {/* Live needle */}
+      <line x1="12" y1="12" x2={nx} y2={ny} stroke={color} strokeWidth="2" />
       {/* Center dot */}
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.5" fill={color} stroke="none" />
     </svg>
   );
 }
@@ -317,6 +324,7 @@ function formatTime(ts: number): string {
 
 export default function PerformanceOverlay({
   enabled,
+  contained,
 }: PerformanceOverlayProps) {
   const isEnabled = enabled ?? process.env.NODE_ENV === "development";
   const [metrics, setMetrics] = useState<PerformanceMetrics>(INITIAL);
@@ -346,6 +354,12 @@ export default function PerformanceOverlay({
     if (initialized.current) return;
     initialized.current = true;
 
+    if (contained) {
+      // Start at top-left of container
+      setPos({ x: 8, y: 8 });
+      return;
+    }
+
     const saved = loadState();
     if (saved) {
       // Clamp to current viewport
@@ -356,14 +370,15 @@ export default function PerformanceOverlay({
     } else {
       setPos({ x: window.innerWidth - 194, y: 12 });
     }
-  }, []);
+  }, [contained]);
 
   /* ── Persist on change ─────────────────────────────────────────── */
 
   useEffect(() => {
+    if (contained) return; // no persistence in contained mode
     if (pos.x === -1) return; // not initialized yet
     saveState({ x: pos.x, y: pos.y, minimized });
-  }, [pos.x, pos.y, minimized]);
+  }, [pos.x, pos.y, minimized, contained]);
 
   /* ── Drag logic (pointer events — works for mouse + touch) ─────── */
 
@@ -378,13 +393,35 @@ export default function PerformanceOverlay({
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, []);
 
-  const onPointerMove = useCallback((e: ReactPointerEvent<HTMLElement>) => {
-    if (!dragging.current) return;
-    didDrag.current = true;
-    const x = Math.max(0, e.clientX - dragOffset.current.x);
-    const y = Math.max(0, e.clientY - dragOffset.current.y);
-    setPos({ x, y });
-  }, []);
+  const onPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLElement>) => {
+      if (!dragging.current) return;
+      didDrag.current = true;
+
+      if (contained) {
+        // Clamp within the parent container
+        const el = overlayRef.current;
+        const parent = el?.parentElement;
+        if (!el || !parent) return;
+        const pRect = parent.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const x = Math.min(
+          Math.max(0, e.clientX - pRect.left - dragOffset.current.x),
+          pRect.width - elRect.width,
+        );
+        const y = Math.min(
+          Math.max(0, e.clientY - pRect.top - dragOffset.current.y),
+          pRect.height - elRect.height,
+        );
+        setPos({ x, y });
+      } else {
+        const x = Math.max(0, e.clientX - dragOffset.current.x);
+        const y = Math.max(0, e.clientY - dragOffset.current.y);
+        setPos({ x, y });
+      }
+    },
+    [contained],
+  );
 
   const onPointerUp = useCallback(() => {
     dragging.current = false;
@@ -401,7 +438,12 @@ export default function PerformanceOverlay({
     return (
       <button
         ref={setOverlayRef}
-        style={{ ...minimizedBtn, left: pos.x, top: pos.y }}
+        style={{
+          ...minimizedBtn,
+          ...(contained ? { position: "absolute" as const, zIndex: 10 } : {}),
+          left: pos.x,
+          top: pos.y,
+        }}
         onClick={() => {
           if (!didDrag.current) setMinimized(false);
         }}
@@ -411,21 +453,39 @@ export default function PerformanceOverlay({
         aria-label="Expand performance overlay"
         data-perf-overlay
       >
-        <GaugeIcon />
+        <GaugeIcon fps={metrics.fps} />
       </button>
     );
   }
 
   /* ── Expanded state ────────────────────────────────────────────── */
 
-  const fpsColor =
-    metrics.fps >= 55 ? accent : metrics.fps >= 30 ? dimAccent : warn;
+  // Match gauge icon color bands: green 45+, yellow 20-44, red <20
+  const fpsValue = Math.min(60, Math.max(0, metrics.fps));
+  const liveColor =
+    fpsValue >= 45 ? "#22c55e" : fpsValue >= 20 ? "#eab308" : "#ef4444";
+  const fpsStyle: CSSProperties = { color: liveColor, fontWeight: 600 };
+
+  const avgValue = Math.min(60, Math.max(0, metrics.avgFps));
+  const avgColor =
+    avgValue >= 45 ? "#22c55e" : avgValue >= 20 ? "#eab308" : "#ef4444";
+  const avgStyle: CSSProperties = { color: avgColor, fontWeight: 600 };
+
+  // Frame time: <18ms green, 18-33ms yellow, >33ms red
+  const ftColor =
+    metrics.frameTime <= 18
+      ? "#22c55e"
+      : metrics.frameTime <= 33
+        ? "#eab308"
+        : "#ef4444";
+  const ftStyle: CSSProperties = { color: ftColor, fontWeight: 600 };
 
   return (
     <div
       ref={setOverlayRef}
       style={{
         ...baseOverlay,
+        ...(contained ? { position: "absolute" as const, zIndex: 10 } : {}),
         left: pos.x,
         top: pos.y,
         minWidth: 170,
@@ -478,15 +538,15 @@ export default function PerformanceOverlay({
       {/* Metrics */}
       <div style={row}>
         <span style={label}>FPS</span>
-        <span style={fpsColor}>{metrics.fps}</span>
+        <span style={fpsStyle}>{metrics.fps}</span>
       </div>
       <div style={row}>
         <span style={label}>Avg FPS</span>
-        <span style={fpsColor}>{metrics.avgFps}</span>
+        <span style={avgStyle}>{metrics.avgFps}</span>
       </div>
       <div style={row}>
         <span style={label}>Frame</span>
-        <span style={accent}>{metrics.frameTime} ms</span>
+        <span style={ftStyle}>{metrics.frameTime} ms</span>
       </div>
       <div style={row}>
         <span style={label}>Long tasks</span>

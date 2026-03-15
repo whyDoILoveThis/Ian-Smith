@@ -25,4 +25,6 @@ export interface PerformanceMetrics {
 export interface PerformanceOverlayProps {
   /** Enable/disable the overlay. Defaults to process.env.NODE_ENV === 'development'. */
   enabled?: boolean;
+  /** Render inline (position: relative) instead of fixed. Disables drag & localStorage. */
+  contained?: boolean;
 }

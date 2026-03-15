@@ -18,6 +18,7 @@ import {
   TimelineShowcaseCard,
   ItsQuizMeShowcaseCard,
   IconCreatorShowcaseCard,
+  PerformanceOverlayShowcaseCard,
 } from "@/components/main/ShowcaseInstances";
 
 export default function Home() {
@@ -50,6 +51,7 @@ export default function Home() {
         <TimelineShowcaseCard />
         <ItsQuizMeShowcaseCard />
         <IconCreatorShowcaseCard />
+        <PerformanceOverlayShowcaseCard />
       </div>
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && <ItsBot show={showBot} setShow={setShowBot} />}

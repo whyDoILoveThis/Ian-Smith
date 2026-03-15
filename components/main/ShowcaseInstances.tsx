@@ -5,6 +5,7 @@ import WaterSortHero from "@/components/main/showcase-visuals/WaterSortHero";
 import IconCreatorHero from "@/components/main/showcase-visuals/IconCreatorHero";
 import FloatingParticles from "@/components/main/showcase-visuals/FloatingParticles";
 import TimelineHero from "@/components/main/showcase-visuals/TimelineHero";
+import PerfOverlayHero from "@/components/main/showcase-visuals/PerfOverlayHero";
 
 /* ═══════════════════════════════════════════════════════════
    Emoji / icon lists for floating backgrounds
@@ -278,6 +279,72 @@ export function TimelineShowcaseCard() {
       backgroundSlot={
         <FloatingParticles
           dotColorRgb="6,182,212"
+          count={12}
+          distance={600}
+          rotation={0}
+        />
+      }
+    />
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   5. PERFORMANCE OVERLAY SHOWCASE
+   ═══════════════════════════════════════════════════════════ */
+
+export function PerformanceOverlayShowcaseCard() {
+  return (
+    <ShowcaseCard
+      categoryLabel="Dev Tool"
+      title={
+        <>
+          Perf
+          <span className="bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
+            Overlay
+          </span>
+        </>
+      }
+      description={
+        <>
+          A zero-config{" "}
+          <span className="text-white/70 font-semibold">
+            FPS &amp; performance overlay
+          </span>{" "}
+          for any Next.js app. Live speedometer gauge, color-coded metrics,{" "}
+          <span className="text-white/70 font-semibold">
+            Long Animation Frame (LoAF) attribution
+          </span>
+          , draggable HUD with localStorage persistence, and one-line
+          drop&#8209;in setup.
+        </>
+      }
+      features={[
+        { icon: "📊", label: "Live FPS Gauge" },
+        { icon: "🔍", label: "LoAF Attribution" },
+        { icon: "🖱️", label: "Drag & Minimize" },
+        { icon: "💾", label: "State Persistence" },
+      ]}
+      theme={{
+        glowGradient:
+          "radial-gradient(circle, #22c55e 0%, #10b981 40%, transparent 70%)",
+        accentBarBg: "linear-gradient(to right, #22c55e, #10b981, #06b6d4)",
+        badgeBg: "bg-emerald-500/20",
+        badgeText: "text-emerald-300",
+        badgeBorder: "border-emerald-500/30",
+        cardShadow: "shadow-emerald-500/5",
+        ctaBg:
+          "bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400",
+        ctaText: "text-white",
+        ctaShadow:
+          "shadow-xl shadow-emerald-500/25 transition-shadow hover:shadow-emerald-500/40",
+      }}
+      ctaLabel="View Source"
+      ctaHref="https://github.com"
+      techNote="Built with requestAnimationFrame, PerformanceObserver & LoAF API — zero dependencies"
+      heroSlot={<PerfOverlayHero />}
+      backgroundSlot={
+        <FloatingParticles
+          dotColorRgb="34,197,94"
           count={12}
           distance={600}
           rotation={0}
