@@ -554,9 +554,9 @@ export function ChatHeader({
                   <div className="mt-2 pt-2 border-t border-white/10">
                     <div className="text-[10px] text-white/50 font-medium uppercase tracking-wider mb-1.5">
                       Pick{" "}
-                      {pendingGradient.length >= 3
-                        ? "3/3"
-                        : `${pendingGradient.length}/3`}{" "}
+                      {pendingGradient.length >= 10
+                        ? "10/10"
+                        : `${pendingGradient.length}/10`}{" "}
                       colors
                     </div>
 
@@ -581,14 +581,6 @@ export function ChatHeader({
                             </span>
                           </button>
                         ))}
-                        {pendingGradient.length >= 2 && (
-                          <div
-                            className="flex-1 h-4 rounded-full"
-                            style={{
-                              background: `linear-gradient(to right, ${pendingGradient.join(", ")})`,
-                            }}
-                          />
-                        )}
                       </div>
                     )}
 
@@ -619,9 +611,9 @@ export function ChatHeader({
                         <button
                           key={c}
                           type="button"
-                          disabled={pendingGradient.length >= 3}
+                          disabled={pendingGradient.length >= 10}
                           onClick={() => {
-                            if (pendingGradient.length < 3) {
+                            if (pendingGradient.length < 10) {
                               setPendingGradient((prev) => [...prev, c]);
                             }
                           }}
