@@ -250,6 +250,9 @@ export function RoomSpotsView({
 
   // Storage migration state
   const [showStorageMigrateModal, setShowStorageMigrateModal] = useState(false);
+  const [smSrcEndpoint, setSmSrcEndpoint] = useState("");
+  const [smSrcProjectId, setSmSrcProjectId] = useState("");
+  const [smSrcBucketIdMigrate, setSmSrcBucketIdMigrate] = useState("");
   const [smDestEndpoint, setSmDestEndpoint] = useState("");
   const [smDestProjectId, setSmDestProjectId] = useState("");
   const [smDestBucketId, setSmDestBucketId] = useState("");
@@ -1643,6 +1646,63 @@ export function RoomSpotsView({
 
             {/* Form */}
             <div className="px-5 py-4 space-y-3">
+              {/* ── Source ── */}
+              <p className="text-[10px] font-semibold text-[#FD366E] uppercase tracking-widest">Source</p>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
+                  Source Endpoint
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://cloud.appwrite.io/v1"
+                  value={smSrcEndpoint}
+                  onChange={(e) => setSmSrcEndpoint(e.target.value.trim())}
+                  className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#3E3E44] focus:outline-none transition-colors"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.3)",
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
+                  Source Project ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 68c0df35001a5700a437"
+                  value={smSrcProjectId}
+                  onChange={(e) => setSmSrcProjectId(e.target.value.trim())}
+                  className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#3E3E44] focus:outline-none transition-colors"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.3)",
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
+                  Source Bucket ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 68c149fa0003ec08c1dc"
+                  value={smSrcBucketIdMigrate}
+                  onChange={(e) => setSmSrcBucketIdMigrate(e.target.value.trim())}
+                  className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#3E3E44] focus:outline-none transition-colors"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.3)",
+                  }}
+                />
+              </div>
+
+              {/* ── Destination ── */}
+              <div className="pt-2" style={{ borderTop: "1px solid #2D2D31" }} />
+              <p className="text-[10px] font-semibold text-[#FE9567] uppercase tracking-widest">Destination</p>
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-[#818999] uppercase tracking-wider">
                   Endpoint
@@ -2058,7 +2118,12 @@ export function RoomSpotsView({
                 {smMissing.length > 0 && (
                   <button
                     type="button"
-                    disabled={smBusy}
+                    disabled={
+                      smBusy ||
+                      !smSrcEndpoint ||
+                      !smSrcProjectId ||
+                      !smSrcBucketIdMigrate
+                    }
                     onClick={async () => {
                       setSmBusy(true);
                       setSmResult(null);
@@ -2103,12 +2168,9 @@ export function RoomSpotsView({
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              srcEndpoint:
-                                process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
-                              srcProjectId:
-                                process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
-                              srcBucketId:
-                                process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID,
+                              srcEndpoint: smSrcEndpoint,
+                              srcProjectId: smSrcProjectId,
+                              srcBucketId: smSrcBucketIdMigrate,
                               destEndpoint: smDestEndpoint,
                               destProjectId: smDestProjectId,
                               destBucketId: smDestBucketId,
@@ -2268,6 +2330,9 @@ export function RoomSpotsView({
                   type="button"
                   disabled={
                     smBusy ||
+                    !smSrcEndpoint ||
+                    !smSrcProjectId ||
+                    !smSrcBucketIdMigrate ||
                     !smDestEndpoint ||
                     !smDestProjectId ||
                     !smDestBucketId ||
@@ -2368,12 +2433,9 @@ export function RoomSpotsView({
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
-                            srcEndpoint:
-                              process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
-                            srcProjectId:
-                              process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
-                            srcBucketId:
-                              process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID,
+                            srcEndpoint: smSrcEndpoint,
+                            srcProjectId: smSrcProjectId,
+                            srcBucketId: smSrcBucketIdMigrate,
                             destEndpoint: smDestEndpoint,
                             destProjectId: smDestProjectId,
                             destBucketId: smDestBucketId,
@@ -2591,8 +2653,8 @@ export function RoomSpotsView({
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        endpoint: process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
-                        projectId: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
+                        endpoint: smSrcEndpoint,
+                        projectId: smSrcProjectId,
                         bucketId: smSrcBucketId,
                         apiKey: smSrcApiKey,
                       }),
@@ -2784,9 +2846,8 @@ export function RoomSpotsView({
                           "Content-Type": "application/json",
                         },
                         body: JSON.stringify({
-                          endpoint: process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
-                          projectId:
-                            process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
+                          endpoint: smSrcEndpoint,
+                          projectId: smSrcProjectId,
                           bucketId: smSrcBucketId,
                           apiKey: smSrcApiKey,
                           fileIds: Array.from(srcSelected),
