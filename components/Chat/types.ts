@@ -161,7 +161,8 @@ export type ChatTheme =
   | "blue"
   | "purple"
   | "pink"
-  | "rose";
+  | "rose"
+  | "gradient";
 
 export type ThemeColors = {
   bg: string;

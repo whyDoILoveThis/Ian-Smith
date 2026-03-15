@@ -125,4 +125,12 @@ export const THEME_COLORS: Record<ChatTheme, ThemeColors> = {
     btn: "bg-rose-500",
     border: "#f43f5e",
   },
+  gradient: {
+    bg: "",
+    text: "text-white",
+    accent: "text-white/60",
+    ring: "ring-purple-400",
+    btn: "bg-purple-500",
+    border: "#a855f7",
+  },
 };

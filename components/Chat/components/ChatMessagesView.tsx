@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { MESSAGES_PER_PAGE } from "../constants";
-import type { Message, ThemeColors } from "../types";
+import type { Message, ThemeColors, ChatTheme } from "../types";
 import { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
 import { CloudPoofAnimation } from "./CloudPoofAnimation";
 import {
@@ -34,6 +34,8 @@ type ChatMessagesViewProps = {
   messages: Message[];
   slotId: "1" | "2" | null;
   themeColors: ThemeColors;
+  chatTheme: ChatTheme;
+  gradientColors: string[];
   isOtherTyping: boolean;
   formatTimestamp: (createdAt?: number | object) => string;
   setReplyingTo: (msg: Message | null) => void;
@@ -64,6 +66,8 @@ export function ChatMessagesView({
   messages,
   slotId,
   themeColors,
+  chatTheme,
+  gradientColors,
   isOtherTyping,
   formatTimestamp,
   setReplyingTo,
@@ -610,9 +614,22 @@ export function ChatMessagesView({
                     : ""
                 } ${
                   isMine
-                    ? `${themeColors.bg} ${themeColors.text} rounded-br-none`
+                    ? `${
+                        chatTheme === "gradient" ? "" : themeColors.bg
+                      } ${themeColors.text} rounded-br-none`
                     : "bg-white/10 text-white rounded-bl-none"
                 }`}
+                style={
+                  isMine &&
+                  chatTheme === "gradient" &&
+                  gradientColors.length >= 2
+                    ? {
+                        background: `linear-gradient(to bottom, ${gradientColors.join(", ")})`,
+                        backgroundAttachment: "fixed",
+                        backgroundSize: "100% 100vh",
+                      }
+                    : undefined
+                }
                 onTouchStart={(e) => {
                   handleSwipeStart(e, msg, isMine);
                   handleLongPressStart(msg.id, isMine);

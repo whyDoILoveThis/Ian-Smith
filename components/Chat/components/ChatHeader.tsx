@@ -19,6 +19,8 @@ type ChatHeaderProps = {
   setActiveTab: (tab: "chat" | "room") => void;
   chatTheme: ChatTheme;
   handleThemeChange: (theme: ChatTheme) => void;
+  gradientColors: string[];
+  handleGradientColorsChange: (colors: string[]) => void;
   slotId: "1" | "2" | null;
   callStatus: CallStatus;
   otherPersonOnline: boolean;
@@ -44,6 +46,8 @@ export function ChatHeader({
   setActiveTab,
   chatTheme,
   handleThemeChange,
+  gradientColors,
+  handleGradientColorsChange,
   slotId,
   callStatus,
   otherPersonOnline,
@@ -64,6 +68,8 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
+  const [showGradientPicker, setShowGradientPicker] = useState(false);
+  const [pendingGradient, setPendingGradient] = useState<string[]>([]);
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const themePickerRef = useRef<HTMLDivElement>(null);
   const pencilButtonRef = useRef<HTMLButtonElement>(null);
@@ -458,6 +464,12 @@ export function ChatHeader({
                                     : chatTheme === "rose"
                                       ? "#f43f5e"
                                       : undefined,
+                ...(chatTheme === "gradient" && gradientColors.length >= 2
+                  ? {
+                      background: `linear-gradient(135deg, ${gradientColors.join(", ")})`,
+                      backgroundColor: undefined,
+                    }
+                  : {}),
                 color: "white",
               }}
               title="Change theme color"
@@ -490,6 +502,7 @@ export function ChatHeader({
                       onClick={() => {
                         handleThemeChange(key as ChatTheme);
                         setShowThemePicker(false);
+                        setShowGradientPicker(false);
                       }}
                       className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${
                         chatTheme === key
@@ -499,7 +512,136 @@ export function ChatHeader({
                       style={{ backgroundColor: color }}
                     />
                   ))}
+                  {/* Gradient button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingGradient(
+                        gradientColors.length >= 2 ? [...gradientColors] : [],
+                      );
+                      setShowGradientPicker((v) => !v);
+                    }}
+                    className={`w-6 h-6 rounded-full transition-transform hover:scale-110 border border-white/20 ${
+                      chatTheme === "gradient"
+                        ? "ring-2 ring-white ring-offset-1 ring-offset-black/90 scale-110"
+                        : ""
+                    }`}
+                    style={{
+                      background:
+                        gradientColors.length >= 2
+                          ? `linear-gradient(135deg, ${gradientColors.join(", ")})`
+                          : "conic-gradient(#ef4444, #f97316, #facc15, #22c55e, #3b82f6, #a855f7, #ec4899, #ef4444)",
+                    }}
+                    title="Gradient theme"
+                  />
                 </div>
+
+                {/* Gradient color picker sub-panel */}
+                {showGradientPicker && (
+                  <div className="mt-2 pt-2 border-t border-white/10">
+                    <div className="text-[10px] text-white/50 font-medium uppercase tracking-wider mb-1.5">
+                      Pick{" "}
+                      {pendingGradient.length >= 3
+                        ? "3/3"
+                        : `${pendingGradient.length}/3`}{" "}
+                      colors
+                    </div>
+
+                    {/* Selected gradient preview + chips */}
+                    {pendingGradient.length >= 1 && (
+                      <div className="flex items-center gap-1.5 mb-2">
+                        {pendingGradient.map((c, i) => (
+                          <button
+                            key={`${c}-${i}`}
+                            type="button"
+                            onClick={() => {
+                              setPendingGradient((prev) =>
+                                prev.filter((_, j) => j !== i),
+                              );
+                            }}
+                            className="w-5 h-5 rounded-full ring-1 ring-white/30 hover:ring-red-400 transition-all relative group"
+                            style={{ backgroundColor: c }}
+                            title="Click to remove"
+                          >
+                            <span className="absolute inset-0 flex items-center justify-center text-[8px] text-white opacity-0 group-hover:opacity-100 font-bold drop-shadow">
+                              ✕
+                            </span>
+                          </button>
+                        ))}
+                        {pendingGradient.length >= 2 && (
+                          <div
+                            className="flex-1 h-4 rounded-full"
+                            style={{
+                              background: `linear-gradient(to right, ${pendingGradient.join(", ")})`,
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Color palette */}
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        "#ef4444",
+                        "#f97316",
+                        "#facc15",
+                        "#22c55e",
+                        "#34d399",
+                        "#06b6d4",
+                        "#3b82f6",
+                        "#6366f1",
+                        "#a855f7",
+                        "#ec4899",
+                        "#f43f5e",
+                        "#f472b6",
+                        "#fb923c",
+                        "#a3e635",
+                        "#2dd4bf",
+                        "#38bdf8",
+                        "#818cf8",
+                        "#c084fc",
+                        "#ffffff",
+                        "#000000",
+                      ].map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          disabled={pendingGradient.length >= 3}
+                          onClick={() => {
+                            if (pendingGradient.length < 3) {
+                              setPendingGradient((prev) => [...prev, c]);
+                            }
+                          }}
+                          className={`w-5 h-5 rounded-full transition-transform hover:scale-125 disabled:opacity-30 disabled:cursor-not-allowed ${
+                            c === "#ffffff" ? "border border-white/30" : ""
+                          }`}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Apply button */}
+                    <button
+                      type="button"
+                      disabled={pendingGradient.length < 2}
+                      onClick={() => {
+                        handleGradientColorsChange(pendingGradient);
+                        handleThemeChange("gradient");
+                        setShowGradientPicker(false);
+                        setShowThemePicker(false);
+                      }}
+                      className="mt-2 w-full py-1 rounded-lg text-[10px] font-semibold text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      style={{
+                        background:
+                          pendingGradient.length >= 2
+                            ? `linear-gradient(to right, ${pendingGradient.join(", ")})`
+                            : "rgba(255,255,255,0.1)",
+                      }}
+                    >
+                      Apply Gradient
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

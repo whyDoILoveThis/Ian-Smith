@@ -403,7 +403,13 @@ export default function AIContentSugestions() {
 
   // Single Firebase hook — includes messages, decryption, typing, presence, etc.
   const firebaseWithSlot = useChatFirebase(isUnlocked, combo, slotId, roomPath);
-  const { encryptionKey, chatTheme, handleThemeChange } = firebaseWithSlot;
+  const {
+    encryptionKey,
+    chatTheme,
+    handleThemeChange,
+    gradientColors,
+    handleGradientColorsChange,
+  } = firebaseWithSlot;
 
   // Surface Firebase connection errors as toasts
   useEffect(() => {
@@ -1015,6 +1021,8 @@ export default function AIContentSugestions() {
         setActiveTab={setActiveTab}
         chatTheme={chatTheme}
         handleThemeChange={handleThemeChange}
+        gradientColors={gradientColors}
+        handleGradientColorsChange={handleGradientColorsChange}
         slotId={slotId}
         callStatus={voiceCall.callStatus}
         otherPersonOnline={otherPersonOnline}
@@ -1095,7 +1103,9 @@ export default function AIContentSugestions() {
             privacyMode={privacyMode}
             onPrivacyModeChange={setPrivacyMode}
             useFallbackBucket={firebaseWithSlot.useFallbackBucket}
-            onUseFallbackBucketChange={firebaseWithSlot.handleUseFallbackBucketChange}
+            onUseFallbackBucketChange={
+              firebaseWithSlot.handleUseFallbackBucketChange
+            }
             onFallbackDetected={handleFallbackDetected}
           />
         ) : (
@@ -1104,6 +1114,8 @@ export default function AIContentSugestions() {
               messages={firebaseWithSlot.messages}
               slotId={slotId}
               themeColors={themeColors}
+              chatTheme={chatTheme}
+              gradientColors={gradientColors}
               isOtherTyping={firebaseWithSlot.isOtherTyping}
               formatTimestamp={formatTimestamp}
               setReplyingTo={chatMessages.setReplyingTo}

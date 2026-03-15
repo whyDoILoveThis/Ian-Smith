@@ -37,6 +37,7 @@ export function useChatFirebase(
   const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [chatTheme, setChatTheme] = useState<ChatTheme>("emerald");
+  const [gradientColors, setGradientColors] = useState<string[]>([]);
   const [useFallbackBucket, setUseFallbackBucket] = useState(false);
   const [tttState, setTttState] = useState<TttState | null>(null);
   const [presence, setPresence] = useState<{ "1"?: boolean; "2"?: boolean }>({});
@@ -391,9 +392,23 @@ export function useChatFirebase(
           "purple",
           "pink",
           "rose",
+          "gradient",
         ].includes(val)
       ) {
         setChatTheme(val as ChatTheme);
+      }
+    });
+    return () => unsub();
+  }, [isUnlocked, roomPath]);
+
+  // Subscribe to shared gradient colors
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const gcRef = ref(rtdb, `${roomPath}/gradientColors`);
+    const unsub = onValue(gcRef, (snap) => {
+      const val = snap.val();
+      if (Array.isArray(val) && val.length >= 2 && val.length <= 3 && val.every((v: unknown) => typeof v === "string")) {
+        setGradientColors(val as string[]);
       }
     });
     return () => unsub();
@@ -748,6 +763,16 @@ export function useChatFirebase(
     [isUnlocked, roomPath]
   );
 
+  const handleGradientColorsChange = useCallback(
+    (colors: string[]) => {
+      if (!isUnlocked) return;
+      const gcRef = ref(rtdb, `${roomPath}/gradientColors`);
+      set(gcRef, colors);
+      setGradientColors(colors);
+    },
+    [isUnlocked, roomPath]
+  );
+
   const handleIndicatorColorChange = useCallback(
     (color: string) => {
       if (!isUnlocked || !slotId) return;
@@ -774,6 +799,7 @@ export function useChatFirebase(
     encryptionKeyRef,
     isOtherTyping,
     chatTheme,
+    gradientColors,
     tttState,
     presence,
     lastSeen,
@@ -788,6 +814,7 @@ export function useChatFirebase(
     loadOlderFromServer,
     loadAllFromServer,
     handleThemeChange,
+    handleGradientColorsChange,
     handleIndicatorColorChange,
     useFallbackBucket,
     handleUseFallbackBucketChange,
