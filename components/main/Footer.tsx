@@ -2,21 +2,23 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import FacebookIcon from "../sub/FacebookIcon";
-import GithubIcon from "../sub/GithubIcon";
+
 import { SignInButton } from "@clerk/nextjs";
 import DoubleSecretLogin from "../sub/Secret/DoubleSecretLogin";
 import ITSLogo from "../sub/ItsLogo";
 import LinkUnderlineAnim from "../sub/LinkUnderlineAnim";
 import { appwrGetSecurityFlag } from "@/appwrite/appwrUpdateSecurity";
 import { SecurityToggle } from "../CMS/CMS";
-import RunningPuppy from "../sub/RunningPuppy";
 import { LINKS } from "@/lib/Links";
+import { useAuth } from "@clerk/nextjs";
 
 const Footer = () => {
   const [isSecurityMaxed, setIsSecurityMaxed] = useState(true);
   const [toggledSecurity, setToggledSecurity] = useState(false);
   const [showSecurityBanner, setShowSecurityBanner] = useState(false);
+  const ADMIN_CLERK_ID = process.env.NEXT_PUBLIC_IANS_CLERK_USERID;
+  const { userId } = useAuth();
+  const isAdmin = !!userId && !!ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID;
 
   useEffect(() => {
     const g = async () => {
@@ -53,20 +55,7 @@ const Footer = () => {
             />
           ))}
         </div>
-        <div className="flex items-center gap-5">
-          <Link
-            className="text-[26px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-colors duration-200"
-            href={"https://facebook.com"}
-          >
-            <FacebookIcon />
-          </Link>
-          <Link
-            className="text-[22px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-colors duration-200"
-            href={"https://github.com"}
-          >
-            <GithubIcon />
-          </Link>
-        </div>
+        {isAdmin && <SecurityToggle />}
         {isSecurityMaxed ? (
           <DoubleSecretLogin />
         ) : (
@@ -79,29 +68,31 @@ const Footer = () => {
             </span>
 
             {/** Security banner */}
-            <span
-              onClick={() => {
-                if (!showSecurityBanner) {
-                  setShowSecurityBanner(true);
-                }
-              }}
-              className={`${!showSecurityBanner ? "-translate-x-64 cursor-pointer" : ""} transition-all fixed flex gap-2 bg-red-50 dark:bg-red-950/90 zz-top-plus2 left-0 top-20 btn-red p-2 pl-2 pr-4 rounded-tr-lg rounded-br-lg text-[10px] select-none border border-l-0 border-red-400 `}
-            >
-              ⚠️
-              <span className="translate-y-[1.5px]">
-                SECURITY IS CURRENTLY LOOSE ASF
-              </span>
-              ⚠️
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowSecurityBanner(false);
+            {isAdmin && (
+              <span
+                onClick={() => {
+                  if (!showSecurityBanner) {
+                    setShowSecurityBanner(true);
+                  }
                 }}
-                className="text-red-500 hover:text-red-700 text-xs"
+                className={`${!showSecurityBanner ? "-translate-x-64 cursor-pointer" : ""} transition-all fixed flex gap-2 bg-red-50 dark:bg-red-950/90 zz-top-plus2 left-0 top-20 btn-red p-2 pl-2 pr-4 rounded-tr-lg rounded-br-lg text-[10px] select-none border border-l-0 border-red-400 `}
               >
-                ✖
-              </button>
-            </span>
+                ⚠️
+                <span className="translate-y-[1.5px]">
+                  SECURITY IS CURRENTLY LOOSE ASF
+                </span>
+                ⚠️
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSecurityBanner(false);
+                  }}
+                  className="text-red-500 hover:text-red-700 text-xs"
+                >
+                  ✖
+                </button>
+              </span>
+            )}
           </div>
         )}
         <p className="text-center text-xs tracking-wide text-slate-400 dark:text-slate-500">

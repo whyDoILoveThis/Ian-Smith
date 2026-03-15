@@ -31,6 +31,7 @@
 }
 
 .cl-card.cl-signIn-start,
+.cl-card.cl-signIn-password,
 .cl-card.cl-signUp-start {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
   border: 1.5px solid rgba(255, 255, 255, 0.15);
@@ -43,6 +44,7 @@
 }
 
 .cl-card.cl-signIn-start:hover,
+.cl-card.cl-signIn-password:hover,
 .cl-card.cl-signUp-start:hover {
   border-color: rgba(255, 255, 255, 0.25);
   box-shadow: 0 12px 48px 0 rgba(0, 0, 0, 0.4),
@@ -51,6 +53,7 @@
 
 /* Universal text color for cards */
 .cl-card.cl-signIn-start *,
+.cl-card.cl-signIn-password *,
 .cl-card.cl-signUp-start * {
   @apply text-slate-300;
 }

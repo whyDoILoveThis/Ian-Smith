@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import ItsDropdown from "@/components/ui/its-dropdown";
 import { Settings } from "lucide-react";
 import ItsNumInput from "../sub/ItsNumInput";
+import { BiSolidUpArrowAlt } from "react-icons/bi";
+import { BiSolidDownArrowAlt } from "react-icons/bi";
+import { FaSatelliteDish } from "react-icons/fa";
 
 /**
  * NetworkSpeedMini — optimized for light and dark mode:
@@ -335,15 +338,18 @@ export default function NetworkSpeedMini() {
 
         {/* visible content */}
         <div className="content flex flex-col justify-center h-full relative z-10">
-          <span className="dark:text-white text-black">
-            📡 {Math.round(stats.ping)}ms
-          </span>
-          <span className="dark:text-white text-black">
-            ⬇ {formatSpeed(stats.down)}
-          </span>
-          <span className="dark:text-white text-black">
-            ⬆ {formatSpeed(stats.up)}
-          </span>
+          <ContentHolder>
+            <span className="-translate-y-[1px]">
+              <FaSatelliteDish />
+            </span>{" "}
+            {Math.round(stats.ping)}ms
+          </ContentHolder>
+          <ContentHolder>
+            <BiSolidDownArrowAlt /> {formatSpeed(stats.down)}
+          </ContentHolder>
+          <ContentHolder>
+            <BiSolidUpArrowAlt /> {formatSpeed(stats.up)}
+          </ContentHolder>
           <span
             style={{
               position: "absolute",
@@ -361,3 +367,9 @@ export default function NetworkSpeedMini() {
     </>
   );
 }
+
+const ContentHolder = ({ children }: { children: React.ReactNode }) => (
+  <span className="flex items-center gap-0.5 dark:text-white text-black">
+    {children}
+  </span>
+);

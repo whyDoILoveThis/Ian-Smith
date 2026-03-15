@@ -62,6 +62,8 @@ const Nav = () => {
                   <Link
                     key={link.name}
                     href={link.href}
+                    target={link.newTab ? "_blank" : "_self"}
+                    rel={link.newTab ? "noopener noreferrer" : undefined}
                     className="group relative flex items-center justify-between px-4 py-3.5 rounded-2xl border border-slate-200/60 dark:border-slate-700/30 bg-white/50 dark:bg-slate-800/40 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:bg-white/80 dark:hover:bg-slate-700/50 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 ease-out"
                   >
                     <div className="flex flex-col gap-0.5">

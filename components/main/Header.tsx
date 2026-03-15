@@ -1,12 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import image from "../../images/hero--img-wG-Vs64b.png";
 import Image from "next/image";
-import { fbGetHeader } from "@/firebase/fbGetHeader";
-import Link from "next/link";
-import FacebookIcon from "../sub/FacebookIcon";
-import GithubIcon from "../sub/GithubIcon";
-import Loader from "./Loader";
+import SocialLinks from "../sub/SocialLinks";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
 import ITSLoader from "./ItsLoader";
 import AgeTag from "../sub/AgeTag";
@@ -88,6 +83,7 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
     <article className="col-flex items-center pt-4 max-w-[600px] sm:flex sm:justify-center md:flex-row md:items-center md:gap-2">
       {imageUrl && (
         <div className="flex items-center gap-1 bg-white dark:bg-opacity-10 bg-opacity-50 p-2 pb-8 m-2 rounded-3xl">
+          {/** Image of my face 😁 */}
           <div className="relative bg-white dark:bg-opacity-5 bg-opacity-20 translate-y-4 w-[115px] h-[115px] flex items-center justify-center rounded-full">
             <Image
               onLoadingComplete={() => {
@@ -108,26 +104,15 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
             )}
           </div>
           <div className="translate-y-9 flex flex-col gap-2">
+            {/** Name and Age */}
             <span className="flex flex-col ">
               <h1 className="text-3xl mt-0.5 text-center font-bold text-nowrap">
                 {header}
               </h1>
               <AgeTag />
             </span>
-            <span className="flex items-center gap-1">
-              <Link
-                className="text-3xl btn btn-ghost btn-round"
-                href={"https://facebook.com"}
-              >
-                <FacebookIcon />
-              </Link>
-              <Link
-                className="text-[25px] btn btn-ghost btn-round"
-                href={"https://facebook.com"}
-              >
-                <GithubIcon />
-              </Link>
-            </span>
+            {/** Social links */}
+            <SocialLinks />
           </div>
         </div>
       )}
@@ -136,7 +121,7 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
           <div className="relative inline-block">
             <span className="bg-gradient-to-r mr-2 from-blue-400 via-indigo-400 to-violet-400 bg-clip-text text-transparent">
               Full-Stack
-            </span>{" "}
+            </span>
             <br />
           </div>
           React Developer
