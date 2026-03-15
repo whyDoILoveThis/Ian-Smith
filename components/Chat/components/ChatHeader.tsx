@@ -270,8 +270,21 @@ export function ChatHeader({
             type="button"
             onClick={() => setActiveTab(activeTab === "chat" ? "room" : "chat")}
             className={`relative h-7 w-14 rounded-full transition-colors duration-200 ${
-              activeTab === "room" ? "bg-amber-500" : `bg-${chatTheme}-500`
+              activeTab === "room"
+                ? "bg-amber-500"
+                : chatTheme === "gradient"
+                  ? ""
+                  : `bg-${chatTheme}-500`
             }`}
+            style={
+              activeTab !== "room" &&
+              chatTheme === "gradient" &&
+              gradientColors.length >= 2
+                ? {
+                    background: `linear-gradient(to right, ${gradientColors.join(", ")})`,
+                  }
+                : undefined
+            }
           >
             <span
               className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-all duration-200 ease-out ${

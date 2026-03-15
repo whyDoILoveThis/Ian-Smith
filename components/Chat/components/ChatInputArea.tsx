@@ -160,6 +160,7 @@ type ChatInputAreaProps = {
   setReplyingTo: (msg: Message | null) => void;
   onOpenVideoRecorder: () => void;
   chatTheme: string;
+  gradientColors: string[];
   /** Incremented on each local keystroke */
   localPulseKey?: number;
   /** Keystroke pulse timestamps from Firebase { "1"?: number, "2"?: number } */
@@ -184,6 +185,7 @@ export function ChatInputArea({
   setReplyingTo,
   onOpenVideoRecorder,
   chatTheme,
+  gradientColors,
   localPulseKey = 0,
   keystrokePulse,
   indicatorColors,
@@ -438,6 +440,16 @@ export function ChatInputArea({
             ref={inputRef}
             style={{
               borderColor: themeColors.border,
+              ...(chatTheme === "gradient" && gradientColors.length >= 2
+                ? {
+                    border: "2px solid transparent",
+                    backgroundImage: `linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), linear-gradient(to right, ${gradientColors.join(", ")})`,
+                    backgroundOrigin: "border-box",
+                    backgroundClip: "padding-box, border-box",
+                    backgroundAttachment: "fixed",
+                    backgroundSize: "100vw 100%",
+                  }
+                : {}),
             }}
             autoFocus
             type="text"
@@ -499,7 +511,19 @@ export function ChatInputArea({
               type="button"
               onClick={() => setShowImageMenu((prev) => !prev)}
               disabled={!slotId || isSending}
-              style={{ borderColor: themeColors.border }}
+              style={{
+                borderColor: themeColors.border,
+                ...(chatTheme === "gradient" && gradientColors.length >= 2
+                  ? {
+                      border: "2px solid transparent",
+                      backgroundImage: `linear-gradient(rgba(23,23,23,0.85), rgba(23,23,23,0.85)), linear-gradient(to right, ${gradientColors.join(", ")})`,
+                      backgroundOrigin: "border-box",
+                      backgroundClip: "padding-box, border-box",
+                      backgroundAttachment: "fixed",
+                      backgroundSize: "100vw 100%",
+                    }
+                  : {}),
+              }}
               className={`flex-shrink-0 rounded-full border p-2.5 text-white/85 transition ${slotId ? "cursor-pointer hover:bg-white/10" : "opacity-50"} disabled:opacity-50`}
             >
               <svg
@@ -614,7 +638,18 @@ export function ChatInputArea({
                 isGenerating ||
                 (!showMagicMenu && !messageText.trim())
               }
-              className={`relative flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${themeColors.btn} ${themeColors.text} hover:opacity-80`}
+              className={`relative flex-shrink-0 rounded-full p-2.5 transition disabled:opacity-50 ${
+                chatTheme === "gradient" ? "" : themeColors.btn
+              } ${themeColors.text} hover:opacity-80`}
+              style={
+                chatTheme === "gradient" && gradientColors.length >= 2
+                  ? {
+                      background: `linear-gradient(to right, ${gradientColors.join(", ")})`,
+                      backgroundAttachment: "fixed",
+                      backgroundSize: "100vw 100%",
+                    }
+                  : undefined
+              }
               title="Send (hold 5s for AI magic menu)"
             >
               {/* Hold-to-open ring animation */}

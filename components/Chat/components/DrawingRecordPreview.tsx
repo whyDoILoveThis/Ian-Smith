@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import type { RecordedDrawingStroke, ThemeColors } from "../types";
+import type { ChatTheme, RecordedDrawingStroke, ThemeColors } from "../types";
 import { DrawingPlayer } from "./DrawingPlayer";
 
 type DrawingRecordPreviewProps = {
   strokes: RecordedDrawingStroke[];
   duration: number;
   themeColors: ThemeColors;
+  chatTheme: ChatTheme;
+  gradientColors: string[];
   isSending: boolean;
   onConfirm: (caption: string) => void;
   onCancel: () => void;
@@ -17,6 +19,8 @@ export function DrawingRecordPreview({
   strokes,
   duration,
   themeColors,
+  chatTheme,
+  gradientColors,
   isSending,
   onConfirm,
   onCancel,
@@ -69,7 +73,16 @@ export function DrawingRecordPreview({
             type="button"
             onClick={() => onConfirm(caption)}
             disabled={isSending || strokes.length === 0}
-            className={`flex-1 rounded-2xl py-3 text-sm font-semibold transition disabled:opacity-50 ${themeColors.bg} ${themeColors.text}`}
+            className={`flex-1 rounded-2xl py-3 text-sm font-semibold transition disabled:opacity-50 ${
+              chatTheme === "gradient" ? "" : themeColors.bg
+            } ${themeColors.text}`}
+            style={
+              chatTheme === "gradient" && gradientColors.length >= 2
+                ? {
+                    background: `linear-gradient(to right, ${gradientColors.join(", ")})`,
+                  }
+                : undefined
+            }
           >
             {isSending ? "Sending..." : "Send Drawing"}
           </button>

@@ -11,6 +11,8 @@ type ImageConfirmModalProps = {
   onConfirm: (caption: string) => void;
   onCancel: () => void;
   themeColors: ThemeColors;
+  chatTheme: ChatTheme;
+  gradientColors: string[];
 };
 
 export function ImageConfirmModal({
@@ -20,6 +22,8 @@ export function ImageConfirmModal({
   onConfirm,
   onCancel,
   themeColors,
+  chatTheme,
+  gradientColors,
 }: ImageConfirmModalProps) {
   const [caption, setCaption] = useState("");
 
@@ -69,7 +73,16 @@ export function ImageConfirmModal({
           <button
             onClick={() => onConfirm(caption)}
             disabled={isSending}
-            className={`flex-1 rounded-2xl  px-4 py-3 text-sm font-semibold  transition hover:opacity-80-300 disabled:cursor-not-allowed disabled:opacity-60 ${themeColors.btn} ${themeColors.text}`}
+            className={`flex-1 rounded-2xl  px-4 py-3 text-sm font-semibold  transition hover:opacity-80-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+              chatTheme === "gradient" ? "" : themeColors.btn
+            } ${themeColors.text}`}
+            style={
+              chatTheme === "gradient" && gradientColors.length >= 2
+                ? {
+                    background: `linear-gradient(to right, ${gradientColors.join(", ")})`,
+                  }
+                : undefined
+            }
           >
             {isSending ? (
               <span className="flex items-center justify-center gap-2">

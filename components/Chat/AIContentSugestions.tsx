@@ -987,6 +987,8 @@ export default function AIContentSugestions() {
         <ImageConfirmModal
           pendingMediaUrl={session.pendingImageUrl}
           themeColors={themeColors}
+          chatTheme={chatTheme}
+          gradientColors={gradientColors}
           isVideo={session.pendingIsVideo}
           isSending={chatMessages.isSending}
           onConfirm={handleConfirmImageWrapper}
@@ -1000,6 +1002,8 @@ export default function AIContentSugestions() {
           strokes={pendingDrawing.strokes}
           duration={pendingDrawing.duration}
           themeColors={themeColors}
+          chatTheme={chatTheme}
+          gradientColors={gradientColors}
           isSending={chatMessages.isSending}
           onConfirm={handleConfirmDrawing}
           onCancel={handleCancelDrawing}
@@ -1139,6 +1143,7 @@ export default function AIContentSugestions() {
               replyingTo={chatMessages.replyingTo}
               themeColors={themeColors}
               chatTheme={chatTheme}
+              gradientColors={gradientColors}
               handleTypingChange={chatMessages.handleTypingChange}
               handleSendMessage={handleSendMessageWrapper}
               handleImageUpload={handleImageUploadWrapper}
