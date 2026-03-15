@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import React from "react";
+import { useNavFooterTheme } from "../main/NavFooterTheme";
 
 interface Props {
   linkText: string;
@@ -7,14 +10,18 @@ interface Props {
 }
 
 const LinkUnderlineAnim = ({ linkText, linkHref }: Props) => {
+  const theme = useNavFooterTheme();
+  const isBlack = theme === "black";
+
   return (
     <Link
       href={linkHref}
       target="_blank"
-      className="text-lg place-self-start font-semibold tracking-wide dark:text-slate-200 
-              text-slate-800     relative group"
+      className={`text-[13px] place-self-start font-medium tracking-wide ${isBlack ? "dark:text-gray-400 text-gray-500" : "dark:text-slate-400 text-slate-500"} relative group`}
     >
-      <span className="relative z-10 transition-colors text-nowrap duration-300 group-hover:dark:text-white group-hover:text-slate-500">
+      <span
+        className={`relative z-10 transition-colors text-nowrap duration-300 group-hover:dark:text-white ${isBlack ? "group-hover:text-gray-200" : "group-hover:text-slate-800"}`}
+      >
         {linkText}
       </span>
       {/* Gradient underline hover effect */}

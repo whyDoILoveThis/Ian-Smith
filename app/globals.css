@@ -484,6 +484,36 @@ input[type="file"]::-webkit-file-upload-button {
   background: linear-gradient(180deg, rgba(99, 102, 241, 0.6) 0%, rgba(139, 92, 246, 0.5) 100%);
 }
 
+/* Nav scrollbar — sleek & minimal */
+.nav-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 150, 150, 0.1) transparent;
+}
+
+.nav-scroll::-webkit-scrollbar {
+  height: 1px;
+  width: 1px;
+}
+
+.nav-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav-scroll::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 150, 0.15);
+  border-radius: 999px;
+}
+
+.nav-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.25) 100%);
+}
+
+.nav-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* FAB glow ring */
 @keyframes fab-glow {
   0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3), 0 0 60px rgba(99, 102, 241, 0.1); }

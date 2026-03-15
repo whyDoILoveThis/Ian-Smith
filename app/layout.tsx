@@ -13,6 +13,7 @@ import SignedInJSX from "@/components/main/SignedInJSX";
 import { MainWrap } from "@/components/main/MainWrap";
 import { BreadcrumbProvider } from "@/breadcrumb";
 import PerformanceOverlayRouteCheckRenderer from "@/components/PerformanceOverlay/PerformanceOverlayRoute";
+import ScrollJumpButtons from "@/components/main/ScrollJumpButtons";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -48,6 +49,7 @@ export default function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <BreadcrumbProvider disabled>
               <PerformanceOverlayRouteCheckRenderer />
+              <ScrollJumpButtons />
               <SignedIn>
                 <ConnectivityWrapper>
                   <MainWrap>

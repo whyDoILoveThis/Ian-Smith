@@ -10,6 +10,7 @@
 import { IconCreatorApp } from "@/components/IconCreator/components/IconCreatorApp";
 import Footer from "@/components/main/Footer";
 import Nav from "@/components/main/Nav";
+import { NavFooterThemeProvider } from "@/components/main/NavFooterTheme";
 
 export const metadata = {
   title: "IconCreator — Logo Background Remover & Icon Generator",
@@ -19,10 +20,12 @@ export const metadata = {
 
 export default function IconCreatorPage() {
   return (
-    <>
-      <Nav />
-      <IconCreatorApp />
-      <Footer />
-    </>
+    <NavFooterThemeProvider theme="black">
+      <div className="min-h-screen bg-white dark:bg-black">
+        <Nav />
+        <IconCreatorApp />
+        <Footer />
+      </div>
+    </NavFooterThemeProvider>
   );
 }

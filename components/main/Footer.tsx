@@ -11,6 +11,7 @@ import { appwrGetSecurityFlag } from "@/appwrite/appwrUpdateSecurity";
 import { SecurityToggle } from "../CMS/CMS";
 import { LINKS } from "@/lib/Links";
 import { useAuth } from "@clerk/nextjs";
+import { useNavFooterTheme } from "./NavFooterTheme";
 
 const Footer = () => {
   const [isSecurityMaxed, setIsSecurityMaxed] = useState(true);
@@ -19,6 +20,8 @@ const Footer = () => {
   const ADMIN_CLERK_ID = process.env.NEXT_PUBLIC_IANS_CLERK_USERID;
   const { userId } = useAuth();
   const isAdmin = !!userId && !!ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID;
+  const theme = useNavFooterTheme();
+  const isBlack = theme === "black";
 
   useEffect(() => {
     const g = async () => {
@@ -39,10 +42,16 @@ const Footer = () => {
   }, [showSecurityBanner]);
 
   return (
-    <article className="w-full flex justify-center mt-16">
-      <div className="h-64 opacity-0" />
-      <footer className="absolute bottom-0 left-0 w-full flex flex-col gap-6 items-center px-6 py-8 border-t border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-950">
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-slate-400 dark:via-slate-500 to-transparent" />
+    <article
+      className={`w-full ${!isBlack ? "flex justify-center" : ""} mt-16`}
+    >
+      {!isBlack && <div className="h-64 opacity-0" />}
+      <footer
+        className={`${!isBlack ? "absolute bottom-0 left-0" : "relative"} w-full flex flex-col gap-6 items-center px-6 py-8 border-t ${isBlack ? "border-gray-200 dark:border-gray-800/50 bg-slate-50 dark:bg-black" : "border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-950"}`}
+      >
+        <div
+          className={`absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent ${isBlack ? "via-gray-400 dark:via-gray-700" : "via-slate-400 dark:via-slate-500"} to-transparent`}
+        />
         <Link className="font-bold text-2xl" href={"/"}>
           <ITSLogo />
         </Link>
@@ -95,7 +104,9 @@ const Footer = () => {
             )}
           </div>
         )}
-        <p className="text-center text-xs tracking-wide text-slate-400 dark:text-slate-500">
+        <p
+          className={`text-center text-xs tracking-wide ${isBlack ? "text-gray-400 dark:text-gray-600" : "text-slate-400 dark:text-slate-500"}`}
+        >
           © {new Date().getFullYear()} Ian Thai Smith. All rights reserved.
         </p>
       </footer>
