@@ -37,6 +37,7 @@ export function useChatFirebase(
   const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [chatTheme, setChatTheme] = useState<ChatTheme>("emerald");
+  const [useFallbackBucket, setUseFallbackBucket] = useState(false);
   const [tttState, setTttState] = useState<TttState | null>(null);
   const [presence, setPresence] = useState<{ "1"?: boolean; "2"?: boolean }>({});
   const [lastSeen, setLastSeen] = useState<{ "1"?: number; "2"?: number }>({});
@@ -398,6 +399,16 @@ export function useChatFirebase(
     return () => unsub();
   }, [isUnlocked, roomPath]);
 
+  // Subscribe to room-wide fallback-bucket toggle
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const bucketRef = ref(rtdb, `${roomPath}/useFallbackBucket`);
+    const unsub = onValue(bucketRef, (snap) => {
+      setUseFallbackBucket(snap.val() === true);
+    });
+    return () => unsub();
+  }, [isUnlocked, roomPath]);
+
   // Subscribe to Tic Tac Toe state
   useEffect(() => {
     if (!isUnlocked) return;
@@ -746,6 +757,16 @@ export function useChatFirebase(
     [isUnlocked, slotId, roomPath]
   );
 
+  const handleUseFallbackBucketChange = useCallback(
+    (useFallback: boolean) => {
+      if (!isUnlocked) return;
+      const bucketRef = ref(rtdb, `${roomPath}/useFallbackBucket`);
+      set(bucketRef, useFallback);
+      setUseFallbackBucket(useFallback);
+    },
+    [isUnlocked, roomPath]
+  );
+
   return {
     slots,
     messages,
@@ -768,5 +789,7 @@ export function useChatFirebase(
     loadAllFromServer,
     handleThemeChange,
     handleIndicatorColorChange,
+    useFallbackBucket,
+    handleUseFallbackBucketChange,
   };
 }

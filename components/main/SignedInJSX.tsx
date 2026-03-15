@@ -19,12 +19,12 @@ export default function SignedInJSX({ children, adminUserId }: Props) {
   if (userId && adminUserId && userId === adminUserId) {
     return (
       <>
-        <div className="fixed left-0 top-24 p-4 mt-4 bg-white/10 backdrop-blur-md rounded-md border border-l-0 border-white/25 rounded-tl-none rounded-bl-none zz-top-plus4 w-fit -translate-x-[80px] hover:translate-x-0 transition-transform">
+        <div className="fixed left-0 top-24 p-6 mt-4 bg-white/10 backdrop-blur-sm rounded-full border border-l-0 border-white/25 rounded-tl-none rounded-bl-none zz-top-plus4 w-fit -translate-x-[80px] hover:translate-x-0 transition-transform">
           <button
             onClick={() => {
               setShowMainContent(!showMainContent);
             }}
-            className={`btn btn-purple`}
+            className={`btn btn-purple !border-2 font-bold !rounded-full`}
           >
             {!showMainContent ? "Main" : "CMS"}
           </button>

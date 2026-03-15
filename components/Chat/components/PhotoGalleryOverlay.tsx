@@ -9,11 +9,13 @@ import React, {
 } from "react";
 import Image from "next/image";
 import type { Message, ThemeColors } from "../types";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 
 type PhotoGalleryOverlayProps = {
   messages: Message[];
   themeColors: ThemeColors;
   onClose: () => void;
+  onFallbackDetected?: () => void;
 };
 
 type PhotoItem = {
@@ -29,6 +31,7 @@ export function PhotoGalleryOverlay({
   messages,
   themeColors,
   onClose,
+  onFallbackDetected,
 }: PhotoGalleryOverlayProps) {
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(
@@ -36,13 +39,14 @@ export function PhotoGalleryOverlay({
   );
   const [swipeOffset, setSwipeOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [bucketMap, setBucketMap] = useState<Record<string, string>>({});
 
   // Extract all photos from messages
   const photos: PhotoItem[] = useMemo(() => {
     return messages
       .filter((msg) => msg.imageUrl)
       .map((msg) => ({
-        imageUrl: msg.imageUrl!,
+        imageUrl: toProxyUrl(msg.imageUrl)!,
         sender: msg.sender,
         senderInitial: (msg.sender?.[0] || "?").toUpperCase(),
         slotId: msg.slotId,
@@ -51,6 +55,35 @@ export function PhotoGalleryOverlay({
       }))
       .reverse(); // newest first
   }, [messages]);
+
+  // Detect which bucket each photo lives in via the X-Bucket header
+  useEffect(() => {
+    let cancelled = false;
+    const detect = async () => {
+      const map: Record<string, string> = {};
+      await Promise.all(
+        photos.map(async (photo) => {
+          try {
+            const res = await fetch(photo.imageUrl, { method: "HEAD" });
+            const bucket = res.headers.get("X-Bucket");
+            if (bucket) map[photo.messageId] = bucket;
+          } catch {
+            // ignore
+          }
+        }),
+      );
+      if (!cancelled) {
+        setBucketMap(map);
+        if (Object.values(map).some((b) => b === "2")) {
+          onFallbackDetected?.();
+        }
+      }
+    };
+    if (photos.length > 0) detect();
+    return () => {
+      cancelled = true;
+    };
+  }, [photos, onFallbackDetected]);
 
   // Close on Escape
   useEffect(() => {
@@ -213,6 +246,18 @@ export function PhotoGalleryOverlay({
               >
                 {photo.senderInitial}
               </div>
+              {/* Bucket badge */}
+              {bucketMap[photo.messageId] && (
+                <div
+                  className={`absolute top-1 right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shadow-lg ring-1 ring-black/30 ${
+                    bucketMap[photo.messageId] === "1"
+                      ? "bg-cyan-500 text-white"
+                      : "bg-amber-500 text-white"
+                  }`}
+                >
+                  {bucketMap[photo.messageId]}
+                </div>
+              )}
             </button>
           ))}
         </div>

@@ -469,6 +469,8 @@ export function ChatHeader({
                 ref={themePickerRef}
                 className="fixed right-4 top-14 p-2 bg-black/90 backdrop-blur-sm rounded-xl border border-white/20 shadow-xl z-[200]"
               >
+                {/** hack for making color work in template strings with tailwind*/}
+                <div className="border-[#a855f7]-400 border display-none" />
                 <div className="flex items-center gap-1.5">
                   {[
                     { key: "red", color: "#ef4444" },

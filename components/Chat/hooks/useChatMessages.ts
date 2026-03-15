@@ -13,6 +13,7 @@ export function useChatMessages(
   encryptionKey: CryptoKey | null,
   messages: Message[],
   roomPath: string,
+  useFallbackBucket: boolean = false,
 ) {
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -124,7 +125,7 @@ export function useChatMessages(
       setIsSending(true);
 
       try {
-        const upload = await appwrImgUp(pendingImageFile);
+        const upload = await appwrImgUp(pendingImageFile, { useFallbackBucket });
         const isVideo = pendingImageFile.type.startsWith("video/");
         const msgRef = ref(rtdb, `${roomPath}/messages`);
         
@@ -161,7 +162,7 @@ export function useChatMessages(
       setPendingImageUrl(null);
       setIsImageConfirmOpen(false);
     },
-    [screenName, slotId, roomPath, encryptionKey],
+    [screenName, slotId, roomPath, encryptionKey, useFallbackBucket],
   );
 
   const handleCancelImage = useCallback(
@@ -257,7 +258,7 @@ export function useChatMessages(
           type: videoBlob.type || "video/webm",
         });
 
-        const upload = await appwrImgUp(videoFile);
+        const upload = await appwrImgUp(videoFile, { useFallbackBucket });
         const msgRef = ref(rtdb, `${roomPath}/messages`);
 
         const msgData: Record<string, unknown> = {
@@ -281,7 +282,7 @@ export function useChatMessages(
         setIsSending(false);
       }
     },
-    [screenName, slotId, roomPath, encryptionKey],
+    [screenName, slotId, roomPath, encryptionKey, useFallbackBucket],
   );
 
   // Handle sending a recorded drawing

@@ -1,5 +1,6 @@
 import { tablesDB } from "./appwriteConfig";
 import { appwrImgDelete } from "./appwrStorage";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 
 // Helper function to fetch full screenshot records by IDs
 async function fetchScreenshotRecords(
@@ -104,7 +105,7 @@ export async function appwrFetchProjects(): Promise<Project[]> {
 
         // Build screenshots array pairing URLs and fileIds by index
         const screenshotsArray = screenshotUrls.map((url: string, idx: number) => ({
-          url,
+          url: toProxyUrl(url),
           fileId: screenshotFileIds[idx] || null,
         }));
 

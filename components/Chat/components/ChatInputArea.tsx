@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Message, ThemeColors } from "../types";
 import { PhoneGalleryPicker } from "./PhoneGalleryPicker";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 
 // Default slot colors (same as touch indicators)
 const DEFAULT_SLOT_COLORS: Record<string, string> = {
@@ -386,7 +387,7 @@ export function ChatInputArea({
           <div className="mb-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-2 py-1.5 text-sm">
             {replyingTo.imageUrl && (
               <img
-                src={replyingTo.imageUrl}
+                src={toProxyUrl(replyingTo.imageUrl)}
                 alt="Reply"
                 className="w-10 h-10 rounded object-cover border border-white/10 flex-shrink-0"
               />
@@ -432,8 +433,13 @@ export function ChatInputArea({
               }}
             />
           )}
+
           <input
             ref={inputRef}
+            style={{
+              borderColor: chatTheme,
+              opacity: !slotId || isSending ? 0.5 : 0.7,
+            }}
             autoFocus
             type="text"
             placeholder={slotId ? "Message" : "Join to chat"}
@@ -443,8 +449,9 @@ export function ChatInputArea({
             onKeyDown={(e) => {
               if (e.key === "Enter") sendAndRefocus();
             }}
-            className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-${chatTheme}-400 border-opacity-70 disabled:opacity-50`}
+            className={`flex-1 rounded-full border  bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none border-opacity-70 disabled:opacity-50`}
           />
+
           {/* Image picker button + popup menu */}
           <div className="relative">
             {/* Hidden file inputs */}
@@ -671,6 +678,8 @@ export function ChatInputArea({
           </div>
         </div>
       </div>
+
+      {/**div to h */}
 
       {/* In-app Photo Gallery Picker */}
       {showGalleryPicker && (

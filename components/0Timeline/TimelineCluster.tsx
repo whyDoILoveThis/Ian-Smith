@@ -2,6 +2,7 @@
 "use client";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 
 /* ------------------------------------------------------------------ */
 /*  Cluster node card – shown inside the expanded panel               */
@@ -11,8 +12,8 @@ function ClusterNodeItem({ node }: { node: TimelineNode }) {
   const images = node.images ?? [];
   const urls: string[] =
     images.length > 0 && typeof images[0] === "string"
-      ? (images as unknown as string[])
-      : (images as Screenshot[]).map((s) => s.url);
+      ? (images as unknown as string[]).map(toProxyUrl)
+      : (images as Screenshot[]).map((s) => toProxyUrl(s.url));
   const [imgIdx, setImgIdx] = useState(0);
   const [imgLoading, setImgLoading] = useState(true);
 

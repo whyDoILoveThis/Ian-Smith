@@ -8,11 +8,13 @@ import React, {
   useMemo,
 } from "react";
 import type { Message, ThemeColors } from "../types";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 
 type VideoGalleryOverlayProps = {
   messages: Message[];
   themeColors: ThemeColors;
   onClose: () => void;
+  onFallbackDetected?: () => void;
 };
 
 type VideoItem = {
@@ -28,6 +30,7 @@ export function VideoGalleryOverlay({
   messages,
   themeColors,
   onClose,
+  onFallbackDetected,
 }: VideoGalleryOverlayProps) {
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(
@@ -35,13 +38,14 @@ export function VideoGalleryOverlay({
   );
   const [swipeOffset, setSwipeOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [bucketMap, setBucketMap] = useState<Record<string, string>>({});
 
   // Extract all videos from messages
   const videos: VideoItem[] = useMemo(() => {
     return messages
       .filter((msg) => msg.videoUrl && !msg.isEphemeral)
       .map((msg) => ({
-        videoUrl: msg.videoUrl!,
+        videoUrl: toProxyUrl(msg.videoUrl)!,
         sender: msg.sender,
         senderInitial: (msg.sender?.[0] || "?").toUpperCase(),
         slotId: msg.slotId,
@@ -50,6 +54,35 @@ export function VideoGalleryOverlay({
       }))
       .reverse(); // newest first
   }, [messages]);
+
+  // Detect which bucket each video lives in via the X-Bucket header
+  useEffect(() => {
+    let cancelled = false;
+    const detect = async () => {
+      const map: Record<string, string> = {};
+      await Promise.all(
+        videos.map(async (video) => {
+          try {
+            const res = await fetch(video.videoUrl, { method: "HEAD" });
+            const bucket = res.headers.get("X-Bucket");
+            if (bucket) map[video.messageId] = bucket;
+          } catch {
+            // ignore
+          }
+        }),
+      );
+      if (!cancelled) {
+        setBucketMap(map);
+        if (Object.values(map).some((b) => b === "2")) {
+          onFallbackDetected?.();
+        }
+      }
+    };
+    if (videos.length > 0) detect();
+    return () => {
+      cancelled = true;
+    };
+  }, [videos, onFallbackDetected]);
 
   // Close on Escape, arrow nav in fullscreen
   useEffect(() => {
@@ -220,6 +253,18 @@ export function VideoGalleryOverlay({
               >
                 {video.senderInitial}
               </div>
+              {/* Bucket badge */}
+              {bucketMap[video.messageId] && (
+                <div
+                  className={`absolute top-1 right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shadow-lg ring-1 ring-black/30 ${
+                    bucketMap[video.messageId] === "1"
+                      ? "bg-cyan-500 text-white"
+                      : "bg-amber-500 text-white"
+                  }`}
+                >
+                  {bucketMap[video.messageId]}
+                </div>
+              )}
             </button>
           ))}
         </div>

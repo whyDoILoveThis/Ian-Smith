@@ -117,6 +117,14 @@ export default function AIContentSugestions() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const fallbackToastShown = useRef(false);
+  const handleFallbackDetected = useCallback(() => {
+    if (!fallbackToastShown.current) {
+      fallbackToastShown.current = true;
+      showToast("Some files were served from the fallback bucket", "info");
+    }
+  }, [showToast]);
+
   // Disguise timeout (minutes, 0 = always show disguise / never auto-return)
   const [disguiseTimeout, setDisguiseTimeout] = useState<number>(0);
   const disguiseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -411,6 +419,7 @@ export default function AIContentSugestions() {
     encryptionKey,
     firebaseWithSlot.messages,
     roomPath,
+    firebaseWithSlot.useFallbackBucket,
   );
 
   // Surface message send errors as toasts
@@ -1077,6 +1086,9 @@ export default function AIContentSugestions() {
             onMigrateConvo={session.migrateConvo}
             privacyMode={privacyMode}
             onPrivacyModeChange={setPrivacyMode}
+            useFallbackBucket={firebaseWithSlot.useFallbackBucket}
+            onUseFallbackBucketChange={firebaseWithSlot.handleUseFallbackBucketChange}
+            onFallbackDetected={handleFallbackDetected}
           />
         ) : (
           <>

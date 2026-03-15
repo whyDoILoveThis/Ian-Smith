@@ -56,6 +56,10 @@ const TEXT_REACTION_COLORS = [
   "#8b5cf6", // purple
   "#ec4899", // pink
   "#f43f5e", // rose
+  "#9C6007", // brown
+  "#6366f1", // indigo
+  "#64748b", // slate
+  "#14b8a6", // teal
 ];
 
 const QUICK_EMOJIS = [
@@ -70,6 +74,7 @@ const QUICK_EMOJIS = [
   ":(",
   ":/",
   ":|",
+
   ">:)",
   ">:(",
   "xD",
@@ -90,10 +95,14 @@ const QUICK_EMOJIS = [
   "🙆‍♀️",
 
   "🤑",
+  "🥳",
+  "🎉",
+  "🎊",
   "🔥",
   "💯",
   "💰",
   "💸",
+  "💪",
   "👌",
   "👍",
 

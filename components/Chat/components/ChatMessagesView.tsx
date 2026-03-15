@@ -17,6 +17,7 @@ import {
 } from "./EmojiReactionPicker";
 import Image from "next/image";
 import ReplyIcon from "@/components/sub/ReplyIcon";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 import { DrawingPlayer } from "./DrawingPlayer";
 
 /** Returns true when the string contains ONLY emoji (and optional whitespace). */
@@ -25,32 +26,7 @@ function isEmojiOnly(text: string): boolean {
   if (!stripped) return false;
   return [...stripped].every((ch) => {
     const cp = ch.codePointAt(0)!;
-    return (
-      (cp >= 0x1f600 && cp <= 0x1f64f) || // Emoticons
-      (cp >= 0x1f300 && cp <= 0x1f5ff) || // Misc Symbols & Pictographs
-      (cp >= 0x1f680 && cp <= 0x1f6ff) || // Transport & Map
-      (cp >= 0x1f1e0 && cp <= 0x1f1ff) || // Regional Indicators (flags)
-      (cp >= 0x2600 && cp <= 0x26ff) || // Misc Symbols
-      (cp >= 0x2700 && cp <= 0x27bf) || // Dingbats
-      (cp >= 0x1f900 && cp <= 0x1f9ff) || // Supplemental Symbols
-      (cp >= 0x1fa00 && cp <= 0x1fa6f) || // Chess Symbols
-      (cp >= 0x1fa70 && cp <= 0x1faff) || // Symbols Extended-A
-      (cp >= 0xfe00 && cp <= 0xfe0f) || // Variation Selectors
-      (cp >= 0x231a && cp <= 0x23ff) || // Misc Technical
-      cp === 0x200d || // ZWJ
-      cp === 0x20e3 || // Combining Enclosing Keycap
-      cp === 0x2b05 ||
-      cp === 0x2b06 ||
-      cp === 0x2b07 ||
-      cp === 0x2b1b ||
-      cp === 0x2b1c ||
-      cp === 0x2b50 ||
-      cp === 0x2b55 ||
-      cp === 0x3030 ||
-      cp === 0x303d ||
-      cp === 0x3297 ||
-      cp === 0x3299
-    );
+    return cp >= 0x1f600 && cp <= 0x1f64f;
   });
 }
 
@@ -712,6 +688,7 @@ export function ChatMessagesView({
                 />
 
                 {/* Reply preview if this is a reply */}
+                {/**perfectly inset shadow all the way around */}
                 {(msg.replyToText || msg.replyToImageUrl) && !isLockedOut && (
                   <button
                     type="button"
@@ -719,14 +696,14 @@ export function ChatMessagesView({
                       e.stopPropagation();
                       if (msg.replyToId) scrollToMessage(msg.replyToId);
                     }}
-                    className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] border-l-4 text-left w-full cursor-pointer active:opacity-70 transition-opacity ${
+                    className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] text-left w-full cursor-pointer active:opacity-70 transition-opacity ${
                       isMine
                         ? "bg-black/10 border-black/40"
                         : "bg-white/5 border-white/20"
                     }`}
                     style={{
                       boxShadow:
-                        "inset 0 2px 3px rgba(0, 0, 0, 0.3), inset 0 -2px 3px rgba(0, 0, 0, 0.2), inset -2px 0 3px rgba(0, 0, 0, 0.2)",
+                        "inset 0 3px 5px rgba(0, 0, 0, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.4), inset 3px 0 5px rgba(0, 0, 0, 0.25), inset -3px 0 5px rgba(0, 0, 0, 0.25)",
                     }}
                   >
                     <p className="font-semibold opacity-80">
@@ -734,7 +711,7 @@ export function ChatMessagesView({
                     </p>
                     {msg.replyToImageUrl && (
                       <img
-                        src={msg.replyToImageUrl}
+                        src={toProxyUrl(msg.replyToImageUrl)}
                         alt="Reply"
                         className="mt-1 mb-1 w-12 h-12 rounded object-cover border border-white/10"
                       />
@@ -834,7 +811,7 @@ export function ChatMessagesView({
                     </div>
                   ) : (
                     <Image
-                      src={msg.imageUrl}
+                      src={toProxyUrl(msg.imageUrl)}
                       alt="Uploaded"
                       width={500}
                       height={320}
@@ -902,7 +879,7 @@ export function ChatMessagesView({
                   )}
                 {msg.videoUrl && !msg.isEphemeral && !isLockedOut && (
                   <video
-                    src={msg.videoUrl}
+                    src={toProxyUrl(msg.videoUrl)}
                     controls
                     className="mt-2 w-full rounded-xl border border-white/10"
                   />
@@ -917,7 +894,7 @@ export function ChatMessagesView({
                       onClick={() =>
                         setActiveEphemeralVideo({
                           messageId: msg.id,
-                          videoUrl: msg.videoUrl!,
+                          videoUrl: toProxyUrl(msg.videoUrl)!,
                           sender: msg.sender,
                           videoFileId: msg.videoFileId,
                           isMine,

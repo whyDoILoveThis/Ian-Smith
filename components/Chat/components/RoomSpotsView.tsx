@@ -136,6 +136,9 @@ type RoomSpotsViewProps = {
   ) => Promise<boolean>;
   privacyMode?: boolean;
   onPrivacyModeChange?: (enabled: boolean) => void;
+  useFallbackBucket?: boolean;
+  onUseFallbackBucketChange?: (useFallback: boolean) => void;
+  onFallbackDetected?: () => void;
   isAdmin?: boolean;
 };
 
@@ -172,6 +175,9 @@ export function RoomSpotsView({
   onSetDisguiseTimeout,
   privacyMode = false,
   onPrivacyModeChange,
+  useFallbackBucket = false,
+  onUseFallbackBucketChange,
+  onFallbackDetected,
   isAdmin = false,
 }: RoomSpotsViewProps) {
   // ── State ──────────────────────────────────────────────────────────────
@@ -1033,6 +1039,22 @@ export function RoomSpotsView({
               <span className="text-base">🔀</span>
               <span>Migrate</span>
             </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => onUseFallbackBucketChange?.(!useFallbackBucket)}
+                className={`flex items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs active:scale-[0.98] transition-all ${
+                  useFallbackBucket
+                    ? "border-amber-400/20 bg-amber-400/[0.06] text-amber-300"
+                    : "border-cyan-400/20 bg-cyan-400/[0.06] text-cyan-300"
+                }`}
+              >
+                <span className="text-base">
+                  {useFallbackBucket ? "📦" : "☁️"}
+                </span>
+                <span>{useFallbackBucket ? "Bucket 2" : "Bucket 1"}</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -1420,6 +1442,7 @@ export function RoomSpotsView({
           messages={allPhotoMessages.length > 0 ? allPhotoMessages : messages}
           themeColors={themeColors}
           onClose={() => setShowPhotoGallery(false)}
+          onFallbackDetected={onFallbackDetected}
         />
       )}
 
@@ -1440,6 +1463,7 @@ export function RoomSpotsView({
           messages={allVideoMessages.length > 0 ? allVideoMessages : messages}
           themeColors={themeColors}
           onClose={() => setShowVideoGallery(false)}
+          onFallbackDetected={onFallbackDetected}
         />
       )}
 

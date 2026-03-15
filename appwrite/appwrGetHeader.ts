@@ -1,4 +1,5 @@
 import { tablesDB } from "./appwriteConfig";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 
 
 
@@ -13,7 +14,9 @@ const databaseId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
     const row = await tablesDB.getRow(databaseId, tableId, rowId);
 
     if (row) {
-      return row as unknown as Header; // Cast to your interface
+      const header = row as unknown as Header;
+      if (header.imageUrl) header.imageUrl = toProxyUrl(header.imageUrl);
+      return header;
     } else {
       console.log("No such row!");
       return null;

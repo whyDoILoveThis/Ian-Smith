@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import LoaderSpinSmall from "../sub/LoaderSpinSmall";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 
 type TimelineHoverImageViewerProps = {
   images: Screenshot[] | string[];
@@ -19,8 +20,8 @@ export default function TimelineHoverImageViewer({
   // Normalize to array of URLs
   const urls: string[] =
     images.length > 0 && typeof images[0] === "string"
-      ? (images as string[])
-      : (images as Screenshot[]).map((img) => img.url);
+      ? (images as string[]).map(toProxyUrl)
+      : (images as Screenshot[]).map((img) => toProxyUrl(img.url));
 
   const flashCounter = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);

@@ -1,6 +1,7 @@
 import { ID } from "appwrite";
 import { storage, tablesDB } from "./appwriteConfig";
 import { appwrImgUp, appwrImgDelete } from "./appwrStorage";
+import { toProxyUrl } from "@/lib/appwriteProxy";
 
 interface SaveSkillParams {
   file: File;
@@ -54,7 +55,7 @@ export async function appwrFetchSkills(): Promise<Skill[]> {
       const skillData = {
         $id: row.$id,
         text: row.text || row.data?.text,
-        url: row.url || row.data?.url,
+        url: toProxyUrl(row.url || row.data?.url),
         fileId: row.fileId || row.data?.fileId,
       };
       console.log("📝 Single skill data:", skillData);
