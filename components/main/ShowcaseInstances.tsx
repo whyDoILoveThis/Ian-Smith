@@ -293,6 +293,25 @@ export function TimelineShowcaseCard() {
    ═══════════════════════════════════════════════════════════ */
 
 export function PerformanceOverlayShowcaseCard() {
+  const handleThrottle = () => {
+    // Gradually increase per-frame blocking over 3s so FPS drops smoothly to 0.
+    const DURATION = 3000;
+    const start = performance.now();
+    function throttleFrame() {
+      const elapsed = performance.now() - start;
+      if (elapsed > DURATION) return;
+      const progress = elapsed / DURATION; // 0 → 1
+      // Block an increasing chunk of each frame: 0ms → 120ms
+      const blockMs = progress * 120;
+      const blockEnd = performance.now() + blockMs;
+      while (performance.now() < blockEnd) {
+        // busy-wait
+      }
+      requestAnimationFrame(throttleFrame);
+    }
+    requestAnimationFrame(throttleFrame);
+  };
+
   return (
     <ShowcaseCard
       categoryLabel="Dev Tool"
@@ -338,8 +357,8 @@ export function PerformanceOverlayShowcaseCard() {
         ctaShadow:
           "shadow-xl shadow-emerald-500/25 transition-shadow hover:shadow-emerald-500/40",
       }}
-      ctaLabel="View Source"
-      ctaHref="https://github.com"
+      ctaLabel="Emulate Throttle"
+      onCtaClick={handleThrottle}
       techNote="Built with requestAnimationFrame, PerformanceObserver & LoAF API — zero dependencies"
       heroSlot={<PerfOverlayHero />}
       backgroundSlot={

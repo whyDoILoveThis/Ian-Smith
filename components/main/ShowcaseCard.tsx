@@ -89,7 +89,8 @@ export interface ShowcaseCardProps {
   features: FeatureBadgeItem[];
   theme: ShowcaseTheme;
   ctaLabel: string;
-  ctaHref: string;
+  ctaHref?: string;
+  onCtaClick?: () => void;
   techNote?: string;
   heroSlot?: ReactNode;
   backgroundSlot?: ReactNode;
@@ -104,6 +105,7 @@ export default function ShowcaseCard({
   theme,
   ctaLabel,
   ctaHref,
+  onCtaClick,
   techNote,
   heroSlot,
   backgroundSlot,
@@ -236,9 +238,10 @@ export default function ShowcaseCard({
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
               {techNote && <p className="text-sm text-white/30">{techNote}</p>}
 
-              <Link href={ctaHref}>
+              {onCtaClick ? (
                 <motion.button
                   type="button"
+                  onClick={onCtaClick}
                   className={`group relative px-8 py-3.5 rounded-2xl text-sm font-bold cursor-pointer ${theme.ctaBg} ${theme.ctaText} ${theme.ctaShadow}`}
                   variants={ctaVariants}
                   whileHover="hover"
@@ -261,7 +264,34 @@ export default function ShowcaseCard({
                     </svg>
                   </span>
                 </motion.button>
-              </Link>
+              ) : ctaHref ? (
+                <Link href={ctaHref}>
+                  <motion.button
+                    type="button"
+                    className={`group relative px-8 py-3.5 rounded-2xl text-sm font-bold cursor-pointer ${theme.ctaBg} ${theme.ctaText} ${theme.ctaShadow}`}
+                    variants={ctaVariants}
+                    whileHover="hover"
+                    whileTap="tap"
+                  >
+                    <span className="flex items-center gap-2">
+                      {ctaLabel}
+                      <svg
+                        className="w-4 h-4 transition-transform group-hover:translate-x-0.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+                        />
+                      </svg>
+                    </span>
+                  </motion.button>
+                </Link>
+              ) : null}
             </div>
           </div>
         </motion.div>

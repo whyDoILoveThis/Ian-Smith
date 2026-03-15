@@ -331,6 +331,11 @@ export default function PerformanceOverlay({
   const [minimized, setMinimized] = useState(false);
   const [pos, setPos] = useState({ x: -1, y: 12 }); // x = -1 means "not yet loaded"
   const [showDetails, setShowDetails] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [detached, setDetached] = useState(false);
+  const [showBoundsToast, setShowBoundsToast] = useState(false);
+  const boundsToastShown = useRef(false);
+  const boundsToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialized = useRef(false);
 
   const dragging = useRef(false);
@@ -380,12 +385,20 @@ export default function PerformanceOverlay({
     saveState({ x: pos.x, y: pos.y, minimized });
   }, [pos.x, pos.y, minimized, contained]);
 
+  // Cleanup bounds toast timer
+  useEffect(() => {
+    return () => {
+      if (boundsToastTimer.current) clearTimeout(boundsToastTimer.current);
+    };
+  }, []);
+
   /* ── Drag logic (pointer events — works for mouse + touch) ─────── */
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     e.preventDefault();
     dragging.current = true;
     didDrag.current = false;
+    boundsToastShown.current = false;
     const el = overlayRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -398,34 +411,76 @@ export default function PerformanceOverlay({
       if (!dragging.current) return;
       didDrag.current = true;
 
-      if (contained) {
+      if (contained && !detached) {
         // Clamp within the parent container
         const el = overlayRef.current;
         const parent = el?.parentElement;
         if (!el || !parent) return;
         const pRect = parent.getBoundingClientRect();
         const elRect = el.getBoundingClientRect();
-        const x = Math.min(
-          Math.max(0, e.clientX - pRect.left - dragOffset.current.x),
-          pRect.width - elRect.width,
-        );
-        const y = Math.min(
-          Math.max(0, e.clientY - pRect.top - dragOffset.current.y),
-          pRect.height - elRect.height,
-        );
+        const maxX = pRect.width - elRect.width;
+        const maxY = pRect.height - elRect.height;
+        const rawX = e.clientX - pRect.left - dragOffset.current.x;
+        const rawY = e.clientY - pRect.top - dragOffset.current.y;
+        const x = Math.min(Math.max(0, rawX), maxX);
+        const y = Math.min(Math.max(0, rawY), maxY);
+
+        // Show toast when drag hits container bounds
+        if (
+          !boundsToastShown.current &&
+          (rawX < 0 || rawY < 0 || rawX > maxX || rawY > maxY)
+        ) {
+          boundsToastShown.current = true;
+          setShowBoundsToast(true);
+          if (boundsToastTimer.current) clearTimeout(boundsToastTimer.current);
+          boundsToastTimer.current = setTimeout(
+            () => setShowBoundsToast(false),
+            4000,
+          );
+        }
+
         setPos({ x, y });
       } else {
-        const x = Math.max(0, e.clientX - dragOffset.current.x);
-        const y = Math.max(0, e.clientY - dragOffset.current.y);
+        // Fixed to viewport — clamp to screen edges
+        const el = overlayRef.current;
+        const elW = el?.offsetWidth ?? 170;
+        const elH = el?.offsetHeight ?? 40;
+        const rawX = e.clientX - dragOffset.current.x;
+        const rawY = e.clientY - dragOffset.current.y;
+        const x = Math.min(Math.max(0, rawX), window.innerWidth - elW);
+        const y = Math.min(Math.max(0, rawY), window.innerHeight - elH);
         setPos({ x, y });
       }
     },
-    [contained],
+    [contained, detached],
   );
 
   const onPointerUp = useCallback(() => {
     dragging.current = false;
   }, []);
+
+  const handleDetach = useCallback(() => {
+    const el = overlayRef.current;
+    const parent = el?.parentElement;
+    if (!el || !parent) return;
+    const pRect = parent.getBoundingClientRect();
+    setPos({ x: pRect.left + pos.x, y: pRect.top + pos.y });
+    setDetached(true);
+    setShowBoundsToast(false);
+  }, [pos.x, pos.y]);
+
+  const handleReattach = useCallback(() => {
+    const el = overlayRef.current;
+    const parent = el?.parentElement;
+    if (!el || !parent) return;
+    const pRect = parent.getBoundingClientRect();
+    const elW = el.offsetWidth;
+    const elH = el.offsetHeight;
+    const x = Math.min(Math.max(0, pos.x - pRect.left), pRect.width - elW);
+    const y = Math.min(Math.max(0, pos.y - pRect.top), pRect.height - elH);
+    setPos({ x, y });
+    setDetached(false);
+  }, [pos.x, pos.y]);
 
   if (!isEnabled) return null;
 
@@ -440,7 +495,9 @@ export default function PerformanceOverlay({
         ref={setOverlayRef}
         style={{
           ...minimizedBtn,
-          ...(contained ? { position: "absolute" as const, zIndex: 10 } : {}),
+          ...(contained && !detached
+            ? { position: "absolute" as const, zIndex: 10 }
+            : {}),
           left: pos.x,
           top: pos.y,
         }}
@@ -485,7 +542,9 @@ export default function PerformanceOverlay({
       ref={setOverlayRef}
       style={{
         ...baseOverlay,
-        ...(contained ? { position: "absolute" as const, zIndex: 10 } : {}),
+        ...(contained && !detached
+          ? { position: "absolute" as const, zIndex: 10 }
+          : {}),
         left: pos.x,
         top: pos.y,
         minWidth: 170,
@@ -512,6 +571,35 @@ export default function PerformanceOverlay({
       <div style={headerRow}>
         <div style={titleStyle}>perf</div>
         <div style={headerBtns}>
+          {contained && detached && (
+            <button
+              style={{
+                ...infoBtn,
+                color: "#22c55e",
+                borderColor: "rgba(34, 197, 94, 0.3)",
+                fontSize: 10,
+              }}
+              onClick={handleReattach}
+              aria-label="Reattach to showcase"
+              title="Reattach to showcase"
+            >
+              ↩
+            </button>
+          )}
+          <button
+            style={{
+              ...infoBtn,
+              color: showHelp ? "#38bdf8" : "rgba(255, 255, 255, 0.4)",
+              borderColor: showHelp
+                ? "rgba(56, 189, 248, 0.3)"
+                : "rgba(255, 255, 255, 0.15)",
+              fontSize: 10,
+            }}
+            onClick={() => setShowHelp((v) => !v)}
+            aria-label="Show overlay help"
+          >
+            ?
+          </button>
           <button
             style={{
               ...infoBtn,
@@ -554,6 +642,91 @@ export default function PerformanceOverlay({
           {metrics.longTaskCount}
         </span>
       </div>
+
+      {/* Help panel */}
+      {showHelp && (
+        <div style={{ ...detailPanel, maxHeight: "50vh" }}>
+          <div style={detailTitle}>about this overlay</div>
+          <div
+            style={{
+              fontSize: 9,
+              lineHeight: 1.6,
+              color: "rgba(255,255,255,0.55)",
+            }}
+          >
+            <div style={{ marginBottom: 6 }}>
+              <span style={{ color: "#38bdf8", fontWeight: 600 }}>FPS</span> —
+              Frames per second measured via requestAnimationFrame.
+              <span style={{ color: "#22c55e" }}>Green</span> ≥45,{" "}
+              <span style={{ color: "#eab308" }}>Yellow</span> 20-44,{" "}
+              <span style={{ color: "#ef4444" }}>Red</span> &lt;20.
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              <span style={{ color: "#38bdf8", fontWeight: 600 }}>
+                Long Tasks
+              </span>{" "}
+              — Tasks blocking the main thread for &gt;50ms.
+            </div>
+            <div
+              style={{
+                marginBottom: 6,
+                borderLeft: "2px solid rgba(56,189,248,0.3)",
+                paddingLeft: 6,
+              }}
+            >
+              <span style={{ color: "#f59e0b", fontWeight: 600 }}>
+                Script attribution
+              </span>{" "}
+              requires the <span style={{ color: "#fff" }}>LoAF API</span>{" "}
+              (Chromium 123+). Many tasks show no script because they are caused
+              by:
+            </div>
+            <div style={{ paddingLeft: 10, marginBottom: 6 }}>
+              •{" "}
+              <span style={{ color: "rgba(255,255,255,0.7)" }}>
+                Layout / style / paint
+              </span>{" "}
+              — pure rendering, no JS involved
+              <br />•{" "}
+              <span style={{ color: "rgba(255,255,255,0.7)" }}>
+                Garbage collection
+              </span>{" "}
+              — V8 memory cleanup
+              <br />•{" "}
+              <span style={{ color: "rgba(255,255,255,0.7)" }}>
+                Browser internals
+              </span>{" "}
+              — HTML parsing, script compilation
+              <br />•{" "}
+              <span style={{ color: "rgba(255,255,255,0.7)" }}>
+                Cross-origin scripts
+              </span>{" "}
+              — need{" "}
+              <code style={{ fontSize: 8, color: "#f59e0b" }}>
+                Timing-Allow-Origin
+              </code>{" "}
+              header
+            </div>
+            <div
+              style={{
+                marginBottom: 6,
+                borderLeft: "2px solid rgba(56,189,248,0.3)",
+                paddingLeft: 6,
+              }}
+            >
+              For these tasks, the overlay infers context from the LoAF timing
+              breakdown (render start, blocking duration, style &amp; layout
+              timing, UI event triggers).
+            </div>
+            <div
+              style={{ color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}
+            >
+              For the deepest detail, use Chrome DevTools → Performance tab to
+              record a trace.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Long task detail panel */}
       {showDetails && (
@@ -600,13 +773,107 @@ export default function PerformanceOverlay({
                     </div>
                   ))
                 ) : (
-                  <div style={noAttribution}>
-                    No script attribution available
+                  <div style={scriptRow}>
+                    {task.context && (
+                      <div>
+                        <span style={scriptLabel}>what </span>
+                        <span style={{ ...scriptValue, color: "#f59e0b" }}>
+                          {task.context}
+                        </span>
+                      </div>
+                    )}
+                    {task.blockingDuration != null &&
+                      task.blockingDuration > 0 && (
+                        <div>
+                          <span style={scriptLabel}>blocking </span>
+                          <span style={scriptValue}>
+                            {task.blockingDuration} ms
+                          </span>
+                        </div>
+                      )}
+                    {task.renderStart != null && (
+                      <div>
+                        <span style={scriptLabel}>render@</span>
+                        <span style={scriptValue}>
+                          {Math.round(task.renderStart - task.startTime)} ms in
+                        </span>
+                      </div>
+                    )}
+                    {task.firstUIEventTimestamp != null &&
+                      task.firstUIEventTimestamp > 0 && (
+                        <div>
+                          <span style={scriptLabel}>trigger </span>
+                          <span style={scriptValue}>user interaction</span>
+                        </div>
+                      )}
+                    {task.containerType && (
+                      <div>
+                        <span style={scriptLabel}>container </span>
+                        <span style={scriptValue}>
+                          {task.containerType}
+                          {task.containerSrc
+                            ? ` — ${shortenURL(task.containerSrc)}`
+                            : ""}
+                        </span>
+                      </div>
+                    )}
+                    {!task.context &&
+                      !task.blockingDuration &&
+                      !task.renderStart &&
+                      !task.containerType && (
+                        <div style={{ ...noAttribution, paddingLeft: 0 }}>
+                          No attribution (browser internal)
+                        </div>
+                      )}
                   </div>
                 )}
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Bounds toast — appears when drag hits container edge */}
+      {showBoundsToast && contained && !detached && (
+        <div
+          style={{
+            marginTop: 6,
+            padding: "5px 8px",
+            background: "rgba(56, 189, 248, 0.08)",
+            border: "1px solid rgba(56, 189, 248, 0.2)",
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            pointerEvents: "auto",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 9,
+              color: "rgba(255,255,255,0.5)",
+              lineHeight: 1.3,
+            }}
+          >
+            Detach to move freely
+          </span>
+          <button
+            onClick={handleDetach}
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              color: "#38bdf8",
+              background: "rgba(56, 189, 248, 0.15)",
+              border: "1px solid rgba(56, 189, 248, 0.3)",
+              borderRadius: 4,
+              padding: "2px 8px",
+              cursor: "pointer",
+              whiteSpace: "nowrap" as const,
+            }}
+          >
+            Detach
+          </button>
         </div>
       )}
     </div>

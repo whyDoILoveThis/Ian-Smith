@@ -30,6 +30,63 @@ function extractScripts(entry: PerformanceEntry): LongTaskScript[] {
 }
 
 /**
+ * Infer a human-readable context hint for a long task based on its metadata.
+ */
+function inferContext(entry: PerformanceEntry, scripts: LongTaskScript[]): string {
+  const e = entry as unknown as Record<string, unknown>;
+
+  // If we have script attribution, no guessing needed
+  if (scripts.length > 0) return "";
+
+  const duration = entry.duration;
+  const renderStart = typeof e.renderStart === "number" ? e.renderStart : 0;
+  const styleAndLayoutStart = typeof e.styleAndLayoutStart === "number" ? e.styleAndLayoutStart : 0;
+  const startTime = entry.startTime;
+  const firstUI = typeof e.firstUIEventTimestamp === "number" ? e.firstUIEventTimestamp : 0;
+
+  // Detect if it was triggered by user interaction
+  const fromUI = firstUI > 0;
+
+  // Calculate rendering vs scripting time
+  if (renderStart > 0 && startTime > 0) {
+    const scriptTime = renderStart - startTime;
+    const renderTime = duration - (renderStart - startTime);
+    const layoutTime = styleAndLayoutStart > 0 && renderStart > 0
+      ? duration - (styleAndLayoutStart - startTime) - (renderStart > styleAndLayoutStart ? 0 : renderTime)
+      : 0;
+
+    if (scriptTime < 5 && renderTime > 30) {
+      return fromUI ? "UI event → heavy render/paint" : "Style/layout/paint (no JS)";
+    }
+    if (scriptTime > renderTime * 2) {
+      return fromUI ? "UI event → script execution" : "Script execution (no attribution)";
+    }
+    if (styleAndLayoutStart > 0 && (styleAndLayoutStart - startTime) > duration * 0.5) {
+      return fromUI ? "UI event → layout thrash" : "Forced layout/reflow";
+    }
+    if (renderTime > scriptTime) {
+      return fromUI ? "UI event → render-heavy" : "Render-heavy task";
+    }
+  }
+
+  // longtask API fallback: use name for origin context
+  const name = entry.name;
+  if (name === "cross-origin-ancestor" || name === "cross-origin-descendant" || name === "cross-origin-unreachable") {
+    return "Cross-origin iframe/embed";
+  }
+  if (name === "same-origin-ancestor" || name === "same-origin-descendant" || name === "same-origin") {
+    return "Same-origin frame";
+  }
+  if (name === "multiple-contexts") {
+    return "Multiple browsing contexts";
+  }
+
+  if (fromUI) return "User interaction handler";
+
+  return "Browser internal task";
+}
+
+/**
  * Shorten a full URL to just filename + line:col when possible.
  * e.g. "http://localhost:3000/_next/static/chunks/app/page-abc123.js" → "page-abc123.js"
  */
@@ -135,12 +192,19 @@ export function usePerformanceMetrics(
         for (const entry of list.getEntries()) {
           if (entry.duration < 50) continue; // only count >50ms
           longTaskCount.current++;
+          const e = entry as unknown as Record<string, unknown>;
+          const scripts = extractScripts(entry);
           pushTask({
             duration: Math.round(entry.duration * 10) / 10,
             startTime: Math.round(entry.startTime * 10) / 10,
             name: entry.name || "long-animation-frame",
             timestamp: Date.now(),
-            scripts: extractScripts(entry),
+            scripts,
+            blockingDuration: typeof e.blockingDuration === "number" ? Math.round(e.blockingDuration * 10) / 10 : undefined,
+            renderStart: typeof e.renderStart === "number" ? Math.round(e.renderStart * 10) / 10 : undefined,
+            styleAndLayoutStart: typeof e.styleAndLayoutStart === "number" ? Math.round(e.styleAndLayoutStart * 10) / 10 : undefined,
+            firstUIEventTimestamp: typeof e.firstUIEventTimestamp === "number" ? e.firstUIEventTimestamp : undefined,
+            context: inferContext(entry, scripts),
           });
         }
       });
@@ -158,12 +222,27 @@ export function usePerformanceMetrics(
           const entries = list.getEntries();
           longTaskCount.current += entries.length;
           for (const entry of entries) {
+            // Extract TaskAttributionTiming from longtask entries
+            const attr = (entry as unknown as Record<string, unknown>).attribution;
+            let containerType: string | undefined;
+            let containerSrc: string | undefined;
+            let containerName: string | undefined;
+            if (Array.isArray(attr) && attr.length > 0) {
+              const a = attr[0] as Record<string, unknown>;
+              containerType = typeof a.containerType === "string" && a.containerType ? a.containerType : undefined;
+              containerSrc = typeof a.containerSrc === "string" && a.containerSrc ? a.containerSrc : undefined;
+              containerName = typeof a.containerName === "string" && a.containerName ? a.containerName : undefined;
+            }
             pushTask({
               duration: Math.round(entry.duration * 10) / 10,
               startTime: Math.round(entry.startTime * 10) / 10,
               name: entry.name || "self",
               timestamp: Date.now(),
               scripts: [],
+              containerType,
+              containerSrc,
+              containerName,
+              context: inferContext(entry, []),
             });
           }
         });
