@@ -31,12 +31,46 @@ export function IconCreatorApp() {
   const [activeTab, setActiveTab] = useState<TabId>("about");
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-orange-50/30 to-gray-100 dark:from-gray-950/80 dark:via-[#0a0a0a] dark:to-black">
+    <div className="min-h-screen w-full">
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-50 via-orange-50/30 to-gray-100 dark:from-gray-950/70 dark:via-[#0a0a0a] dark:to-black" />
       {/* Decorative background orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-orange-500/10 dark:bg-orange-500/5 blur-3xl" />
-        <div className="absolute top-1/2 -left-40 w-80 h-80 rounded-full bg-orange-400/10 dark:bg-orange-600/5 blur-3xl" />
-        <div className="absolute -bottom-40 right-1/3 w-72 h-72 rounded-full bg-amber-400/10 dark:bg-amber-500/5 blur-3xl" />
+        <motion.div
+          className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-orange-500/10 dark:bg-orange-500/10 blur-3xl"
+          animate={{
+            y: [0, 300, 0],
+            x: [0, -200, 0],
+          }}
+          transition={{
+            duration: 35,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+        <motion.div
+          className="absolute top-1/2 -left-40 w-80 h-80 rounded-full bg-orange-400/10 dark:bg-orange-600/10 blur-3xl"
+          animate={{
+            y: [0, -100, 0],
+            x: [0, 200, 0],
+          }}
+          transition={{
+            duration: 22,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+        <motion.div
+          className="absolute -bottom-40 right-1/3 w-72 h-72 rounded-full bg-amber-400/10 dark:bg-amber-500/10 blur-3xl"
+          animate={{
+            y: [0, 200, 0],
+            x: [0, 250, 0],
+          }}
+          transition={{
+            duration: 29,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
       </div>
 
       <div className="relative z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">

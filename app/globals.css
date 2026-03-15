@@ -103,6 +103,19 @@ h1 {
   z-index: 1000004;
 }
 
+/* Modal overlay styles - lower z-index of nav and footer when modal is open */
+body.modal-open nav,
+body.modal-open footer,
+body.modal-open article {
+  z-index: 1 !important;
+  position: relative;
+}
+
+body.modal-open nav[class*="zz-top"],
+body.modal-open footer {
+  pointer-events: none;
+}
+
 .zz-10 {
   z-index: 10;
 }

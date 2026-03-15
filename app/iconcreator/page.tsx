@@ -21,7 +21,8 @@ export const metadata = {
 export default function IconCreatorPage() {
   return (
     <NavFooterThemeProvider theme="black">
-      <div className="min-h-screen bg-white dark:bg-black">
+      <div className="w-full min-h-screen">
+        <div className="absolute inset-0 bg-white dark:bg-black" />
         <Nav />
         <IconCreatorApp />
         <Footer />

@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ANIM } from "../lib/constants";
+import { useEffect, useState } from "react";
 
 interface PreviewModalProps {
   isOpen: boolean;
@@ -31,11 +32,36 @@ export function PreviewModal({
   onConfirm,
   onCancel,
 }: PreviewModalProps) {
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+      document.body.classList.add("modal-open");
+
+      const preventScroll = (e: Event) => {
+        e.preventDefault();
+      };
+
+      document.addEventListener("touchmove", preventScroll, { passive: false });
+      window.addEventListener("wheel", preventScroll, { passive: false });
+
+      return () => {
+        document.removeEventListener("touchmove", preventScroll);
+        window.removeEventListener("wheel", preventScroll);
+      };
+    } else {
+      document.documentElement.style.overflow = "auto";
+      document.body.style.overflow = "auto";
+      document.body.classList.remove("modal-open");
+    }
+  }, [isOpen]);
+
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[1000004] flex items-center justify-center p-4 pointer-events-auto"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -43,7 +69,7 @@ export function PreviewModal({
         >
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[1000002] pointer-events-auto"
             onClick={!isGenerating ? onCancel : undefined}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -53,7 +79,7 @@ export function PreviewModal({
           {/* Modal content */}
           <motion.div
             className={cn(
-              "relative z-10 w-full max-w-2xl rounded-2xl overflow-hidden",
+              "relative z-[1000004] w-11/12 sm:w-full sm:max-w-2xl rounded-2xl overflow-hidden flex flex-col max-h-[90vh] pointer-events-auto",
               "bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl",
               "border border-white/30 dark:border-orange-500/15",
               "shadow-2xl shadow-black/20",
@@ -64,7 +90,7 @@ export function PreviewModal({
             transition={ANIM.spring}
           >
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 flex-shrink-0">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Preview Result
               </h3>
@@ -73,8 +99,8 @@ export function PreviewModal({
               </p>
             </div>
 
-            {/* Image previews */}
-            <div className="p-6">
+            {/* Image previews — scrollable */}
+            <div className="px-4 sm:px-6 py-6 overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Original */}
                 <div className="space-y-2">
@@ -87,7 +113,7 @@ export function PreviewModal({
                       <img
                         src={originalDataUrl}
                         alt="Original"
-                        className="w-full h-auto max-h-[300px] object-contain"
+                        className="w-full h-auto max-h-[250px] sm:max-h-[300px] object-contain"
                       />
                     )}
                   </div>
@@ -116,7 +142,7 @@ export function PreviewModal({
                       <img
                         src={processedDataUrl}
                         alt="Processed"
-                        className="w-full h-auto max-h-[300px] object-contain"
+                        className="w-full h-auto max-h-[250px] sm:max-h-[300px] object-contain"
                       />
                     )}
                   </div>
@@ -125,42 +151,45 @@ export function PreviewModal({
             </div>
 
             {/* Actions */}
-            <div className="px-6 py-4 border-t border-gray-200/50 dark:border-gray-700/50 flex gap-3 justify-end">
+            <div className="px-4 sm:px-6 py-4 border-t border-gray-200/50 dark:border-gray-700/50 flex gap-3 justify-end flex-shrink-0">
               <button
                 onClick={onCancel}
                 disabled={isGenerating}
                 className={cn(
-                  "px-5 py-2.5 rounded-xl text-sm font-medium transition-all",
+                  "px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-sm font-medium transition-all",
                   "bg-gray-100 text-gray-700 hover:bg-gray-200",
                   "dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700",
-                  "disabled:opacity-50 disabled:cursor-not-allowed",
+                  "disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
                 )}
               >
                 <span className="flex items-center gap-2">
                   <X className="w-4 h-4" />
-                  Cancel
+                  <span className="hidden sm:inline">Cancel</span>
                 </span>
               </button>
               <button
                 onClick={onConfirm}
                 disabled={isGenerating}
                 className={cn(
-                  "px-5 py-2.5 rounded-xl text-sm font-medium transition-all",
+                  "px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-sm font-medium transition-all",
                   "bg-orange-500 text-white hover:bg-orange-600",
                   "shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40",
-                  "disabled:opacity-70 disabled:cursor-not-allowed",
+                  "disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap",
                 )}
               >
                 <span className="flex items-center gap-2">
                   {isGenerating ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating ICO...
+                      <span className="hidden sm:inline">
+                        Generating ICO...
+                      </span>
                     </>
                   ) : (
                     <>
                       <Check className="w-4 h-4" />
-                      Confirm & Generate
+                      <span className="hidden sm:inline">Confirm &</span>{" "}
+                      Generate
                     </>
                   )}
                 </span>

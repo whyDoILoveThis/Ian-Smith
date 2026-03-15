@@ -47,7 +47,7 @@ const Footer = () => {
     >
       {!isBlack && <div className="h-64 opacity-0" />}
       <footer
-        className={`${!isBlack ? "absolute bottom-0 left-0" : "relative"} w-full flex flex-col gap-6 items-center px-6 py-8 border-t ${isBlack ? "border-gray-200 dark:border-gray-800/50 bg-slate-50 dark:bg-black" : "border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-950"}`}
+        className={`relative w-full flex flex-col gap-6 items-center px-6 py-8 border-t ${isBlack ? "border-gray-200 dark:border-gray-800/50 bg-slate-50 dark:bg-black" : "border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-950"}`}
       >
         <div
           className={`absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent ${isBlack ? "via-gray-400 dark:via-gray-700" : "via-slate-400 dark:via-slate-500"} to-transparent`}
@@ -61,6 +61,7 @@ const Footer = () => {
               key={link.name}
               linkText={link.name}
               linkHref={link.href}
+              linkTarget={link.target}
             />
           ))}
         </div>

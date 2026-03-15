@@ -7,16 +7,18 @@ import { useNavFooterTheme } from "../main/NavFooterTheme";
 interface Props {
   linkText: string;
   linkHref: string;
+  linkTarget?: string;
 }
 
-const LinkUnderlineAnim = ({ linkText, linkHref }: Props) => {
+const LinkUnderlineAnim = ({ linkText, linkHref, linkTarget }: Props) => {
   const theme = useNavFooterTheme();
   const isBlack = theme === "black";
 
   return (
     <Link
       href={linkHref}
-      target="_blank"
+      target={linkTarget}
+      rel={linkTarget === "_blank" ? "noopener noreferrer" : undefined}
       className={`text-[13px] place-self-start font-medium tracking-wide ${isBlack ? "dark:text-gray-400 text-gray-500" : "dark:text-slate-400 text-slate-500"} relative group`}
     >
       <span

@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+
+// Routes where scroll buttons should be hidden
+const HIDDEN_ROUTES = ["/", "/iconcreator"];
 
 export default function ScrollJumpButtons() {
+  const pathname = usePathname();
   const [showTop, setShowTop] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
+  const isHidden = !HIDDEN_ROUTES.includes(pathname);
 
   useEffect(() => {
     const check = () => {
@@ -24,6 +30,10 @@ export default function ScrollJumpButtons() {
       window.removeEventListener("resize", check);
     };
   }, []);
+
+  if (isHidden) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 zz-top flex flex-row gap-1.5">
