@@ -26,6 +26,7 @@ export type Message = {
   imageFileId?: string;
   videoUrl?: string;
   videoFileId?: string;
+  mediaBucket?: "1" | "2";
   createdAt?: number | object;
   decryptionFailed?: boolean;
   replyToId?: string;

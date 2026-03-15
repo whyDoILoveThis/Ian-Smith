@@ -430,6 +430,14 @@ export default function AIContentSugestions() {
     }
   }, [chatMessages.sendError, showToast, chatMessages]);
 
+  // Surface fallback-bucket upload notification as toast
+  useEffect(() => {
+    if (chatMessages.lastUploadUsedFallback) {
+      showToast("Uploaded to fallback bucket", "info");
+      chatMessages.setLastUploadUsedFallback(false);
+    }
+  }, [chatMessages.lastUploadUsedFallback, showToast, chatMessages]);
+
   // Surface session errors as toasts
   useEffect(() => {
     if (session.error) {

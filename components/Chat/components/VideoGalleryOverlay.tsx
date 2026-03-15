@@ -24,6 +24,7 @@ type VideoItem = {
   slotId: "1" | "2";
   timestamp?: number | object;
   messageId: string;
+  mediaBucket?: "1" | "2";
 };
 
 export function VideoGalleryOverlay({
@@ -38,7 +39,6 @@ export function VideoGalleryOverlay({
   );
   const [swipeOffset, setSwipeOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [bucketMap, setBucketMap] = useState<Record<string, string>>({});
 
   // Extract all videos from messages
   const videos: VideoItem[] = useMemo(() => {
@@ -51,37 +51,16 @@ export function VideoGalleryOverlay({
         slotId: msg.slotId,
         timestamp: msg.createdAt,
         messageId: msg.id,
+        mediaBucket: msg.mediaBucket,
       }))
       .reverse(); // newest first
   }, [messages]);
 
-  // Detect which bucket each video lives in via the X-Bucket header
+  // Notify parent if any video came from the fallback bucket
   useEffect(() => {
-    let cancelled = false;
-    const detect = async () => {
-      const map: Record<string, string> = {};
-      await Promise.all(
-        videos.map(async (video) => {
-          try {
-            const res = await fetch(video.videoUrl, { method: "HEAD" });
-            const bucket = res.headers.get("X-Bucket");
-            if (bucket) map[video.messageId] = bucket;
-          } catch {
-            // ignore
-          }
-        }),
-      );
-      if (!cancelled) {
-        setBucketMap(map);
-        if (Object.values(map).some((b) => b === "2")) {
-          onFallbackDetected?.();
-        }
-      }
-    };
-    if (videos.length > 0) detect();
-    return () => {
-      cancelled = true;
-    };
+    if (videos.some((v) => v.mediaBucket === "2")) {
+      onFallbackDetected?.();
+    }
   }, [videos, onFallbackDetected]);
 
   // Close on Escape, arrow nav in fullscreen
@@ -254,15 +233,15 @@ export function VideoGalleryOverlay({
                 {video.senderInitial}
               </div>
               {/* Bucket badge */}
-              {bucketMap[video.messageId] && (
+              {video.mediaBucket && (
                 <div
                   className={`absolute top-1 right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shadow-lg ring-1 ring-black/30 ${
-                    bucketMap[video.messageId] === "1"
+                    video.mediaBucket === "1"
                       ? "bg-cyan-500 text-white"
                       : "bg-amber-500 text-white"
                   }`}
                 >
-                  {bucketMap[video.messageId]}
+                  {video.mediaBucket}
                 </div>
               )}
             </button>

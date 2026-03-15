@@ -19,6 +19,7 @@ export function useChatMessages(
   const [isSending, setIsSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [lastUploadUsedFallback, setLastUploadUsedFallback] = useState(false);
 
   const typingTimeoutRef = useRef<number | null>(null);
   const localPulseKeyRef = useRef(0);
@@ -146,8 +147,10 @@ export function useChatMessages(
           msgData.imageUrl = upload.url;
           msgData.imageFileId = upload.fileId;
         }
+        msgData.mediaBucket = useFallbackBucket ? "2" : "1";
         
         await push(msgRef, msgData);
+        if (useFallbackBucket) setLastUploadUsedFallback(true);
       } catch {
         setSendError("Media failed to send.");
         throw new Error("Media failed to send.");
@@ -266,6 +269,7 @@ export function useChatMessages(
           sender: screenName.trim(),
           videoUrl: upload.url,
           videoFileId: upload.fileId,
+          mediaBucket: useFallbackBucket ? "2" : "1",
           isEphemeral: true,
           createdAt: { ".sv": "timestamp" },
         };
@@ -275,6 +279,7 @@ export function useChatMessages(
         }
 
         await push(msgRef, msgData);
+        if (useFallbackBucket) setLastUploadUsedFallback(true);
       } catch {
         setSendError("Ephemeral video failed to send.");
         throw new Error("Ephemeral video failed to send.");
@@ -419,6 +424,8 @@ export function useChatMessages(
     isSending,
     sendError,
     setSendError,
+    lastUploadUsedFallback,
+    setLastUploadUsedFallback,
     replyingTo,
     setReplyingTo,
     handleSendMessage,
