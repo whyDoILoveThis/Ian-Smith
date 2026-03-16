@@ -51,8 +51,14 @@ export async function appwrImgUp(
     console.log("appwrite proxy url: ", url, "bucket:", targetBucket === chatBucketId ? "primary" : "fallback");
 
     return { fileId, url };
-  } catch (error) {
-    console.error("Appwrite Upload Error:", error);
+  } catch (error: any) {
+    const bucket = targetBucket === chatBucketId ? "chat (NYC)" : "CMS (Frankfurt)";
+    console.error(
+      `Appwrite Upload Error [${bucket}]:`,
+      error?.message || error,
+      error?.code ? `(code ${error.code})` : "",
+      error?.type || "",
+    );
     throw error;
   }
 }

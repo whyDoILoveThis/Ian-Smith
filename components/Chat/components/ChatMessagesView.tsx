@@ -21,13 +21,43 @@ import { toProxyUrl } from "@/lib/appwriteProxy";
 import { DrawingPlayer } from "./DrawingPlayer";
 
 /** Returns true when the string contains ONLY emoji (and optional whitespace). */
+/** Returns true when the string contains ONLY emoji (and optional whitespace). */
+const emojiSegmentRe = new RegExp(
+  "^(?:\\p{Emoji_Presentation}|\\p{Emoji}\\uFE0F)(?:\\u200D(?:\\p{Emoji_Presentation}|\\p{Emoji}\\uFE0F))*$",
+  "u",
+);
 function isEmojiOnly(text: string): boolean {
   const stripped = text.replace(/\s/g, "");
   if (!stripped) return false;
-  return [...stripped].every((ch) => {
+  // Use Intl.Segmenter to split into grapheme clusters, then check each one.
+  if (typeof Intl !== "undefined" && Intl.Segmenter) {
+    const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
+    for (const { segment } of segmenter.segment(stripped)) {
+      if (!emojiSegmentRe.test(segment)) return false;
+    }
+    return true;
+  }
+  // Fallback: use codepoint iteration to strip known emoji ranges
+  const codepoints = Array.from(stripped);
+  const remaining = codepoints.filter((ch) => {
     const cp = ch.codePointAt(0)!;
-    return cp >= 0x1f600 && cp <= 0x1f64f;
+    // Common emoji blocks
+    if (cp >= 0x1f600 && cp <= 0x1f64f) return false; // Emoticons
+    if (cp >= 0x1f300 && cp <= 0x1f5ff) return false; // Misc Symbols & Pictographs
+    if (cp >= 0x1f680 && cp <= 0x1f6ff) return false; // Transport & Map
+    if (cp >= 0x1f900 && cp <= 0x1f9ff) return false; // Supplemental Symbols
+    if (cp >= 0x1fa00 && cp <= 0x1fa6f) return false; // Chess Symbols
+    if (cp >= 0x1fa70 && cp <= 0x1faff) return false; // Symbols Extended-A
+    if (cp >= 0x2600 && cp <= 0x26ff) return false; // Misc Symbols
+    if (cp >= 0x2700 && cp <= 0x27bf) return false; // Dingbats
+    if (cp >= 0xfe00 && cp <= 0xfe0f) return false; // Variation Selectors
+    if (cp === 0x200d) return false; // ZWJ
+    if (cp === 0x20e3) return false; // Combining Enclosing Keycap
+    if (cp >= 0xe0020 && cp <= 0xe007f) return false; // Tags
+    if (cp >= 0x1f1e0 && cp <= 0x1f1ff) return false; // Regional Indicators (flags)
+    return true;
   });
+  return remaining.length === 0;
 }
 
 type ChatMessagesViewProps = {
