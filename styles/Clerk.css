@@ -485,3 +485,7 @@
 .cl-phone-input[data-open="true"] {
     z-index: 100000000 !important;
 }
+
+.cl-internal-1dauvpw {
+  display: none !important;
+}
