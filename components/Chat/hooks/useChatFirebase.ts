@@ -422,7 +422,7 @@ export function useChatFirebase(
     const gcRef = ref(rtdb, `${roomPath}/gradientColors`);
     const unsub = onValue(gcRef, (snap) => {
       const val = snap.val();
-      if (Array.isArray(val) && val.length >= 2 && val.length <= 3 && val.every((v: unknown) => typeof v === "string")) {
+      if (Array.isArray(val) && val.length >= 2 && val.length <= 10 && val.every((v: unknown) => typeof v === "string")) {
         setGradientColors(val as string[]);
       }
     });
