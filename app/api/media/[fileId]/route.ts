@@ -56,10 +56,8 @@ export async function GET(
         return new NextResponse(upstream.body, { status: 200, headers });
       }
 
-      // If 404, try next bucket; for other errors, stop
-      if (upstream.status !== 404) {
-        return new NextResponse(null, { status: upstream.status });
-      }
+      // Non-success — try next bucket (handles 404, 402 bandwidth exceeded, 403, etc.)
+      continue;
     } catch {
       // Network error — try next bucket
       continue;
