@@ -140,6 +140,7 @@ type RoomSpotsViewProps = {
   onUseFallbackBucketChange?: (useFallback: boolean) => void;
   onFallbackDetected?: () => void;
   isAdmin?: boolean;
+  onScrollToMessage?: (messageId: string) => void;
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -179,6 +180,7 @@ export function RoomSpotsView({
   onUseFallbackBucketChange,
   onFallbackDetected,
   isAdmin = false,
+  onScrollToMessage,
 }: RoomSpotsViewProps) {
   // ── State ──────────────────────────────────────────────────────────────
   const [leaveConfirmText, setLeaveConfirmText] = useState("");
@@ -1517,6 +1519,10 @@ export function RoomSpotsView({
           themeColors={themeColors}
           onClose={() => setShowPhotoGallery(false)}
           onFallbackDetected={onFallbackDetected}
+          onGoToMessage={(messageId) => {
+            setShowPhotoGallery(false);
+            onScrollToMessage?.(messageId);
+          }}
         />
       )}
 

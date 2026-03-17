@@ -1111,6 +1111,10 @@ export default function AIContentSugestions() {
               firebaseWithSlot.handleUseFallbackBucketChange
             }
             onFallbackDetected={handleFallbackDetected}
+            onScrollToMessage={(id) => {
+              setActiveTab("chat");
+              setScrollToMessageId(id + ":" + Date.now());
+            }}
           />
         ) : (
           <>
