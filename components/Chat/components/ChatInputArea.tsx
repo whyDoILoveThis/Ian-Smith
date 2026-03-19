@@ -79,6 +79,18 @@ const GENERATE_OPTIONS: MagicOption[] = [
     icon: "🥵",
     mode: "generate-sexy",
   },
+  {
+    id: "gen-ultra-sexy",
+    label: "Ultra Sexy Reply",
+    icon: "🔞",
+    mode: "generate-ultra-sexy",
+  },
+  {
+    id: "gen-sexy-tweaker",
+    label: "Sexy Tweaker",
+    icon: "🤪",
+    mode: "generate-sexy-tweaker",
+  },
 ];
 
 /** Options shown when the input field already has text (rewrite) */
@@ -139,6 +151,18 @@ const REWRITE_OPTIONS: MagicOption[] = [
     label: "Make It Sexy",
     icon: "🥵",
     mode: "rewrite-sexy",
+  },
+  {
+    id: "rw-ultra-sexy",
+    label: "Make It Ultra Sexy",
+    icon: "🔞",
+    mode: "rewrite-ultra-sexy",
+  },
+  {
+    id: "rw-sexy-tweaker",
+    label: "Sexy Tweaker",
+    icon: "🤪",
+    mode: "rewrite-sexy-tweaker",
   },
   {
     id: "rw-shorter",
@@ -239,6 +263,7 @@ export function ChatInputArea({
   const [showMagicMenu, setShowMagicMenu] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [replyLength, setReplyLength] = useState<ReplyLength>("medium");
+  const [customPrompt, setCustomPrompt] = useState("");
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   /** Suppress the click that fires on pointer-up after a successful hold */
@@ -313,6 +338,7 @@ export function ChatInputArea({
           mode,
           length: replyLength,
         };
+        if (customPrompt.trim()) body.customPrompt = customPrompt.trim();
         const currentText = messageText.trim();
         if (currentText.length > 0) body.currentText = currentText;
 
@@ -338,6 +364,7 @@ export function ChatInputArea({
       messageText,
       handleTypingChange,
       replyLength,
+      customPrompt,
     ],
   );
 
@@ -615,6 +642,17 @@ export function ChatInputArea({
                       ? "Rewrite with AI"
                       : "Generate with AI"}
                   </p>
+                </div>
+
+                {/* Custom prompt input */}
+                <div className="px-3 py-2 border-b border-white/10">
+                  <input
+                    type="text"
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    placeholder="Custom instructions (optional)"
+                    className="w-full rounded-md bg-white/5 px-2 py-1 text-[11px] text-white placeholder-neutral-500 outline-none focus:bg-white/10 transition"
+                  />
                 </div>
 
                 {/* Length selector */}
