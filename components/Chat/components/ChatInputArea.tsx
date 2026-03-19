@@ -264,6 +264,7 @@ export function ChatInputArea({
   const [isGenerating, setIsGenerating] = useState(false);
   const [replyLength, setReplyLength] = useState<ReplyLength>("medium");
   const [customPrompt, setCustomPrompt] = useState("");
+  const [creativity, setCreativity] = useState(3);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   /** Suppress the click that fires on pointer-up after a successful hold */
@@ -337,6 +338,7 @@ export function ChatInputArea({
           mySlotId: slotId,
           mode,
           length: replyLength,
+          creativity,
         };
         if (customPrompt.trim()) body.customPrompt = customPrompt.trim();
         const currentText = messageText.trim();
@@ -364,6 +366,7 @@ export function ChatInputArea({
       messageText,
       handleTypingChange,
       replyLength,
+      creativity,
       customPrompt,
     ],
   );
@@ -653,6 +656,27 @@ export function ChatInputArea({
                     placeholder="Custom instructions (optional)"
                     className="w-full rounded-md bg-white/5 px-2 py-1 text-[11px] text-white placeholder-neutral-500 outline-none focus:bg-white/10 transition"
                   />
+                </div>
+
+                {/* Creativity selector */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-white/10">
+                  <span className="text-[9px] text-neutral-500 mr-1">
+                    Creativity
+                  </span>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setCreativity(n)}
+                      className={`w-6 h-6 rounded-full text-[10px] font-bold transition ${
+                        creativity === n
+                          ? "bg-purple-600 text-white"
+                          : "bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Length selector */}

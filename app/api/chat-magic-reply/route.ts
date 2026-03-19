@@ -195,6 +195,7 @@ export async function POST(req: Request) {
       mode = "generate",
       length: lengthPref = "medium",
       customPrompt,
+      creativity,
     } = await req.json();
 
     if (!recentMessages || !Array.isArray(recentMessages)) {
@@ -255,6 +256,10 @@ export async function POST(req: Request) {
       systemPrompt.content += ` Additional guidance from the user: ${customPrompt.trim()}`;
     }
 
+    // Map creativity 1-5 to temperature: 1→0.2 (close to your text), 5→1.2 (very creative)
+    const creativityLevel = typeof creativity === "number" ? Math.max(1, Math.min(5, creativity)) : 3;
+    const temperature = [0.2, 0.4, 0.7, 1.0, 1.2][creativityLevel - 1];
+
     const messages = [systemPrompt, ...conversationMessages];
 
     const proxied = await fetch(
@@ -268,7 +273,7 @@ export async function POST(req: Request) {
         body: JSON.stringify({
           model: "groq/compound",
           messages,
-          temperature: 0.7,
+          temperature,
         }),
       },
     );
