@@ -79,6 +79,7 @@ type ChatMessagesViewProps = {
     videoFileId?: string,
   ) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onColorChange?: (messageId: string, color: string | null) => void;
   scrollToMessageId?: string | null;
   /** Are there older messages on the server that haven't been fetched yet? */
   hasMoreOnServer?: boolean;
@@ -107,6 +108,7 @@ export function ChatMessagesView({
   onDeleteEphemeralMessage,
   onDeleteMessage,
   onReact,
+  onColorChange,
   scrollToMessageId,
   hasMoreOnServer = false,
   loadOlderFromServer,
@@ -645,20 +647,26 @@ export function ChatMessagesView({
                 } ${
                   isMine
                     ? `${
-                        chatTheme === "gradient" ? "" : themeColors.bg
+                        chatTheme === "gradient" && !msg.bgColor
+                          ? ""
+                          : msg.bgColor
+                            ? ""
+                            : themeColors.bg
                       } ${themeColors.text} rounded-br-none`
-                    : "bg-white/10 text-white rounded-bl-none"
+                    : `${msg.bgColor ? "" : "bg-white/10"} text-white rounded-bl-none`
                 }`}
                 style={
-                  isMine &&
-                  chatTheme === "gradient" &&
-                  gradientColors.length >= 2
-                    ? {
-                        background: `linear-gradient(to bottom, ${gradientColors.join(", ")})`,
-                        backgroundAttachment: "fixed",
-                        backgroundSize: "100% 100vh",
-                      }
-                    : undefined
+                  msg.bgColor
+                    ? { background: msg.bgColor }
+                    : isMine &&
+                        chatTheme === "gradient" &&
+                        gradientColors.length >= 2
+                      ? {
+                          background: `linear-gradient(to bottom, ${gradientColors.join(", ")})`,
+                          backgroundAttachment: "fixed",
+                          backgroundSize: "100% 100vh",
+                        }
+                      : undefined
                 }
                 onTouchStart={(e) => {
                   handleSwipeStart(e, msg, isMine);
@@ -732,6 +740,8 @@ export function ChatMessagesView({
                   currentReactions={msg.reactions}
                   slotId={slotId}
                   onReact={onReact}
+                  currentBgColor={msg.bgColor}
+                  onColorChange={onColorChange}
                 />
 
                 {/* Reply preview if this is a reply */}

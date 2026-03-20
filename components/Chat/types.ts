@@ -41,6 +41,8 @@ export type Message = {
   disappearedFor?: { "1"?: boolean; "2"?: boolean };
   // Reactions
   reactions?: Record<string, { "1"?: boolean; "2"?: boolean }>;
+  // Per-message background color override
+  bgColor?: string;
   // Drawing message fields
   drawingData?: RecordedDrawingStroke[];
   drawingDuration?: number;

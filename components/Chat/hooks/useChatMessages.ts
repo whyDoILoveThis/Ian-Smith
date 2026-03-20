@@ -423,6 +423,19 @@ export function useChatMessages(
     [slotId, roomPath, messages],
   );
 
+  // Set or clear a per-message background color
+  const setMessageBgColor = useCallback(
+    async (messageId: string, color: string | null) => {
+      const bgRef = ref(rtdb, `${roomPath}/messages/${messageId}/bgColor`);
+      try {
+        await set(bgRef, color);
+      } catch (err) {
+        console.error("Failed to set message bg color:", err);
+      }
+    },
+    [roomPath],
+  );
+
   return {
     messageText,
     setMessageText,
@@ -448,5 +461,6 @@ export function useChatMessages(
     deleteEphemeralMessage,
     deleteMessage,
     toggleReaction,
+    setMessageBgColor,
   };
 }

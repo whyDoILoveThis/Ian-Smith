@@ -436,6 +436,8 @@ type EmojiReactionPickerProps = {
   currentReactions?: Record<string, { "1"?: boolean; "2"?: boolean }>;
   slotId: "1" | "2" | null;
   onReact: (messageId: string, emoji: string) => void;
+  currentBgColor?: string;
+  onColorChange?: (messageId: string, color: string | null) => void;
 };
 
 export function EmojiReactionPicker({
@@ -444,10 +446,13 @@ export function EmojiReactionPicker({
   currentReactions,
   slotId,
   onReact,
+  currentBgColor,
+  onColorChange,
 }: EmojiReactionPickerProps) {
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [textReactionValue, setTextReactionValue] = useState("");
   const [textReactionColor, setTextReactionColor] = useState(
     TEXT_REACTION_COLORS[0],
@@ -458,6 +463,7 @@ export function EmojiReactionPicker({
   const fullPickerRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
   const textPanelRef = useRef<HTMLDivElement>(null);
+  const colorPanelRef = useRef<HTMLDivElement>(null);
 
   // Nudge a popup element so it stays fully inside the viewport
   const clampToViewport = useCallback((el: HTMLDivElement | null) => {
@@ -506,9 +512,16 @@ export function EmojiReactionPicker({
     }
   }, [showTextInput, clampToViewport]);
 
+  useLayoutEffect(() => {
+    if (showColorPicker) {
+      clampToViewport(colorPanelRef.current);
+    }
+  }, [showColorPicker, clampToViewport]);
+
   // Close on click outside
   useEffect(() => {
-    if (!showQuickBar && !showFullPicker && !showTextInput) return;
+    if (!showQuickBar && !showFullPicker && !showTextInput && !showColorPicker)
+      return;
     const handler = (e: MouseEvent | TouchEvent) => {
       if (
         containerRef.current &&
@@ -517,6 +530,7 @@ export function EmojiReactionPicker({
         setShowQuickBar(false);
         setShowFullPicker(false);
         setShowTextInput(false);
+        setShowColorPicker(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -525,7 +539,7 @@ export function EmojiReactionPicker({
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("touchstart", handler);
     };
-  }, [showQuickBar, showFullPicker, showTextInput]);
+  }, [showQuickBar, showFullPicker, showTextInput, showColorPicker]);
 
   const handleEmojiClick = useCallback(
     (emoji: string) => {
@@ -542,8 +556,6 @@ export function EmojiReactionPicker({
     const key = encodeTextReaction(trimmed, textReactionColor);
     onReact(messageId, key);
     setTextReactionValue("");
-    setShowTextInput(false);
-    setShowQuickBar(false);
   }, [textReactionValue, textReactionColor, messageId, onReact]);
 
   const handleTriggerClick = useCallback(
@@ -610,68 +622,94 @@ export function EmojiReactionPicker({
       </button>
 
       {/* Quick reaction bar */}
-      {showQuickBar && !showFullPicker && !showTextInput && (
-        <div
-          ref={quickBarRef}
-          className={`pointer-events-auto absolute z-50 bottom-8 w-72 flex flex-wrap items-center gap-2 rounded-3xl bg-neutral-900/95 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg shadow-black/40 ${
-            isMine ? "left-0" : "right-0"
-          }`}
-          style={{ whiteSpace: "nowrap" }}
-        >
-          {QUICK_EMOJIS.map((emoji) => (
+      {showQuickBar &&
+        !showFullPicker &&
+        !showTextInput &&
+        !showColorPicker && (
+          <div
+            ref={quickBarRef}
+            className={`pointer-events-auto absolute z-50 bottom-8 w-72 flex flex-wrap items-center gap-2 rounded-3xl bg-neutral-900/95 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg shadow-black/40 ${
+              isMine ? "left-0" : "right-0"
+            }`}
+            style={{ whiteSpace: "nowrap" }}
+          >
+            {QUICK_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEmojiClick(emoji);
+                }}
+                className={`emoji w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 hover:scale-125 transition-all duration-150 text-white ${
+                  hasReacted(emoji) ? "bg-white/15 scale-110" : ""
+                }`}
+              >
+                {emoji}
+              </button>
+            ))}
+            {/* T button to open text reaction input */}
             <button
-              key={emoji}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleEmojiClick(emoji);
+                setShowTextInput(true);
               }}
-              className={`emoji w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 hover:scale-125 transition-all duration-150 text-white ${
-                hasReacted(emoji) ? "bg-white/15 scale-110" : ""
-              }`}
+              className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
+              title="Text reaction"
             >
-              {emoji}
+              <span
+                className="text-xs font-bold leading-none"
+                style={{ fontFamily: "serif" }}
+              >
+                T
+              </span>
             </button>
-          ))}
-          {/* T button to open text reaction input */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowTextInput(true);
-            }}
-            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
-            title="Text reaction"
-          >
-            <span
-              className="text-xs font-bold leading-none"
-              style={{ fontFamily: "serif" }}
+            {/* Plus button to open full picker */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowFullPicker(true);
+              }}
+              className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
             >
-              T
-            </span>
-          </button>
-          {/* Plus button to open full picker */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowFullPicker(true);
-            }}
-            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-        </div>
-      )}
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            {/* Color button to change message bg */}
+            {onColorChange && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowColorPicker(true);
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
+                title="Message color"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="4" fill="currentColor" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
 
       {/* Text reaction input panel */}
       {showTextInput && (
@@ -770,6 +808,87 @@ export function EmojiReactionPicker({
                 Send
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Color picker panel */}
+      {showColorPicker && onColorChange && (
+        <div
+          ref={colorPanelRef}
+          className={`pointer-events-auto absolute z-50 bottom-8 w-56 rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-xl shadow-black/50 ${
+            isMine ? "left-0" : "right-0"
+          }`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowColorPicker(false);
+              }}
+              className="text-xs text-neutral-400 hover:text-white transition-colors flex items-center gap-1"
+            >
+              <svg
+                className="w-3 h-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back
+            </button>
+            <span className="text-xs text-neutral-300 font-medium">
+              Bubble Color
+            </span>
+          </div>
+          {/* Color grid */}
+          <div className="flex flex-wrap gap-2 p-3">
+            {/* Clear / default button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onColorChange(messageId, null);
+              }}
+              className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                !currentBgColor
+                  ? "border-white scale-110"
+                  : "border-white/20 hover:border-white/50"
+              }`}
+              title="Default"
+            >
+              <svg
+                className="w-3.5 h-3.5 text-neutral-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            {TEXT_REACTION_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onColorChange(messageId, color);
+                }}
+                className={`w-7 h-7 rounded-full border-2 transition-all ${
+                  currentBgColor === color
+                    ? "border-white scale-110"
+                    : "border-white/20 hover:border-white/50"
+                }`}
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
           </div>
         </div>
       )}

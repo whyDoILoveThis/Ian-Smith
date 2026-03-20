@@ -204,7 +204,8 @@ export function useChatFirebase(
               existing.seenReceiptBy !== fresh.seenReceiptBy ||
               existing.reactions !== fresh.reactions ||
               existing.viewedBy !== fresh.viewedBy ||
-              existing.disappearedFor !== fresh.disappearedFor
+              existing.disappearedFor !== fresh.disappearedFor ||
+              existing.bgColor !== fresh.bgColor
             )) {
               if (!patchedTail) {
                 // Lazily copy just the tail
@@ -217,6 +218,7 @@ export function useChatFirebase(
                 reactions: fresh.reactions,
                 viewedBy: fresh.viewedBy,
                 disappearedFor: fresh.disappearedFor,
+                bgColor: fresh.bgColor,
               };
               changed = true;
             }

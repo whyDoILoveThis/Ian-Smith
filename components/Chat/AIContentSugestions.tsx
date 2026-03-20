@@ -1133,6 +1133,7 @@ export default function AIContentSugestions() {
               onDeleteEphemeralMessage={chatMessages.deleteEphemeralMessage}
               onDeleteMessage={chatMessages.deleteMessage}
               onReact={chatMessages.toggleReaction}
+              onColorChange={chatMessages.setMessageBgColor}
               scrollToMessageId={scrollToMessageId}
               hasMoreOnServer={firebaseWithSlot.hasMoreOnServer}
               loadOlderFromServer={firebaseWithSlot.loadOlderFromServer}
