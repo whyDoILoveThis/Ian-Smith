@@ -43,6 +43,9 @@ export default function RootLayout({
           <meta name="mobile-web-app-capable" content="yes" />
         </head>
         <body
+          style={{
+            fontFamily: `${inter.style.fontFamily}, 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif`,
+          }}
           className={`relative min-h-screen
            ${inter.className}`}
         >
