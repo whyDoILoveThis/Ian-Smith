@@ -205,7 +205,8 @@ export function useChatFirebase(
               existing.reactions !== fresh.reactions ||
               existing.viewedBy !== fresh.viewedBy ||
               existing.disappearedFor !== fresh.disappearedFor ||
-              existing.bgColor !== fresh.bgColor
+              existing.bgColor !== fresh.bgColor ||
+              existing.bgEmojis !== fresh.bgEmojis
             )) {
               if (!patchedTail) {
                 // Lazily copy just the tail
@@ -219,6 +220,7 @@ export function useChatFirebase(
                 viewedBy: fresh.viewedBy,
                 disappearedFor: fresh.disappearedFor,
                 bgColor: fresh.bgColor,
+                bgEmojis: fresh.bgEmojis,
               };
               changed = true;
             }

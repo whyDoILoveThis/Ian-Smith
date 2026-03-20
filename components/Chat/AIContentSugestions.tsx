@@ -1134,6 +1134,7 @@ export default function AIContentSugestions() {
               onDeleteMessage={chatMessages.deleteMessage}
               onReact={chatMessages.toggleReaction}
               onColorChange={chatMessages.setMessageBgColor}
+              onBgEmojisChange={chatMessages.setMessageBgEmojis}
               scrollToMessageId={scrollToMessageId}
               hasMoreOnServer={firebaseWithSlot.hasMoreOnServer}
               loadOlderFromServer={firebaseWithSlot.loadOlderFromServer}

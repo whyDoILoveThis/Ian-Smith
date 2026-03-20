@@ -436,6 +436,19 @@ export function useChatMessages(
     [roomPath],
   );
 
+  // Set or clear per-message background emojis
+  const setMessageBgEmojis = useCallback(
+    async (messageId: string, data: { emojis: string[]; density: number } | null) => {
+      const bgRef = ref(rtdb, `${roomPath}/messages/${messageId}/bgEmojis`);
+      try {
+        await set(bgRef, data);
+      } catch (err) {
+        console.error("Failed to set message bg emojis:", err);
+      }
+    },
+    [roomPath],
+  );
+
   return {
     messageText,
     setMessageText,
@@ -462,5 +475,6 @@ export function useChatMessages(
     deleteMessage,
     toggleReaction,
     setMessageBgColor,
+    setMessageBgEmojis,
   };
 }

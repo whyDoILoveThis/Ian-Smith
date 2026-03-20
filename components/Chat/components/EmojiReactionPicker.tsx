@@ -438,6 +438,11 @@ type EmojiReactionPickerProps = {
   onReact: (messageId: string, emoji: string) => void;
   currentBgColor?: string;
   onColorChange?: (messageId: string, color: string | null) => void;
+  currentBgEmojis?: { emojis: string[]; density: number };
+  onBgEmojisChange?: (
+    messageId: string,
+    data: { emojis: string[]; density: number } | null,
+  ) => void;
 };
 
 export function EmojiReactionPicker({
@@ -448,11 +453,20 @@ export function EmojiReactionPicker({
   onReact,
   currentBgColor,
   onColorChange,
+  currentBgEmojis,
+  onBgEmojisChange,
 }: EmojiReactionPickerProps) {
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showBgEmojiPicker, setShowBgEmojiPicker] = useState(false);
+  const [bgEmojiList, setBgEmojiList] = useState<string[]>(
+    currentBgEmojis?.emojis ?? [],
+  );
+  const [bgEmojiDensity, setBgEmojiDensity] = useState(
+    currentBgEmojis?.density ?? 8,
+  );
   const [textReactionValue, setTextReactionValue] = useState("");
   const [textReactionColor, setTextReactionColor] = useState(
     TEXT_REACTION_COLORS[0],
@@ -464,6 +478,7 @@ export function EmojiReactionPicker({
   const textInputRef = useRef<HTMLInputElement>(null);
   const textPanelRef = useRef<HTMLDivElement>(null);
   const colorPanelRef = useRef<HTMLDivElement>(null);
+  const bgEmojiPanelRef = useRef<HTMLDivElement>(null);
 
   // Nudge a popup element so it stays fully inside the viewport
   const clampToViewport = useCallback((el: HTMLDivElement | null) => {
@@ -518,9 +533,21 @@ export function EmojiReactionPicker({
     }
   }, [showColorPicker, clampToViewport]);
 
+  useLayoutEffect(() => {
+    if (showBgEmojiPicker) {
+      clampToViewport(bgEmojiPanelRef.current);
+    }
+  }, [showBgEmojiPicker, clampToViewport]);
+
   // Close on click outside
   useEffect(() => {
-    if (!showQuickBar && !showFullPicker && !showTextInput && !showColorPicker)
+    if (
+      !showQuickBar &&
+      !showFullPicker &&
+      !showTextInput &&
+      !showColorPicker &&
+      !showBgEmojiPicker
+    )
       return;
     const handler = (e: MouseEvent | TouchEvent) => {
       if (
@@ -531,6 +558,7 @@ export function EmojiReactionPicker({
         setShowFullPicker(false);
         setShowTextInput(false);
         setShowColorPicker(false);
+        setShowBgEmojiPicker(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -539,7 +567,13 @@ export function EmojiReactionPicker({
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("touchstart", handler);
     };
-  }, [showQuickBar, showFullPicker, showTextInput, showColorPicker]);
+  }, [
+    showQuickBar,
+    showFullPicker,
+    showTextInput,
+    showColorPicker,
+    showBgEmojiPicker,
+  ]);
 
   const handleEmojiClick = useCallback(
     (emoji: string) => {
@@ -561,15 +595,22 @@ export function EmojiReactionPicker({
   const handleTriggerClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (showFullPicker || showTextInput) {
+      if (
+        showFullPicker ||
+        showTextInput ||
+        showColorPicker ||
+        showBgEmojiPicker
+      ) {
         setShowFullPicker(false);
         setShowTextInput(false);
+        setShowColorPicker(false);
+        setShowBgEmojiPicker(false);
         setShowQuickBar(false);
       } else {
         setShowQuickBar((prev) => !prev);
       }
     },
-    [showFullPicker, showTextInput],
+    [showFullPicker, showTextInput, showColorPicker, showBgEmojiPicker],
   );
 
   // Check if current user already reacted with an emoji
@@ -582,7 +623,10 @@ export function EmojiReactionPicker({
   );
 
   return (
-    <div ref={containerRef} className="absolute inset-0 pointer-events-none">
+    <div
+      ref={containerRef}
+      className="absolute inset-0 pointer-events-none z-[2]"
+    >
       {/* Smiley trigger button - inside bottom corner */}
       <button
         ref={triggerBtnRef}
@@ -625,7 +669,8 @@ export function EmojiReactionPicker({
       {showQuickBar &&
         !showFullPicker &&
         !showTextInput &&
-        !showColorPicker && (
+        !showColorPicker &&
+        !showBgEmojiPicker && (
           <div
             ref={quickBarRef}
             className={`pointer-events-auto absolute z-50 bottom-8 w-72 flex flex-wrap items-center gap-2 rounded-3xl bg-neutral-900/95 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg shadow-black/40 ${
@@ -888,6 +933,187 @@ export function EmojiReactionPicker({
                 style={{ backgroundColor: color }}
                 title={color}
               />
+            ))}
+          </div>
+          {/* Bg emoji section */}
+          {onBgEmojisChange && (
+            <div className="px-3 pb-3 border-t border-white/10 pt-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500">
+                  Bg Emojis
+                </span>
+                {bgEmojiList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setBgEmojiList([]);
+                      setBgEmojiDensity(8);
+                      onBgEmojisChange(messageId, null);
+                    }}
+                    className="text-[10px] text-neutral-500 hover:text-red-400 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                {bgEmojiList.map((emoji, i) => (
+                  <button
+                    key={`${emoji}-${i}`}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const updated = bgEmojiList.filter((_, j) => j !== i);
+                      setBgEmojiList(updated);
+                      if (updated.length > 0) {
+                        onBgEmojisChange(messageId, {
+                          emojis: updated,
+                          density: bgEmojiDensity,
+                        });
+                      } else {
+                        onBgEmojisChange(messageId, null);
+                      }
+                    }}
+                    className="emoji w-7 h-7 flex items-center justify-center rounded-md bg-white/10 hover:bg-red-500/30 transition-colors text-sm"
+                    title="Remove"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+                {bgEmojiList.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowBgEmojiPicker(true);
+                      setShowColorPicker(false);
+                    }}
+                    className="w-7 h-7 flex items-center justify-center rounded-md border border-dashed border-white/20 hover:border-white/50 hover:bg-white/5 transition-all text-neutral-400 hover:text-white"
+                    title="Add emoji"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {bgEmojiList.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-neutral-500 shrink-0">
+                    Density
+                  </span>
+                  <input
+                    type="range"
+                    min={3}
+                    max={100}
+                    value={bgEmojiDensity}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const val = Number(e.target.value);
+                      setBgEmojiDensity(val);
+                      onBgEmojisChange(messageId, {
+                        emojis: bgEmojiList,
+                        density: val,
+                      });
+                    }}
+                    className="flex-1 h-1 accent-emerald-500 cursor-pointer"
+                  />
+                  <span className="text-[10px] text-neutral-400 w-5 text-right">
+                    {bgEmojiDensity}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bg emoji picker (full emoji grid to add bg emojis) */}
+      {showBgEmojiPicker && onBgEmojisChange && (
+        <div
+          ref={bgEmojiPanelRef}
+          className={`pointer-events-auto absolute z-50 bottom-8 w-72 max-h-64 overflow-y-auto rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-xl shadow-black/50 ${
+            isMine ? "left-0" : "right-0"
+          }`}
+        >
+          <div className="sticky top-0 z-10 bg-neutral-900/95 backdrop-blur-md border-b border-white/10 px-3 py-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowBgEmojiPicker(false);
+                setShowColorPicker(true);
+              }}
+              className="text-xs text-neutral-400 hover:text-white transition-colors flex items-center gap-1"
+            >
+              <svg
+                className="w-3 h-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back
+            </button>
+            <span className="text-xs text-neutral-500">
+              Add Bg Emoji ({bgEmojiList.length}/10)
+            </span>
+          </div>
+          <div className="p-2">
+            {EMOJI_CATEGORIES.map((cat) => (
+              <div key={cat.label} className="mb-2">
+                <p className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1 px-1">
+                  {cat.label}
+                </p>
+                <div className="grid grid-cols-8 gap-0.5">
+                  {cat.emojis.map((emoji) => {
+                    const alreadyAdded = bgEmojiList.includes(emoji);
+                    return (
+                      <button
+                        key={emoji}
+                        type="button"
+                        disabled={bgEmojiList.length >= 10 && !alreadyAdded}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          let updated: string[];
+                          if (alreadyAdded) {
+                            updated = bgEmojiList.filter((e) => e !== emoji);
+                          } else {
+                            if (bgEmojiList.length >= 10) return;
+                            updated = [...bgEmojiList, emoji];
+                          }
+                          setBgEmojiList(updated);
+                          if (updated.length > 0) {
+                            onBgEmojisChange(messageId, {
+                              emojis: updated,
+                              density: bgEmojiDensity,
+                            });
+                          } else {
+                            onBgEmojisChange(messageId, null);
+                          }
+                        }}
+                        className={`emoji w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 hover:scale-110 transition-all text-base ${
+                          alreadyAdded
+                            ? "bg-emerald-500/20 ring-1 ring-emerald-500"
+                            : ""
+                        } ${bgEmojiList.length >= 10 && !alreadyAdded ? "opacity-30 cursor-not-allowed" : ""}`}
+                      >
+                        {emoji}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         </div>

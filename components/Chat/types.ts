@@ -43,6 +43,8 @@ export type Message = {
   reactions?: Record<string, { "1"?: boolean; "2"?: boolean }>;
   // Per-message background color override
   bgColor?: string;
+  // Per-message background emoji decoration
+  bgEmojis?: { emojis: string[]; density: number };
   // Drawing message fields
   drawingData?: RecordedDrawingStroke[];
   drawingDuration?: number;
