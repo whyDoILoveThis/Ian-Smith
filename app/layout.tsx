@@ -14,6 +14,7 @@ import { MainWrap } from "@/components/main/MainWrap";
 import { BreadcrumbProvider } from "@/breadcrumb";
 import PerformanceOverlayRouteCheckRenderer from "@/components/PerformanceOverlay/PerformanceOverlayRoute";
 import ScrollJumpButtons from "@/components/main/ScrollJumpButtons";
+import VersionGuard from "@/components/main/VersionGuard";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -53,6 +54,7 @@ export default function RootLayout({
             <BreadcrumbProvider disabled>
               <PerformanceOverlayRouteCheckRenderer />
               <ScrollJumpButtons />
+              <VersionGuard />
               <SignedIn>
                 <ConnectivityWrapper>
                   <MainWrap>
