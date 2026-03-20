@@ -80,30 +80,67 @@ function hashString(str: string): number {
   return h;
 }
 
-function generateBgEmojiPositions(
-  messageId: string,
-  emojis: string[],
-  density: number,
-) {
-  const rand = seededRandom(hashString(messageId));
-  const items: {
-    emoji: string;
-    top: number;
-    left: number;
-    size: number;
-    rotation: number;
-  }[] = [];
-  for (let i = 0; i < density; i++) {
-    items.push({
-      emoji: emojis[Math.floor(rand() * emojis.length)],
-      top: rand() * 100,
-      left: rand() * 100,
-      size: 10 + rand() * 18, // 10px to 28px
-      rotation: rand() * 360,
-    });
-  }
-  return items;
-}
+/** Canvas-based bg emoji overlay — renders all emojis to a single <canvas> instead of N DOM nodes */
+const BgEmojiOverlay = React.memo(function BgEmojiOverlay({
+  messageId,
+  emojis,
+  density,
+}: {
+  messageId: string;
+  emojis: string[];
+  density: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    if (!parent) return;
+
+    const w = parent.offsetWidth;
+    const h = parent.offsetHeight;
+    if (w === 0 || h === 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalAlpha = 0.6;
+
+    const rand = seededRandom(hashString(messageId));
+    for (let i = 0; i < density; i++) {
+      const emoji = emojis[Math.floor(rand() * emojis.length)];
+      const top = rand() * h;
+      const left = rand() * w;
+      const size = 10 + rand() * 18;
+      const rotation = rand() * 360;
+
+      ctx.save();
+      ctx.translate(left, top);
+      ctx.rotate((rotation * Math.PI) / 180);
+      ctx.font = `${size}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(emoji, 0, 0);
+      ctx.restore();
+    }
+  }, [messageId, emojis, density]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl"
+      style={{ zIndex: 0 }}
+    />
+  );
+});
 
 type ChatMessagesViewProps = {
   messages: Message[];
@@ -730,30 +767,11 @@ export function ChatMessagesView({
               >
                 {/* Bg emoji overlay */}
                 {msg.bgEmojis && msg.bgEmojis.emojis.length > 0 && (
-                  <div
-                    className="emoji absolute inset-0 pointer-events-none overflow-hidden rounded-2xl"
-                    style={{ zIndex: 0 }}
-                  >
-                    {generateBgEmojiPositions(
-                      msg.id,
-                      msg.bgEmojis.emojis,
-                      msg.bgEmojis.density,
-                    ).map((item, i) => (
-                      <span
-                        key={i}
-                        className="absolute select-none opacity-60"
-                        style={{
-                          top: `${item.top}%`,
-                          left: `${item.left}%`,
-                          fontSize: `${item.size}px`,
-                          transform: `rotate(${item.rotation}deg) translate(-50%, -50%)`,
-                          lineHeight: 1,
-                        }}
-                      >
-                        {item.emoji}
-                      </span>
-                    ))}
-                  </div>
+                  <BgEmojiOverlay
+                    messageId={msg.id}
+                    emojis={msg.bgEmojis.emojis}
+                    density={msg.bgEmojis.density}
+                  />
                 )}
                 {/* Delete button (long-press) */}
                 {isMine && longPressedMsgId === msg.id && (
