@@ -256,7 +256,7 @@ function truncatePath(path: string, max = 40): string {
 export default function FirebaseRTDBTrackerOverlay({
   enabled,
 }: RTDBTrackerOverlayProps) {
-  const isEnabled = enabled ?? process.env.NODE_ENV === "development";
+  const isEnabled = enabled ?? true;
   const { metrics, resetMetrics } = useRTDBMetrics(isEnabled);
   const [minimized, setMinimized] = useState(false);
   const [pos, setPos] = useState({ x: -1, y: 12 });

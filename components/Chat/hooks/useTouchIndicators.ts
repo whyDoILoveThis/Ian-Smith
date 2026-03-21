@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useRef } from "react";
-import { ref, onValue, set, remove } from "firebase/database";
+import { ref, onValue, set, remove, update } from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 
 export type TouchIndicator = {
@@ -18,16 +18,20 @@ export type TouchIndicator = {
 };
 
 const TOUCH_DURATION = 1400; // How long touch indicator stays visible (ms)
-const THROTTLE_MS = 50; // Minimum time between touch events
+const THROTTLE_MS = 100; // Minimum time between touch events
 
 export function useTouchIndicators(slotId: "1" | "2" | null, roomPath: string) {
   const TOUCH_PATH = `${roomPath}/touches`;
   const [touches, setTouches] = useState<TouchIndicator[]>([]);
   const lastSendTimeRef = useRef(0);
-  const pendingRemovalsRef = useRef<Set<string>>(new Set());
 
-  // Listen to all touches from Firebase
+  // Listen to all touches from Firebase (only when we have a slot)
   useEffect(() => {
+    if (!slotId) {
+      setTouches([]);
+      return;
+    }
+
     const touchesRef = ref(rtdb, TOUCH_PATH);
 
     const unsubscribe = onValue(touchesRef, (snapshot) => {
@@ -39,26 +43,33 @@ export function useTouchIndicators(slotId: "1" | "2" | null, roomPath: string) {
 
       const now = Date.now();
       const touchList: TouchIndicator[] = [];
+      const staleIds: string[] = [];
 
       Object.entries(data).forEach(([id, touch]) => {
         const t = touch as TouchIndicator;
         // Only include touches that are still within the display duration
         if (now - t.timestamp < TOUCH_DURATION) {
           touchList.push({ ...t, id });
-        } else if (!pendingRemovalsRef.current.has(id)) {
-          // Clean up stale touches that weren't removed
-          pendingRemovalsRef.current.add(id);
-          remove(ref(rtdb, `${TOUCH_PATH}/${id}`)).finally(() => {
-            pendingRemovalsRef.current.delete(id);
-          });
+        } else {
+          staleIds.push(id);
         }
       });
 
       setTouches(touchList);
+
+      // Batch-remove all stale touches in a single write (avoids cascading
+      // onValue callbacks that individual remove() calls would trigger).
+      if (staleIds.length > 0) {
+        const updates: Record<string, null> = {};
+        for (const id of staleIds) {
+          updates[`${TOUCH_PATH}/${id}`] = null;
+        }
+        update(ref(rtdb), updates).catch(() => {});
+      }
     });
 
     return () => unsubscribe();
-  }, [TOUCH_PATH]);
+  }, [slotId, TOUCH_PATH]);
 
   // Send a tap event to Firebase with throttling
   const sendTap = useCallback(

@@ -58,8 +58,13 @@ export function useDrawing(slotId: "1" | "2" | null, roomPath: string) {
   // Buffer for local points during drawing
   const localPoints = useRef<{ x: number; y: number }[] | null>(null);
 
-  // Listen to all strokes from Firebase
+  // Listen to all strokes from Firebase (only when we have a slot)
   useEffect(() => {
+    if (!slotId) {
+      setStrokes([]);
+      return;
+    }
+
     const strokesRef = ref(rtdb, DRAWING_PATH);
 
     const unsubscribe = onValue(strokesRef, (snapshot) => {
@@ -85,7 +90,7 @@ export function useDrawing(slotId: "1" | "2" | null, roomPath: string) {
     });
 
     return () => unsubscribe();
-  }, [DRAWING_PATH]);
+  }, [slotId, DRAWING_PATH]);
 
   // Start a new stroke
   const startStroke = useCallback(
