@@ -1,3 +1,5 @@
+// RTDB tracker must be imported FIRST so its WebSocket proxy is in place before Firebase connects
+import FirebaseRTDBTrackerOverlayRenderer from "@/components/FirebaseRTDBTrackerOverlay/FirebaseRTDBTrackerOverlayRenderer";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -55,6 +57,7 @@ export default function RootLayout({
               <PerformanceOverlayRouteCheckRenderer />
               <ScrollJumpButtons />
               <VersionGuard />
+              <FirebaseRTDBTrackerOverlayRenderer />
               <SignedIn>
                 <ConnectivityWrapper>
                   <MainWrap>
