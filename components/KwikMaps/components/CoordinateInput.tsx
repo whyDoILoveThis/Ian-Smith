@@ -131,7 +131,7 @@ export function CoordinateInput({ onAddCoordinate }: CoordinateInputProps) {
         {/* Submit Button */}
         <button
           type="submit"
-          className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95"
+          className="max-w-[200px] place-self-end flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95"
         >
           <Plus size={20} />
           Add Location

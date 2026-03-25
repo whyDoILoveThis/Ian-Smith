@@ -17,6 +17,7 @@ interface UseChatEngineOpts {
   applyRouteState: (state: RouteState) => void;
   chatMessages: ChatMessage[];
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  creativity: number;
 }
 
 export function useChatEngine({
@@ -24,6 +25,7 @@ export function useChatEngine({
   applyRouteState,
   chatMessages,
   setChatMessages,
+  creativity,
 }: UseChatEngineOpts) {
   const [chatInput, setChatInput] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
@@ -192,16 +194,19 @@ export function useChatEngine({
         }
         lastChatRequestTimeRef.current = Date.now();
 
-        // Build minimal stop data (name + index only — no lat/lng)
+        // Build stop data with lat/lng so AI can reason about geography
         const activeRoute = routeState.optimizedRoute ?? routeState.coordinates;
         const stops = activeRoute.map((c, i) => ({
           index: i + 1,
           name: c.name,
+          lat: Math.round(c.latitude * 10000) / 10000,
+          lng: Math.round(c.longitude * 10000) / 10000,
         }));
 
-        // Limit history to last 5 messages
+        // Scale history depth with creativity (5-15 messages)
+        const historyDepth = Math.min(5 + Math.floor(creativity), 15);
         const conversationHistory = chatMessages
-          .slice(-5)
+          .slice(-historyDepth)
           .map((m) => ({ role: m.role, content: m.content }));
 
         const response = await fetch("/api/kwikmaps-chat", {
@@ -212,6 +217,7 @@ export function useChatEngine({
             stops,
             hasRoute,
             conversationHistory,
+            creativity,
           }),
         });
 

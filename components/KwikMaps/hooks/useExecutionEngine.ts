@@ -221,9 +221,21 @@ export function executeActions(
     }
   }
 
-  // 4. OPTIMIZE_ROUTE
+  // 4. OPTIMIZE_ROUTE (supports partial optimization via lockedPrefix)
   if (optimizes.length > 0 && workingRoute.length >= 2) {
-    workingRoute = solveTSP(workingRoute);
+    const opt = optimizes[0];
+    const lockedPrefix = (opt.type === "OPTIMIZE_ROUTE" && opt.payload?.lockedPrefix) || 0;
+    if (lockedPrefix > 0 && lockedPrefix < workingRoute.length) {
+      // Keep first N stops locked, optimize only the rest
+      const locked = workingRoute.slice(0, lockedPrefix);
+      const toOptimize = workingRoute.slice(lockedPrefix);
+      if (toOptimize.length >= 2) {
+        const optimized = solveTSP(toOptimize);
+        workingRoute = [...locked, ...optimized];
+      }
+    } else {
+      workingRoute = solveTSP(workingRoute);
+    }
     changed = true;
   }
 

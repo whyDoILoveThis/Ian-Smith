@@ -22,6 +22,7 @@ import {
   Map,
   Send,
   Loader,
+  Settings,
   MessageCircle,
   Undo2,
   Redo2,
@@ -44,6 +45,7 @@ import { useUndoRedo } from "./hooks/useUndoRedo";
 import { useOptimization } from "./hooks/useOptimization";
 import { useChatEngine } from "./hooks/useChatEngine";
 import EmojiText from "@/components/ui/EmojiText";
+import { GlowOptimizeButton } from "./components/GlowOptimizeButton";
 
 export function KwikMapsContainer() {
   const searchParams = useSearchParams();
@@ -84,6 +86,7 @@ export function KwikMapsContainer() {
   } = useUndoRedo(applyRouteState);
 
   // ── Chat engine (AI + local intent, debounce/throttle, validation, execution) ──
+  const [creativity, setCreativity] = useState(5);
   const {
     chatInput,
     setChatInput,
@@ -97,6 +100,7 @@ export function KwikMapsContainer() {
     applyRouteState,
     chatMessages,
     setChatMessages,
+    creativity,
   });
 
   // ── Optimization (button-triggered, hits /api/kwikmaps-optimize) ──
@@ -150,11 +154,28 @@ export function KwikMapsContainer() {
 
   // Chat panel state (fixed bottom, draggable)
   const [chatOpen, setChatOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
   const [chatHeight, setChatHeight] = useState(340);
   const isDraggingRef = useRef(false);
   const didDragRef = useRef(false);
   const dragStartYRef = useRef(0);
   const dragStartHeightRef = useRef(0);
+
+  // Close settings dropdown on outside click
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        settingsRef.current &&
+        !settingsRef.current.contains(e.target as Node)
+      ) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [settingsOpen]);
 
   // Load shared route from URL param on mount
   useEffect(() => {
@@ -492,6 +513,52 @@ export function KwikMapsContainer() {
               disabled={isSendingChat}
               className="flex-1 px-3.5 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 focus:border-indigo-400/30 text-xs disabled:opacity-40 transition-all"
             />
+            <div className="relative" ref={settingsRef}>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((o) => !o)}
+                className={`p-2.5 rounded-xl border transition-all duration-150 ${
+                  settingsOpen
+                    ? "bg-white/10 border-indigo-400/40 text-indigo-300"
+                    : "bg-white/[0.04] border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.08]"
+                }`}
+                title="AI creativity settings"
+              >
+                <Settings size={14} />
+              </button>
+              <AnimatePresence>
+                {settingsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute bottom-12 right-0 w-56 p-3 rounded-xl bg-slate-900/95 border border-white/10 backdrop-blur-xl shadow-xl z-50"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-medium text-white/50 uppercase tracking-wider">
+                        Creativity
+                      </span>
+                      <span className="text-xs font-mono text-indigo-300">
+                        {creativity}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={creativity}
+                      onChange={(e) => setCreativity(Number(e.target.value))}
+                      className="w-full accent-indigo-500 h-1.5 cursor-pointer"
+                    />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[9px] text-white/30">Precise</span>
+                      <span className="text-[9px] text-white/30">Creative</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <button
               type="submit"
               disabled={!chatInput.trim() || isSendingChat}
@@ -737,6 +804,52 @@ export function KwikMapsContainer() {
               disabled={isSendingChat}
               className="flex-1 px-3.5 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 focus:border-indigo-400/30 text-xs disabled:opacity-40 transition-all"
             />
+            <div className="relative" ref={settingsRef}>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((o) => !o)}
+                className={`p-2.5 rounded-xl border transition-all duration-150 ${
+                  settingsOpen
+                    ? "bg-white/10 border-indigo-400/40 text-indigo-300"
+                    : "bg-white/[0.04] border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.08]"
+                }`}
+                title="AI creativity settings"
+              >
+                <Settings size={14} />
+              </button>
+              <AnimatePresence>
+                {settingsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute bottom-12 right-0 w-56 p-3 rounded-xl bg-slate-900/95 border border-white/10 backdrop-blur-xl shadow-xl z-50"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-medium text-white/50 uppercase tracking-wider">
+                        Creativity
+                      </span>
+                      <span className="text-xs font-mono text-indigo-300">
+                        {creativity}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={creativity}
+                      onChange={(e) => setCreativity(Number(e.target.value))}
+                      className="w-full accent-indigo-500 h-1.5 cursor-pointer"
+                    />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[9px] text-white/30">Precise</span>
+                      <span className="text-[9px] text-white/30">Creative</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <button
               type="submit"
               disabled={!chatInput.trim() || isSendingChat}
@@ -1025,7 +1138,7 @@ export function KwikMapsContainer() {
 
                   <div className="flex-1 chat-scroll overflow-y-auto min-h-0 space-y-3">
                     {leftTab === "add" ? (
-                      <div className="p-3 rounded-xl bg-white/[0.03] border border-white/8">
+                      <div className="p-3 rounded-xl mb-12 bg-white/[0.03] border border-white/8">
                         <CoordinateInput
                           onAddCoordinate={handleAddCoordinate}
                         />
@@ -1038,22 +1151,11 @@ export function KwikMapsContainer() {
                       />
                     )}
 
-                    <button
+                    <GlowOptimizeButton
                       onClick={handleOptimizeRoute}
-                      disabled={coordinates.length < 2 || isOptimizing}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 text-white text-sm font-bold transition-all duration-150 disabled:cursor-not-allowed shrink-0"
-                    >
-                      {isOptimizing ? (
-                        <>
-                          <Loader size={15} className="animate-spin" />{" "}
-                          Optimizing...
-                        </>
-                      ) : (
-                        <>
-                          <Navigation2 size={15} /> Map Out Route
-                        </>
-                      )}
-                    </button>
+                      isOptimizing={isOptimizing}
+                      disabled={coordinates.length < 2}
+                    />
 
                     {error && (
                       <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-400/15 text-red-300 text-xs">

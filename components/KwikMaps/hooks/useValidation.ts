@@ -149,7 +149,19 @@ function validateActionPayload(
     }
 
     case "OPTIMIZE_ROUTE": {
-      return { ok: true, action: { type: "OPTIMIZE_ROUTE" } };
+      let lockedPrefix = 0;
+      if (payload && typeof payload === "object") {
+        const p = payload as Record<string, unknown>;
+        if (typeof p.lockedPrefix === "number" && Number.isInteger(p.lockedPrefix) && p.lockedPrefix >= 0) {
+          lockedPrefix = p.lockedPrefix;
+        }
+      }
+      return {
+        ok: true,
+        action: lockedPrefix > 0
+          ? { type: "OPTIMIZE_ROUTE", payload: { lockedPrefix } }
+          : { type: "OPTIMIZE_ROUTE" },
+      };
     }
 
     default:

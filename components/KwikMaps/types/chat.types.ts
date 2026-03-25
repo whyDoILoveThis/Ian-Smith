@@ -21,8 +21,10 @@ export interface ReorderStopsPayload {
   newOrder: number[]; // 1-indexed, must list all stops exactly once
 }
 
-// OPTIMIZE_ROUTE has no payload — uses TSP algorithm server-side
-export type OptimizeRoutePayload = Record<string, never>;
+// OPTIMIZE_ROUTE payload — optional lockedPrefix to keep first N stops in place
+export interface OptimizeRoutePayload {
+  lockedPrefix?: number; // keep first N stops fixed, optimize the rest
+}
 
 export interface RouteAction {
   type: "ADD_STOP";
@@ -42,6 +44,7 @@ export interface ReorderAction {
 export interface OptimizeAction {
   type: "OPTIMIZE_ROUTE";
   payload?: OptimizeRoutePayload;
+  lockedPrefix?: number; // convenience alias
 }
 
 export type Action = RouteAction | RemoveAction | ReorderAction | OptimizeAction;
@@ -125,9 +128,10 @@ export interface LocalIntent {
 
 export interface ChatAPIRequest {
   message: string;
-  stops: { index: number; name: string }[];
+  stops: { index: number; name: string; lat: number; lng: number }[];
   hasRoute: boolean;
   conversationHistory: { role: string; content: string }[];
+  creativity: number; // 1-10
 }
 
 export interface ChatAPIResponse {
