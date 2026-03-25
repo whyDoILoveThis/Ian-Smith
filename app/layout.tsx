@@ -18,7 +18,7 @@ import PerformanceOverlayRouteCheckRenderer from "@/components/PerformanceOverla
 import ScrollJumpButtons from "@/components/main/ScrollJumpButtons";
 import VersionGuard from "@/components/main/VersionGuard";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Ian Smith",
@@ -47,10 +47,10 @@ export default function RootLayout({
         </head>
         <body
           style={{
-            fontFamily: `${inter.style.fontFamily}, 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif`,
+            fontFamily: `${inter.style.fontFamily}, 'Segoe UI Emoji', sans-serif`,
           }}
           className={`relative min-h-screen
-           ${inter.className}`}
+           ${inter.className} ${inter.variable}`}
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <BreadcrumbProvider disabled>

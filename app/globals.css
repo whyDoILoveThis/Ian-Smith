@@ -8,7 +8,8 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
-    --font-emoji: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'EmojiOne Color', sans-serif;
+    --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Symbol', sans-serif;
+    --font-emoji-fallback: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
@@ -74,13 +75,32 @@
     @apply bg-background text-foreground;
     height: auto;
     overflow-y: auto;
+    font-variant-emoji: text;          /* prevent digits/symbols from rendering as emoji */
   }
 }
 
-/* Ensure emoji characters always render with a color emoji font on all platforms */
+/* ── Hybrid emoji rendering ────────────────────────────────────────── */
+/* Primary: Segoe UI Emoji (Windows 10 flat style) when glyph exists  */
+.emoji-segoe,
 .emoji,
 [data-emoji] {
-  font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  font-family: var(--font-emoji);
+  font-variant-emoji: emoji;           /* progressive enhancement */
+}
+
+/* Fallback: Noto / Apple Color Emoji for emoji Segoe doesn't cover   */
+.emoji-fallback {
+  font-family: var(--font-emoji-fallback);
+  font-variant-emoji: emoji;
+}
+
+/* Hybrid emoji for native <input>/<textarea> where we can't inject   */
+/* <span> wrappers.  Overrides the body's font-variant-emoji:text so  */
+/* emoji keep their default (color) presentation while digits stay    */
+/* as text since their Unicode default presentation is text.          */
+.emoji-input {
+  font-family: var(--font-inter, sans-serif), 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  font-variant-emoji: normal;
 }
 
 h1 {
