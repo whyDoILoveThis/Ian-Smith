@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Message, ThemeColors } from "../types";
 import { PhoneGalleryPicker } from "./PhoneGalleryPicker";
+import EmojiText from "@/components/ui/EmojiText";
 import { toProxyUrl } from "@/lib/appwriteProxy";
 
 // Default slot colors (same as touch indicators)
@@ -527,7 +528,7 @@ export function ChatInputArea({
                 onBackspace?.();
               }
             }}
-            className={`flex-1 rounded-full border bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none disabled:opacity-50`}
+            className={`flex-1 emoji-input rounded-full border bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none disabled:opacity-50`}
           />
 
           {/* Image picker button + popup menu */}
@@ -710,7 +711,9 @@ export function ChatInputArea({
                       onClick={() => handleMagicOption(opt.mode)}
                       className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-white/90 transition hover:bg-white/10 disabled:opacity-50"
                     >
-                      <span className="text-base leading-none">{opt.icon}</span>
+                      <span className="text-base leading-none">
+                        <EmojiText>{opt.icon}</EmojiText>
+                      </span>
                       <span>{opt.label}</span>
                     </button>
                   ))}

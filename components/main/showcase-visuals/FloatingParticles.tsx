@@ -18,8 +18,8 @@ interface ParticleConfig {
 export interface FloatingParticlesProps {
   /** Number of particles (default: 10) */
   count?: number;
-  /** Emoji list — when provided, renders text particles. Omit for dot particles. */
-  emojis?: string[];
+  /** Emoji list — now accepts ReactNode[] for custom emoji rendering. Omit for dot particles. */
+  emojis?: React.ReactNode[];
   /** RGB triplet for dot particles, e.g. "139,92,246" */
   dotColorRgb?: string;
   /** Total vertical travel in px (default: 500 for emojis, 600 for dots) */
@@ -110,8 +110,7 @@ export default function FloatingParticles({
                 left: `${p.x}%`,
                 bottom: resolvedBottom,
                 fontSize: p.size,
-                fontFamily:
-                  "var(--font-emoji, 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif)",
+                // fontFamily intentionally omitted so EmojiText controls font
                 "--sc-float-y": `${-resolvedDistance}px`,
                 "--sc-float-rotate": `${resolvedRotation}deg`,
                 "--sc-float-peak": String(p.peakOpacity),

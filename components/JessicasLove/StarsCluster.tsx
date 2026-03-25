@@ -2,6 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
+import EmojiText from "@/components/ui/EmojiText";
 
 export default function StarsCluster() {
   return (
@@ -13,7 +14,7 @@ export default function StarsCluster() {
           className="text-2xl"
           style={{ display: "inline-block", margin: 6, color: "#fffae6" }}
         >
-          ✨
+          <EmojiText>{"✨"}</EmojiText>
         </motion.div>
       ))}
     </div>

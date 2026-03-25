@@ -6,6 +6,7 @@ import {
   useShowcaseInView,
   useShowcaseHasEntered,
 } from "@/components/main/ShowcaseCard";
+import EmojiText from "@/components/ui/EmojiText";
 
 /* ── Tube dimensions (match original) ── */
 const MINI_TUBE_W = 28;
@@ -399,7 +400,7 @@ function ShowcaseJar({ hasEntered }: { hasEntered: boolean }) {
               animate="center"
               exit="exit"
             >
-              {current.emoji}
+              <EmojiText>{current.emoji}</EmojiText>
             </motion.span>
           </AnimatePresence>
         </div>

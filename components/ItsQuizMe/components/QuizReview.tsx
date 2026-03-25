@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import type { QuizResult } from "@/types/Quiz.type";
+import EmojiText from "@/components/ui/EmojiText";
 import {
   RotateCcw,
   PlusCircle,
@@ -201,7 +202,7 @@ export default function QuizReview({
               {/* Regular Quiz Header */}
               {/* Emoji with glow */}
               <div className="text-7xl mb-4 animate-bounce">
-                {scoreConfig.emoji}
+                <EmojiText>{scoreConfig.emoji}</EmojiText>
               </div>
 
               <h1 className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 dark:from-purple-400 dark:via-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">

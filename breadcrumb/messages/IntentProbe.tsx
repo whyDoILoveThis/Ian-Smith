@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { SessionStore } from "../store/sessionStore";
+import EmojiText from "@/components/ui/EmojiText";
 
 interface IntentProbeProps {
   store: SessionStore | null;
@@ -177,7 +178,9 @@ export function IntentProbe({ store, delayMs = 25_000 }: IntentProbeProps) {
               opacity: selected && selected !== opt.value ? 0.4 : 1,
             }}
           >
-            <span>{opt.emoji}</span>
+            <span>
+              <EmojiText>{opt.emoji}</EmojiText>
+            </span>
             <span>{opt.label}</span>
           </button>
         ))}

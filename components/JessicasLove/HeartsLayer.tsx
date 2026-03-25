@@ -2,6 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
+import EmojiText from "@/components/ui/EmojiText";
 
 type Heart = { id: number; x: number; y: number; size: number };
 
@@ -28,7 +29,7 @@ export default function HeartsLayer({ hearts }: { hearts: Heart[] }) {
             fontSize: h.size,
           }}
         >
-          ❤️
+          <EmojiText>{"❤️"}</EmojiText>
         </motion.div>
       ))}
     </div>

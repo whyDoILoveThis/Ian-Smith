@@ -43,6 +43,7 @@ import { useRouteState } from "./hooks/useRouteState";
 import { useUndoRedo } from "./hooks/useUndoRedo";
 import { useOptimization } from "./hooks/useOptimization";
 import { useChatEngine } from "./hooks/useChatEngine";
+import EmojiText from "@/components/ui/EmojiText";
 
 export function KwikMapsContainer() {
   const searchParams = useSearchParams();
@@ -397,52 +398,54 @@ export function KwikMapsContainer() {
                           Restore original
                         </button>
                       )}
-                    <div className="whitespace-pre-wrap">
-                      {(() => {
-                        const retryMatch = msg.content.match(
-                          /(Please try again in [\d.]+[smhd][\w.]*)/i,
-                        );
-                        const rateMatch =
-                          msg.content.match(/(Rate limit reached)/i);
-                        if (retryMatch || rateMatch) {
-                          let parts: React.ReactNode[] = [];
-                          let remaining = msg.content;
-                          if (rateMatch) {
-                            const i = remaining.indexOf(rateMatch[1]);
-                            parts.push(remaining.slice(0, i));
-                            parts.push(
-                              <span
-                                key="rl"
-                                className="text-orange-400 font-semibold"
-                              >
-                                {rateMatch[1]}
-                              </span>,
-                            );
-                            remaining = remaining.slice(
-                              i + rateMatch[1].length,
-                            );
+                    <EmojiText>
+                      <div className="whitespace-pre-wrap">
+                        {(() => {
+                          const retryMatch = msg.content.match(
+                            /(Please try again in [\d.]+[smhd][\w.]*)/i,
+                          );
+                          const rateMatch =
+                            msg.content.match(/(Rate limit reached)/i);
+                          if (retryMatch || rateMatch) {
+                            let parts: React.ReactNode[] = [];
+                            let remaining = msg.content;
+                            if (rateMatch) {
+                              const i = remaining.indexOf(rateMatch[1]);
+                              parts.push(remaining.slice(0, i));
+                              parts.push(
+                                <span
+                                  key="rl"
+                                  className="text-orange-400 font-semibold"
+                                >
+                                  {rateMatch[1]}
+                                </span>,
+                              );
+                              remaining = remaining.slice(
+                                i + rateMatch[1].length,
+                              );
+                            }
+                            if (retryMatch) {
+                              const i = remaining.indexOf(retryMatch[1]);
+                              parts.push(remaining.slice(0, i));
+                              parts.push(
+                                <span
+                                  key="rt"
+                                  className="text-green-400 font-semibold"
+                                >
+                                  {retryMatch[1]}
+                                </span>,
+                              );
+                              remaining = remaining.slice(
+                                i + retryMatch[1].length,
+                              );
+                            }
+                            parts.push(remaining);
+                            return <>{parts}</>;
                           }
-                          if (retryMatch) {
-                            const i = remaining.indexOf(retryMatch[1]);
-                            parts.push(remaining.slice(0, i));
-                            parts.push(
-                              <span
-                                key="rt"
-                                className="text-green-400 font-semibold"
-                              >
-                                {retryMatch[1]}
-                              </span>,
-                            );
-                            remaining = remaining.slice(
-                              i + retryMatch[1].length,
-                            );
-                          }
-                          parts.push(remaining);
-                          return <>{parts}</>;
-                        }
-                        return msg.content;
-                      })()}
-                    </div>
+                          return msg.content;
+                        })()}
+                      </div>
+                    </EmojiText>
                   </div>
                   {msg.role === "assistant" && (
                     <button
@@ -640,52 +643,54 @@ export function KwikMapsContainer() {
                           <History size={9} /> Restore original
                         </button>
                       )}
-                    <div className="whitespace-pre-wrap">
-                      {(() => {
-                        const retryMatch = msg.content.match(
-                          /(Please try again in [\d.]+[smhd][\w.]*)/i,
-                        );
-                        const rateMatch =
-                          msg.content.match(/(Rate limit reached)/i);
-                        if (retryMatch || rateMatch) {
-                          let parts: React.ReactNode[] = [];
-                          let remaining = msg.content;
-                          if (rateMatch) {
-                            const i = remaining.indexOf(rateMatch[1]);
-                            parts.push(remaining.slice(0, i));
-                            parts.push(
-                              <span
-                                key="rl"
-                                className="text-orange-400 font-semibold"
-                              >
-                                {rateMatch[1]}
-                              </span>,
-                            );
-                            remaining = remaining.slice(
-                              i + rateMatch[1].length,
-                            );
+                    <EmojiText>
+                      <div className="whitespace-pre-wrap">
+                        {(() => {
+                          const retryMatch = msg.content.match(
+                            /(Please try again in [\d.]+[smhd][\w.]*)/i,
+                          );
+                          const rateMatch =
+                            msg.content.match(/(Rate limit reached)/i);
+                          if (retryMatch || rateMatch) {
+                            let parts: React.ReactNode[] = [];
+                            let remaining = msg.content;
+                            if (rateMatch) {
+                              const i = remaining.indexOf(rateMatch[1]);
+                              parts.push(remaining.slice(0, i));
+                              parts.push(
+                                <span
+                                  key="rl"
+                                  className="text-orange-400 font-semibold"
+                                >
+                                  {rateMatch[1]}
+                                </span>,
+                              );
+                              remaining = remaining.slice(
+                                i + rateMatch[1].length,
+                              );
+                            }
+                            if (retryMatch) {
+                              const i = remaining.indexOf(retryMatch[1]);
+                              parts.push(remaining.slice(0, i));
+                              parts.push(
+                                <span
+                                  key="rt"
+                                  className="text-green-400 font-semibold"
+                                >
+                                  {retryMatch[1]}
+                                </span>,
+                              );
+                              remaining = remaining.slice(
+                                i + retryMatch[1].length,
+                              );
+                            }
+                            parts.push(remaining);
+                            return <>{parts}</>;
                           }
-                          if (retryMatch) {
-                            const i = remaining.indexOf(retryMatch[1]);
-                            parts.push(remaining.slice(0, i));
-                            parts.push(
-                              <span
-                                key="rt"
-                                className="text-green-400 font-semibold"
-                              >
-                                {retryMatch[1]}
-                              </span>,
-                            );
-                            remaining = remaining.slice(
-                              i + retryMatch[1].length,
-                            );
-                          }
-                          parts.push(remaining);
-                          return <>{parts}</>;
-                        }
-                        return msg.content;
-                      })()}
-                    </div>
+                          return msg.content;
+                        })()}
+                      </div>
+                    </EmojiText>
                   </div>
                   {msg.role === "assistant" && (
                     <button

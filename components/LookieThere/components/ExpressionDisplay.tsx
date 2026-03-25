@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { DetectionResult } from "../types";
+import EmojiText from "@/components/ui/EmojiText";
 import {
   EXPRESSION_MAP,
   EYES_CLOSED_DISPLAY,
@@ -59,7 +60,7 @@ export default function ExpressionDisplay({ result }: ExpressionDisplayProps) {
       {/* ── Hero: dominant expression ─────────────────────────── */}
       <div className="lt-expression-hero">
         <span className="lt-expression-emoji" key={result.dominant.name}>
-          {display.emoji}
+          <EmojiText>{display.emoji}</EmojiText>
         </span>
         <span className="lt-expression-label">{display.label}</span>
       </div>
@@ -94,19 +95,25 @@ export default function ExpressionDisplay({ result }: ExpressionDisplayProps) {
         <div
           className={`lt-indicator ${result.eyesClosed ? "lt-indicator-active" : ""}`}
         >
-          <span>{EYES_CLOSED_DISPLAY.emoji}</span>
+          <span>
+            <EmojiText>{EYES_CLOSED_DISPLAY.emoji}</EmojiText>
+          </span>
           <span>Eyes Closed</span>
         </div>
         <div
           className={`lt-indicator ${result.eyebrowsRaised ? "lt-indicator-active" : ""}`}
         >
-          <span>{EYEBROWS_RAISED_DISPLAY.emoji}</span>
+          <span>
+            <EmojiText>{EYEBROWS_RAISED_DISPLAY.emoji}</EmojiText>
+          </span>
           <span>Brows Raised</span>
         </div>
         <div
           className={`lt-indicator ${result.mouthOpen ? "lt-indicator-active" : ""}`}
         >
-          <span>{MOUTH_OPEN_DISPLAY.emoji}</span>
+          <span>
+            <EmojiText>{MOUTH_OPEN_DISPLAY.emoji}</EmojiText>
+          </span>
           <span>Mouth Open</span>
         </div>
       </div>

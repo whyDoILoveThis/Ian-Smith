@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { SessionStore } from "../store/sessionStore";
+import EmojiText from "@/components/ui/EmojiText";
 
 interface EnergyCheckProps {
   store: SessionStore | null;
@@ -186,7 +187,7 @@ export function EnergyCheck({
             opacity: selected && selected !== l.value ? 0.3 : 1,
           }}
         >
-          {l.emoji}
+          <EmojiText>{l.emoji}</EmojiText>
         </button>
       ))}
 

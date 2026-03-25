@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { ConfettiHandle } from "./ConfettiCanvas";
+import EmojiText from "@/components/ui/EmojiText";
 
 type Choco = { id: number; text: string; opened: boolean };
 
@@ -24,7 +25,7 @@ export default function ChocolateGrid({
       "Our love = my treasure.",
       "Forever is simply not long enough with you.",
       "🎶Ian and Jessie sittin in a tree🎶",
-    ].map((t, i) => ({ id: i, text: t, opened: false }))
+    ].map((t, i) => ({ id: i, text: t, opened: false })),
   );
 
   const [unwrapped, setUnwrapped] = useState(false);
@@ -61,7 +62,7 @@ export default function ChocolateGrid({
       style={{ background: "rgba(255,255,255,0.6)" }}
     >
       <h2 className="text-2xl font-semibold mb-3" style={{ color: MILK_CHOC }}>
-        🍫 Chocolate Bars
+        <EmojiText>{"🍫 Chocolate Bars"}</EmojiText>
       </h2>
 
       <div className="grid grid-cols-3 gap-4">
@@ -178,7 +179,11 @@ export default function ChocolateGrid({
           className="no-heart px-4 py-2 rounded-full font-semibold shadow hover:brightness-105"
           style={{ background: MILK_CHOC, color: "#fff" }}
         >
-          {allOpened ? "Chocolate Bars" : "Eat 'em All 🍬"}
+          {allOpened ? (
+            "Chocolate Bars"
+          ) : (
+            <EmojiText>{"Eat 'em All 🍬"}</EmojiText>
+          )}
         </button>
 
         <button
@@ -189,7 +194,7 @@ export default function ChocolateGrid({
           className="no-heart px-4 py-2 rounded-full border-2 border-pink-300 font-semibold"
           style={{ background: "transparent", color: MILK_CHOC }}
         >
-          🎉 Surprise!
+          <EmojiText>{"🎉 Surprise!"}</EmojiText>
         </button>
         <button className="text-4xl text-pink-400 font-extrabold">+</button>
       </div>

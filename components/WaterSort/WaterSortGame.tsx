@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import EmojiText from "@/components/ui/EmojiText";
 
 /* ═══════════════════════════════════════════════════════════
    TYPES
@@ -79,24 +80,24 @@ for (const k of ALL_COLOR_KEYS) {
 
 const EMOJIS: EmojiDef[] = [
   // ── Fruits ──
-  { emoji: "🍎", name: "Apple", colorKey: "red" },
-  { emoji: "🍊", name: "Orange", colorKey: "orange" },
-  { emoji: "🍋", name: "Lemon", colorKey: "yellow" },
-  { emoji: "🥝", name: "Kiwi", colorKey: "green" },
-  { emoji: "🫐", name: "Blueberry", colorKey: "blue" },
-  { emoji: "🍇", name: "Grape", colorKey: "purple" },
-  { emoji: "🍑", name: "Peach", colorKey: "pink" },
-  { emoji: "🍓", name: "Strawberry", colorKey: "red" },
-  { emoji: "🍌", name: "Banana", colorKey: "yellow" },
-  { emoji: "🍉", name: "Watermelon", colorKey: "green" },
-  { emoji: "🍒", name: "Cherry", colorKey: "red" },
-  { emoji: "🥭", name: "Mango", colorKey: "orange" },
-  { emoji: "🍐", name: "Pear", colorKey: "lime" },
-  { emoji: "🍈", name: "Melon", colorKey: "green" },
-  { emoji: "🍍", name: "Pineapple", colorKey: "yellow" },
-  { emoji: "🥥", name: "Coconut", colorKey: "brown" },
-  { emoji: "🫒", name: "Olive", colorKey: "green" },
-  { emoji: "🍏", name: "Green Apple", colorKey: "lime" },
+  { emoji: <EmojiText>🍎</EmojiText>, name: "Apple", colorKey: "red" },
+  { emoji: <EmojiText>🍊</EmojiText>, name: "Orange", colorKey: "orange" },
+  { emoji: <EmojiText>🍋</EmojiText>, name: "Lemon", colorKey: "yellow" },
+  { emoji: <EmojiText>🥝</EmojiText>, name: "Kiwi", colorKey: "green" },
+  { emoji: <EmojiText>🫐</EmojiText>, name: "Blueberry", colorKey: "blue" },
+  { emoji: <EmojiText>🍇</EmojiText>, name: "Grape", colorKey: "purple" },
+  { emoji: <EmojiText>🍑</EmojiText>, name: "Peach", colorKey: "pink" },
+  { emoji: <EmojiText>🍓</EmojiText>, name: "Strawberry", colorKey: "red" },
+  { emoji: <EmojiText>🍌</EmojiText>, name: "Banana", colorKey: "yellow" },
+  { emoji: <EmojiText>🍉</EmojiText>, name: "Watermelon", colorKey: "green" },
+  { emoji: <EmojiText>🍒</EmojiText>, name: "Cherry", colorKey: "red" },
+  { emoji: <EmojiText>🥭</EmojiText>, name: "Mango", colorKey: "orange" },
+  { emoji: <EmojiText>🍐</EmojiText>, name: "Pear", colorKey: "lime" },
+  { emoji: <EmojiText>🍈</EmojiText>, name: "Melon", colorKey: "green" },
+  { emoji: <EmojiText>🍍</EmojiText>, name: "Pineapple", colorKey: "yellow" },
+  { emoji: <EmojiText>🥥</EmojiText>, name: "Coconut", colorKey: "brown" },
+  { emoji: <EmojiText>🫒</EmojiText>, name: "Olive", colorKey: "green" },
+  { emoji: <EmojiText>🍏</EmojiText>, name: "Green Apple", colorKey: "lime" },
   // ── Vegetables ──
   { emoji: "🥕", name: "Carrot", colorKey: "orange" },
   { emoji: "🍆", name: "Eggplant", colorKey: "purple" },
@@ -839,7 +840,7 @@ function CenterEmoji({
               transition: "opacity 0.4s",
             }}
           >
-            {emoji}
+            <EmojiText>{emoji}</EmojiText>
           </span>
           <span
             className="absolute text-7xl"
@@ -850,7 +851,7 @@ function CenterEmoji({
               transition: "clip-path 0.5s ease-out",
             }}
           >
-            {emoji}
+            <EmojiText>{emoji}</EmojiText>
           </span>
         </div>
 
@@ -1182,7 +1183,7 @@ function LevelGrid({
                         "var(--font-emoji, 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif)",
                     }}
                   >
-                    {ed.emoji}
+                    <EmojiText>{ed.emoji}</EmojiText>
                   </span>
 
                   <div className="h-3.5 flex items-center">
@@ -1670,7 +1671,7 @@ export default function WaterSortGame() {
                 transition={{ duration: 0.9 }}
                 style={{ fontFamily: "var(--font-emoji)" }}
               >
-                {emoji}
+                <EmojiText>{emoji}</EmojiText>
               </motion.div>
 
               <div className="mb-3">

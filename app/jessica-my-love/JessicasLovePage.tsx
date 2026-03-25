@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import EmojiText from "@/components/ui/EmojiText";
 
 /**
  * Drop this file into app/love/page.tsx
@@ -27,7 +28,7 @@ export default function LovePage() {
       "You make ordinary feel like magic.",
       "Our little inside jokes = my treasure.",
       "Forever is simply not long enough with you.",
-    ].map((text, i) => ({ id: i, text, opened: false }))
+    ].map((text, i) => ({ id: i, text, opened: false })),
   );
   const [showLetter, setShowLetter] = useState(false);
   const [unwrapped, setUnwrapped] = useState(false);
@@ -76,7 +77,7 @@ export default function LovePage() {
     setUnwrapped(true);
     // reveal one chocolate message at a time
     setChocos((c) =>
-      c.map((x, i) => ({ ...x, opened: i === 0 ? true : x.opened }))
+      c.map((x, i) => ({ ...x, opened: i === 0 ? true : x.opened })),
     );
     explodeConfetti();
   };
@@ -118,13 +119,13 @@ export default function LovePage() {
           (-p.size / 2) * DPR,
           (-p.size / 2) * DPR,
           p.size * DPR,
-          p.size * DPR
+          p.size * DPR,
         );
         ctx.restore();
       });
       // remove offscreen
       confettiParticles.current = confettiParticles.current.filter(
-        (p) => p.y < canvas.height / DPR + 50
+        (p) => p.y < canvas.height / DPR + 50,
       );
       raf = requestAnimationFrame(tick);
     };
@@ -188,7 +189,7 @@ export default function LovePage() {
           className="no-heart !text-6xl md:!text-7xl font-extrabold leading-tight drop-shadow-2xl"
           style={{ color: MILK_CHOC }}
         >
-          💖 FOR YOU, MY LOVE 💖
+          <EmojiText>{"💖 FOR YOU, MY LOVE 💖"}</EmojiText>
         </h1>
 
         <p
@@ -196,7 +197,7 @@ export default function LovePage() {
           style={{ color: "#442d20" }}
         >
           A tiny world made just for you — click, explore, and let the love
-          surprise you 🍫🌸✨
+          surprise you <EmojiText>{"🍫🌸✨"}</EmojiText>
         </p>
 
         {/* Center interactive area */}
@@ -210,7 +211,7 @@ export default function LovePage() {
               className="text-2xl font-semibold mb-3"
               style={{ color: MILK_CHOC }}
             >
-              🍫 Chocolate Squares
+              <EmojiText>{"🍫 Chocolate Squares"}</EmojiText>
             </h2>
             <div className="grid grid-cols-3 gap-3">
               {chocos.map((c) => (
@@ -233,7 +234,9 @@ export default function LovePage() {
                 >
                   {!c.opened ? (
                     <div className="flex flex-col items-center justify-center h-full">
-                      <div style={{ fontSize: 28 }}>🍫</div>
+                      <div style={{ fontSize: 28 }}>
+                        <EmojiText>{"🍫"}</EmojiText>
+                      </div>
                       <div className="text-xs mt-1 font-bold">Unwrap</div>
                     </div>
                   ) : (
@@ -258,7 +261,11 @@ export default function LovePage() {
                 className="no-heart px-4 py-2 rounded-full font-semibold shadow hover:brightness-105"
                 style={{ background: MILK_CHOC, color: "#fff" }}
               >
-                {unwrapped ? "Unwrapped 🍬" : "Unwrap All"}
+                {unwrapped ? (
+                  <EmojiText>{"Unwrapped 🍬"}</EmojiText>
+                ) : (
+                  "Unwrap All"
+                )}
               </button>
               <button
                 onClick={(e) => {
@@ -268,7 +275,7 @@ export default function LovePage() {
                 className="no-heart px-4 py-2 rounded-full border-2 border-pink-300 font-semibold"
                 style={{ background: "transparent", color: MILK_CHOC }}
               >
-                🎉 Surprise!
+                <EmojiText>{"🎉 Surprise!"}</EmojiText>
               </button>
             </div>
           </div>
@@ -289,7 +296,7 @@ export default function LovePage() {
                   filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.18))",
                 }}
               >
-                ❤️
+                <EmojiText>{"❤️"}</EmojiText>
               </span>
             </motion.div>
 
@@ -297,7 +304,8 @@ export default function LovePage() {
               className="mt-3 text-sm md:text-base"
               style={{ color: "#4a2f25" }}
             >
-              Tap around — hearts will bloom where you click 🌸
+              Tap around — hearts will bloom where you click{" "}
+              <EmojiText>{"🌸"}</EmojiText>
             </p>
 
             <motion.div
@@ -313,7 +321,7 @@ export default function LovePage() {
                 explodeConfetti(60);
               }}
             >
-              💍 Spin the ring
+              <EmojiText>{"💍 Spin the ring"}</EmojiText>
             </motion.div>
           </div>
 
@@ -326,7 +334,7 @@ export default function LovePage() {
               className="text-2xl font-semibold mb-3"
               style={{ color: MILK_CHOC }}
             >
-              💌 Love Letter & Music
+              <EmojiText>{"💌 Love Letter & Music"}</EmojiText>
             </h2>
 
             <div className="flex flex-col gap-3 items-center">
@@ -354,7 +362,11 @@ export default function LovePage() {
                     color: musicOn ? "#fff" : MILK_CHOC,
                   }}
                 >
-                  {musicOn ? "🔊 Music On" : "🔈 Play Music"}
+                  {musicOn ? (
+                    <EmojiText>{"🔊 Music On"}</EmojiText>
+                  ) : (
+                    <EmojiText>{"🔈 Play Music"}</EmojiText>
+                  )}
                 </button>
                 <small style={{ color: "#4a2f25" }}>gentle piano (loop)</small>
               </div>
@@ -385,7 +397,7 @@ export default function LovePage() {
               fontSize: h.size,
             }}
           >
-            ❤️
+            <EmojiText>{"❤️"}</EmojiText>
           </motion.div>
         ))}
       </div>
@@ -412,7 +424,7 @@ export default function LovePage() {
                 className="text-3xl font-bold mb-4"
                 style={{ color: MILK_CHOC }}
               >
-                💖 My Dearest 💖
+                <EmojiText>{"💖 My Dearest 💖"}</EmojiText>
               </h2>
               <pre
                 className="whitespace-pre-wrap text-left text-sm"
@@ -429,7 +441,7 @@ export default function LovePage() {
                   className="px-4 py-2 rounded-full"
                   style={{ background: "#ffd6e8", color: "#3b2a20" }}
                 >
-                  Close 💕
+                  <EmojiText>{"Close 💕"}</EmojiText>
                 </button>
                 <button
                   onClick={() => {
@@ -438,7 +450,7 @@ export default function LovePage() {
                   className="px-4 py-2 rounded-full"
                   style={{ background: MILK_CHOC, color: "#fff" }}
                 >
-                  Celebrate 🎉
+                  <EmojiText>{"Celebrate 🎉"}</EmojiText>
                 </button>
               </div>
             </motion.div>
@@ -460,7 +472,7 @@ export default function LovePage() {
             className="text-2xl"
             style={{ display: "inline-block", margin: 6, color: "#fffae6" }}
           >
-            ✨
+            <EmojiText>{"✨"}</EmojiText>
           </motion.div>
         ))}
       </div>

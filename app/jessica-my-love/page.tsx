@@ -1,6 +1,7 @@
 "use client";
 
 import CenterHeart from "@/components/JessicasLove/CenterHeart";
+import EmojiText from "@/components/ui/EmojiText";
 import ChocolateGrid from "@/components/JessicasLove/ChocolateGrid";
 import ConfettiCanvas, {
   ConfettiHandle,
@@ -47,7 +48,7 @@ export default function LovePage() {
     setClickHearts((s) => [...s, newHeart]);
     setTimeout(
       () => setClickHearts((s) => s.filter((h) => h.id !== newHeart.id)),
-      1700
+      1700,
     );
   };
 
@@ -89,19 +90,21 @@ export default function LovePage() {
           >
             MARRY ME!!
           </span>
-          <span className="animate-spin-slow">💍</span>
+          <span className="animate-spin-slow">
+            <EmojiText>💍</EmojiText>
+          </span>
         </span>
         <h1
           className="no-heart text-6xl md:text-7xl font-extrabold drop-shadow-2xl"
           style={{ color: MILK_CHOC }}
         >
-          💖 FOR YOU, MY LOVE 💖
+          <EmojiText>💖 FOR YOU, MY LOVE 💖</EmojiText>
         </h1>
         <p
           className="mt-3 text-lg md:text-xl italic font-medium"
           style={{ color: "#442d20" }}
         >
-          A tiny world made with love just for you 🍫🌸✨
+          <EmojiText>A tiny world made with love just for you 🍫🌸✨</EmojiText>
         </p>
 
         <div className="mt-8 flex flex-col gap-6 items-center w-full max-w-6xl">
@@ -119,7 +122,7 @@ export default function LovePage() {
               className="text-2xl font-semibold mb-3"
               style={{ color: MILK_CHOC }}
             >
-              💌 Love Letter
+              <EmojiText>💌 Love Letter</EmojiText>
             </h2>
             <div className="flex flex-col gap-3 items-center">
               <button

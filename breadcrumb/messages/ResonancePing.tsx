@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { SessionStore } from "../store/sessionStore";
+import EmojiText from "@/components/ui/EmojiText";
 
 interface ResonancePingProps {
   store: SessionStore | null;
@@ -198,7 +199,7 @@ export function ResonancePing({
             transform: selected === r.value ? "scale(1.15)" : "scale(1)",
           }}
         >
-          {r.emoji}
+          <EmojiText>{r.emoji}</EmojiText>
         </button>
       ))}
 

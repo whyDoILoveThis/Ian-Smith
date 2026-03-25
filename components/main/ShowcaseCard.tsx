@@ -11,6 +11,7 @@ import {
 import { motion } from "framer-motion";
 import Link from "next/link";
 import "@/styles/ShowcaseAnimations.css";
+import EmojiText from "@/components/ui/EmojiText";
 
 /* ── Visibility context ──
    ONE IntersectionObserver per showcase replaces FM's internal IO
@@ -205,7 +206,13 @@ export default function ShowcaseCard({
                       key={f.label}
                       className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.05] border border-white/10"
                     >
-                      <span className="text-base">{f.icon}</span>
+                      <span className={`text-base`}>
+                        {f.icon === "👥" || f.icon === "✨" ? (
+                          <span className="emoji-fallback">{f.icon}</span>
+                        ) : (
+                          <EmojiText>{f.icon}</EmojiText>
+                        )}
+                      </span>
                       <span className="text-sm font-medium text-white/70">
                         {f.label}
                       </span>

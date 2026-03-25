@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import EmojiText from "@/components/ui/EmojiText";
 
 /* ── Decorative floating emoji that drift across the showcase ── */
 const FLOAT_EMOJIS = [
@@ -398,7 +399,7 @@ function ShowcaseJar() {
               exit={{ opacity: 0, scale: 0.6, y: -8 }}
               transition={{ duration: 0.5 }}
             >
-              {current.emoji}
+              <EmojiText>{current.emoji}</EmojiText>
             </motion.span>
           </AnimatePresence>
         </div>
@@ -436,7 +437,7 @@ function FeatureBadge({
       transition={{ delay, duration: 0.45 }}
     >
       <span className="text-base" style={{ fontFamily: "var(--font-emoji)" }}>
-        {icon}
+        <EmojiText>{icon}</EmojiText>
       </span>
       <span className="text-sm font-medium text-white/70">{label}</span>
     </motion.div>
@@ -487,7 +488,7 @@ export default function WaterSortShowcase() {
               ease: "linear",
             }}
           >
-            {f.emoji}
+            <EmojiText>{f.emoji}</EmojiText>
           </motion.span>
         ))}
       </div>

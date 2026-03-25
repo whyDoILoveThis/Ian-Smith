@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
+import EmojiText from "@/components/ui/EmojiText";
 
 export default function CenterHeart({
   onCelebrate,
@@ -82,7 +83,7 @@ export default function CenterHeart({
                   filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.18))",
                 }}
               >
-                ❤️
+                <EmojiText>{"❤️"}</EmojiText>
               </span>
             </motion.div>
           </div>

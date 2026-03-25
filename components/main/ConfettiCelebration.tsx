@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ItsConfettiCannon from "../sub/ItsConfettiCannon";
 import { SPECIAL_DAYS } from "@/lib/globals";
+import EmojiText from "../ui/EmojiText";
 
 interface Day {
   name: string;
@@ -109,10 +110,10 @@ const ConfettiCelebration: React.FC = () => {
           </span>
         </div>
         <div className="flex flex-col items-center">
-          <p className="text-lg h-10 font-semibold text-center">
+          <EmojiText as="p" className="text-lg h-10 font-semibold text-center">
             🎊 Only <span className="text-purple-500">{daysLeft}</span> days
             until <span className="text-blue-400">{currentDay.name}</span>!
-          </p>
+          </EmojiText>
           <span className="flex gap-3 mt-4">
             <button
               onClick={prevDay}
