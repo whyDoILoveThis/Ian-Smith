@@ -38,70 +38,70 @@ import {
   Bug,
   MoreVertical,
 } from "lucide-react";
-import { v4 as uuidv4 } from "uuid";
 import { motion, AnimatePresence } from "framer-motion";
-
-interface RouteLeg {
-  from: string;
-  to: string;
-  distanceKm: number;
-  distanceMiles: number;
-}
-
-interface RouteSnapshot {
-  optimizedRoute: Coordinate[] | null;
-  legs: RouteLeg[];
-  totalDistanceMiles: number;
-  totalDistanceKm: number;
-  coordinates: Coordinate[]; // full coordinates list for undo/redo of add/remove
-}
-
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  routeChanged?: boolean;
-  previousRoute?: RouteSnapshot;
-  newRoute?: RouteSnapshot;
-  undone?: boolean;
-  resent?: boolean;
-  originalSnapshot?: RouteSnapshot;
-}
-
-// Demo locations across Tennessee
-const DEMO_LOCATIONS = [
-  { name: "Nashville Downtown", latitude: 36.1627, longitude: -86.7816 },
-  { name: "Memphis Midtown", latitude: 35.1364, longitude: -89.9789 },
-  { name: "Johnson City Square", latitude: 36.3131, longitude: -82.3151 },
-  { name: "Knoxville Downtown", latitude: 35.9606, longitude: -83.9207 },
-  { name: "Chattanooga Rivefront", latitude: 35.0469, longitude: -85.2693 },
-  { name: "Clarksville Downtown", latitude: 36.5296, longitude: -87.3595 },
-  { name: "Springfield Town Square", latitude: 36.4847, longitude: -86.4919 },
-  { name: "Jackson Town Center", latitude: 35.6144, longitude: -88.8142 },
-  { name: "Oak Ridge City Center", latitude: 36.0197, longitude: -84.2673 },
-  { name: "Murfreesboro Downtown", latitude: 35.8458, longitude: -86.3914 },
-];
+import { useRouteState } from "./hooks/useRouteState";
+import { useUndoRedo } from "./hooks/useUndoRedo";
+import { useOptimization } from "./hooks/useOptimization";
+import { useChatEngine } from "./hooks/useChatEngine";
 
 export function KwikMapsContainer() {
   const searchParams = useSearchParams();
-  const [coordinates, setCoordinates] = useState<Coordinate[]>([]);
-  const [optimizedRoute, setOptimizedRoute] = useState<Coordinate[] | null>(
-    null,
-  );
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [error, setError] = useState<string>("");
-  const [showResults, setShowResults] = useState(false);
-  const [totalDistanceMiles, setTotalDistanceMiles] = useState<number>(0);
-  const [totalDistanceKm, setTotalDistanceKm] = useState<number>(0);
-  const [legs, setLegs] = useState<RouteLeg[]>([]);
-  const [aiInsights, setAiInsights] = useState<string>("");
 
-  // Chat state
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [isSendingChat, setIsSendingChat] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatInputRef = useRef<HTMLInputElement>(null);
+  // ── Route state (coordinates, optimized route, legs, distances) ──
+  const routeState = useRouteState();
+  const {
+    coordinates,
+    setCoordinates,
+    optimizedRoute,
+    setOptimizedRoute,
+    legs,
+    totalDistanceMiles,
+    totalDistanceKm,
+    error,
+    setError,
+    showResults,
+    setShowResults,
+    aiInsights,
+    setAiInsights,
+    getRouteState,
+    applyRouteState,
+    handleAddCoordinate,
+    handleRemoveCoordinate,
+    handleImportRoute: baseHandleImportRoute,
+    handleReset: baseHandleReset,
+    handleLoadDemo,
+  } = routeState;
+
+  // ── Undo/redo + chat message state ──
+  const {
+    chatMessages,
+    setChatMessages,
+    handleUndoRouteChange,
+    handleRedoRouteChange,
+    handleDeleteMessage,
+    handleRestoreOriginal,
+  } = useUndoRedo(applyRouteState);
+
+  // ── Chat engine (AI + local intent, debounce/throttle, validation, execution) ──
+  const {
+    chatInput,
+    setChatInput,
+    isSendingChat,
+    chatEndRef,
+    chatInputRef,
+    handleSendChat,
+    handleResendMessage,
+  } = useChatEngine({
+    getRouteState,
+    applyRouteState,
+    chatMessages,
+    setChatMessages,
+  });
+
+  // ── Optimization (button-triggered, hits /api/kwikmaps-optimize) ──
+  const { isOptimizing, optimizeRoute } = useOptimization();
+
+  // ── UI state ──
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingReset, setPendingReset] = useState(false);
   const [pendingDemo, setPendingDemo] = useState(false);
@@ -112,8 +112,6 @@ export function KwikMapsContainer() {
   const [mapsFailure, setMapsFailure] = useState(false);
   const [mapsFailureLoaded, setMapsFailureLoaded] = useState(false);
   const [togglingMaps, setTogglingMaps] = useState(false);
-  const pendingResendRef = useRef<string | null>(null);
-  const pendingResendSnapshotRef = useRef<RouteSnapshot | null>(null);
 
   const [toolbarOpen, setToolbarOpen] = useState(false);
 
@@ -166,240 +164,46 @@ export function KwikMapsContainer() {
         setCoordinates(parsed);
       }
     }
-  }, [searchParams]);
+  }, [searchParams, setCoordinates]);
 
-  const handleImportRoute = useCallback((imported: Coordinate[]) => {
-    setCoordinates(imported);
-    setOptimizedRoute(null);
-    setShowResults(false);
-    setError("");
+  // Wrap importRoute to also clear chat
+  const handleImportRoute = useCallback(
+    (imported: Coordinate[]) => {
+      baseHandleImportRoute(imported);
+      setChatMessages([]);
+    },
+    [baseHandleImportRoute, setChatMessages],
+  );
+
+  // Wrap reset to also clear chat + highlights
+  const handleReset = useCallback(() => {
+    baseHandleReset();
     setChatMessages([]);
-  }, []);
+    setChatInput("");
+    setHighlightedStopIds([]);
+    setHighlightedLegIndices([]);
+  }, [baseHandleReset, setChatMessages, setChatInput]);
 
-  const handleDeleteMessage = useCallback(
-    (messageId: string) => {
-      const msg = chatMessages.find((m) => m.id === messageId);
-      // If deleting an AI message that changed the route (and wasn't already undone), revert it
-      if (
-        msg?.role === "assistant" &&
-        msg.routeChanged &&
-        msg.previousRoute &&
-        !msg.undone
-      ) {
-        setOptimizedRoute(msg.previousRoute.optimizedRoute);
-        setLegs(msg.previousRoute.legs);
-        setTotalDistanceMiles(msg.previousRoute.totalDistanceMiles);
-        setTotalDistanceKm(msg.previousRoute.totalDistanceKm);
-        if (msg.previousRoute.coordinates) {
-          setCoordinates(msg.previousRoute.coordinates);
-        }
-      }
-      setChatMessages((prev) => prev.filter((m) => m.id !== messageId));
-    },
-    [chatMessages],
-  );
-
-  const handleResendMessage = useCallback(
-    (messageId: string) => {
-      const msg = chatMessages.find((m) => m.id === messageId);
-      if (!msg || msg.role !== "user") return;
-
-      // Find the index of this user message
-      const idx = chatMessages.findIndex((m) => m.id === messageId);
-      // Capture the original AI snapshot before removing
-      let savedSnapshot: RouteSnapshot | undefined;
-      const toRemove = new Set([messageId]);
-      if (
-        idx + 1 < chatMessages.length &&
-        chatMessages[idx + 1].role === "assistant"
-      ) {
-        const aiMsg = chatMessages[idx + 1];
-        // Save the snapshot the AI response applied (so we can restore it later)
-        if (aiMsg.routeChanged && aiMsg.newRoute && !aiMsg.undone) {
-          savedSnapshot = aiMsg.newRoute;
-        }
-        // Undo route change if that AI message changed the route
-        if (aiMsg.routeChanged && aiMsg.previousRoute && !aiMsg.undone) {
-          setOptimizedRoute(aiMsg.previousRoute.optimizedRoute);
-          setLegs(aiMsg.previousRoute.legs);
-          setTotalDistanceMiles(aiMsg.previousRoute.totalDistanceMiles);
-          setTotalDistanceKm(aiMsg.previousRoute.totalDistanceKm);
-          if (aiMsg.previousRoute.coordinates) {
-            setCoordinates(aiMsg.previousRoute.coordinates);
-          }
-        }
-        toRemove.add(aiMsg.id);
-      }
-
-      setChatMessages((prev) => prev.filter((m) => !toRemove.has(m.id)));
-      setChatInput(msg.content);
-      pendingResendRef.current = msg.content;
-      // Store snapshot so the new user message gets tagged
-      pendingResendSnapshotRef.current = savedSnapshot ?? null;
-    },
-    [chatMessages],
-  );
-
-  const handleRestoreOriginal = useCallback(
-    (messageId: string) => {
-      const msg = chatMessages.find((m) => m.id === messageId);
-      if (!msg?.originalSnapshot) return;
-      const snap = msg.originalSnapshot;
-      setOptimizedRoute(snap.optimizedRoute);
-      setLegs(snap.legs);
-      setTotalDistanceMiles(snap.totalDistanceMiles);
-      setTotalDistanceKm(snap.totalDistanceKm);
-      if (snap.coordinates) {
-        setCoordinates(snap.coordinates);
-      }
-      // Mark as restored so the pill updates
-      setChatMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, resent: false } : m)),
-      );
-    },
-    [chatMessages],
-  );
-
-  // Auto-send after resend populates chatInput
-  useEffect(() => {
-    if (
-      pendingResendRef.current &&
-      chatInput === pendingResendRef.current &&
-      !isSendingChat
-    ) {
-      pendingResendRef.current = null;
-      handleSendChat();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatInput]);
-
-  const handleAddCoordinate = useCallback((coordinate: Coordinate) => {
-    setCoordinates((prev) => [...prev, coordinate]);
-    setError("");
-  }, []);
-
-  const handleRemoveCoordinate = useCallback(
-    (id: string) => {
-      setCoordinates((prev) => prev.filter((c) => c.id !== id));
-      if (optimizedRoute) {
-        setOptimizedRoute((prev) =>
-          prev ? prev.filter((c) => c.id !== id) : null,
-        );
-      }
-    },
-    [optimizedRoute],
-  );
-
+  // Button-triggered optimization
   const handleOptimizeRoute = async () => {
     if (coordinates.length < 2) {
       setError("Please add at least 2 locations to optimize");
       return;
     }
-
-    setIsOptimizing(true);
     setError("");
-
-    try {
-      const response = await fetch("/api/kwikmaps-optimize", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ coordinates }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to optimize route");
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        setOptimizedRoute(data.optimizedRoute);
-        setTotalDistanceMiles(data.totalDistanceMiles || 0);
-        setTotalDistanceKm(data.totalDistanceKm || 0);
-        setLegs(data.legs || []);
-        setAiInsights(data.aiInsights || "");
-        setShowResults(true);
-        setMainTab("route");
-      } else {
-        setError(data.error || "Failed to optimize route");
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "An unexpected error occurred",
-      );
-    } finally {
-      setIsOptimizing(false);
+    const result = await optimizeRoute(coordinates);
+    if (result.success) {
+      setOptimizedRoute(result.optimizedRoute);
+      routeState.setTotalDistanceMiles(result.totalDistanceMiles);
+      routeState.setTotalDistanceKm(result.totalDistanceKm);
+      routeState.setLegs(result.legs);
+      setAiInsights(result.aiInsights);
+      setShowResults(true);
+      setMainTab("route");
+    } else {
+      setError(result.error);
     }
   };
-
-  const handleReset = () => {
-    setOptimizedRoute(null);
-    setShowResults(false);
-    setTotalDistanceMiles(0);
-    setTotalDistanceKm(0);
-    setLegs([]);
-    setAiInsights("");
-    setChatMessages([]);
-    setChatInput("");
-    setHighlightedStopIds([]);
-    setHighlightedLegIndices([]);
-  };
-
-  const handleLoadDemo = useCallback(() => {
-    const demoCoordinates: Coordinate[] = DEMO_LOCATIONS.map((loc) => ({
-      id: uuidv4(),
-      name: loc.name,
-      latitude: loc.latitude,
-      longitude: loc.longitude,
-    }));
-    setCoordinates(demoCoordinates);
-    setOptimizedRoute(null);
-    setShowResults(false);
-    setError("");
-  }, []);
-
-  const handleUndoRouteChange = useCallback(
-    (messageId: string) => {
-      const msg = chatMessages.find((m) => m.id === messageId);
-      if (!msg?.previousRoute) return;
-
-      setOptimizedRoute(msg.previousRoute.optimizedRoute);
-      setLegs(msg.previousRoute.legs);
-      setTotalDistanceMiles(msg.previousRoute.totalDistanceMiles);
-      setTotalDistanceKm(msg.previousRoute.totalDistanceKm);
-      setCoordinates(msg.previousRoute.coordinates);
-
-      // Mark this message as undone so the button shows the state
-      setChatMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, undone: true } : m)),
-      );
-    },
-    [chatMessages],
-  );
-
-  const handleRedoRouteChange = useCallback(
-    (messageId: string) => {
-      const msg = chatMessages.find((m) => m.id === messageId);
-      if (!msg?.newRoute) return;
-
-      setOptimizedRoute(msg.newRoute.optimizedRoute);
-      setLegs(msg.newRoute.legs);
-      setTotalDistanceMiles(msg.newRoute.totalDistanceMiles);
-      setTotalDistanceKm(msg.newRoute.totalDistanceKm);
-      setCoordinates(msg.newRoute.coordinates);
-
-      setChatMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, undone: false } : m)),
-      );
-    },
-    [chatMessages],
-  );
-
-  // Scroll chat to bottom when new messages arrive
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
 
   // Auto-open chat when new messages arrive
   useEffect(() => {
@@ -443,189 +247,6 @@ export function KwikMapsContainer() {
     },
     [chatHeight],
   );
-
-  const handleSendChat = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const msg = chatInput.trim();
-    if (!msg || isSendingChat) return;
-
-    const userMessage: ChatMessage = {
-      id: uuidv4(),
-      role: "user",
-      content: msg,
-      ...(pendingResendSnapshotRef.current && {
-        resent: true,
-        originalSnapshot: pendingResendSnapshotRef.current,
-      }),
-    };
-    pendingResendSnapshotRef.current = null;
-
-    setChatMessages((prev) => [...prev, userMessage]);
-    setChatInput("");
-    setIsSendingChat(true);
-
-    try {
-      // Build conversation history for context
-      const conversationHistory = chatMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
-      const response = await fetch("/api/kwikmaps-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: msg,
-          currentRoute: optimizedRoute || [],
-          allCoordinates: coordinates,
-          conversationHistory,
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.error || "Failed to get AI response");
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
-        const assistantMessage: ChatMessage = {
-          id: uuidv4(),
-          role: "assistant",
-          content: data.reply,
-          routeChanged: !!data.routeUpdate,
-        };
-        setChatMessages((prev) => [...prev, assistantMessage]);
-
-        // If the AI updated the route, save snapshots then apply
-        if (data.routeUpdate) {
-          if (optimizedRoute) {
-            // Route exists — full snapshot handling
-            const previousSnapshot: RouteSnapshot = {
-              optimizedRoute: optimizedRoute,
-              legs,
-              totalDistanceMiles,
-              totalDistanceKm,
-              coordinates: [...coordinates],
-            };
-
-            // Compute new coordinates list after add/remove
-            let newCoordinates = [...coordinates];
-            if (data.routeUpdate.removedCoordinateIds) {
-              const removeSet = new Set(data.routeUpdate.removedCoordinateIds);
-              newCoordinates = newCoordinates.filter(
-                (c) => !removeSet.has(c.id),
-              );
-            }
-            if (data.routeUpdate.addedCoordinates) {
-              newCoordinates = [
-                ...newCoordinates,
-                ...data.routeUpdate.addedCoordinates,
-              ];
-            }
-
-            const newSnapshot: RouteSnapshot = {
-              optimizedRoute: data.routeUpdate.optimizedRoute,
-              legs: data.routeUpdate.legs,
-              totalDistanceMiles: data.routeUpdate.totalDistanceMiles,
-              totalDistanceKm: data.routeUpdate.totalDistanceKm,
-              coordinates: newCoordinates,
-            };
-            setChatMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMessage.id
-                  ? {
-                      ...m,
-                      previousRoute: previousSnapshot,
-                      newRoute: newSnapshot,
-                    }
-                  : m,
-              ),
-            );
-
-            setOptimizedRoute(data.routeUpdate.optimizedRoute);
-            setLegs(data.routeUpdate.legs);
-            setTotalDistanceMiles(data.routeUpdate.totalDistanceMiles);
-            setTotalDistanceKm(data.routeUpdate.totalDistanceKm);
-
-            // Sync coordinates if locations were added or removed
-            if (
-              data.routeUpdate.addedCoordinates ||
-              data.routeUpdate.removedCoordinateIds
-            ) {
-              setCoordinates(newCoordinates);
-            }
-          } else {
-            // No route yet — snapshot coordinates for undo/redo, then add
-            const previousSnapshot: RouteSnapshot = {
-              optimizedRoute: null,
-              legs: [],
-              totalDistanceMiles: 0,
-              totalDistanceKm: 0,
-              coordinates: [...coordinates],
-            };
-
-            let newCoordinates = [...coordinates];
-            if (data.routeUpdate.removedCoordinateIds) {
-              const removeSet = new Set(data.routeUpdate.removedCoordinateIds);
-              newCoordinates = newCoordinates.filter(
-                (c) => !removeSet.has(c.id),
-              );
-            }
-            if (data.routeUpdate.addedCoordinates) {
-              newCoordinates = [
-                ...newCoordinates,
-                ...data.routeUpdate.addedCoordinates,
-              ];
-            }
-
-            const newSnapshot: RouteSnapshot = {
-              optimizedRoute: null,
-              legs: [],
-              totalDistanceMiles: 0,
-              totalDistanceKm: 0,
-              coordinates: newCoordinates,
-            };
-
-            setChatMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMessage.id
-                  ? {
-                      ...m,
-                      previousRoute: previousSnapshot,
-                      newRoute: newSnapshot,
-                    }
-                  : m,
-              ),
-            );
-
-            setCoordinates(newCoordinates);
-          }
-        }
-      } else {
-        const errorMessage: ChatMessage = {
-          id: uuidv4(),
-          role: "assistant",
-          content: data.error || "Something went wrong. Try again.",
-        };
-        setChatMessages((prev) => [...prev, errorMessage]);
-      }
-    } catch (err) {
-      const errorMessage: ChatMessage = {
-        id: uuidv4(),
-        role: "assistant",
-        content:
-          err instanceof Error && err.message !== "Failed to get AI response"
-            ? err.message
-            : "Failed to reach AI. Please try again.",
-      };
-      setChatMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsSendingChat(false);
-      chatInputRef.current?.focus();
-    }
-  };
 
   // Chat panel rendered at the bottom of each tab's left column (desktop)
   const chatPanel = (
@@ -778,22 +399,43 @@ export function KwikMapsContainer() {
                       )}
                     <div className="whitespace-pre-wrap">
                       {(() => {
-                        const retryMatch = msg.content.match(/(Please try again in [\d.]+[smhd][\w.]*)/i);
-                        const rateMatch = msg.content.match(/(Rate limit reached)/i);
+                        const retryMatch = msg.content.match(
+                          /(Please try again in [\d.]+[smhd][\w.]*)/i,
+                        );
+                        const rateMatch =
+                          msg.content.match(/(Rate limit reached)/i);
                         if (retryMatch || rateMatch) {
                           let parts: React.ReactNode[] = [];
                           let remaining = msg.content;
                           if (rateMatch) {
                             const i = remaining.indexOf(rateMatch[1]);
                             parts.push(remaining.slice(0, i));
-                            parts.push(<span key="rl" className="text-orange-400 font-semibold">{rateMatch[1]}</span>);
-                            remaining = remaining.slice(i + rateMatch[1].length);
+                            parts.push(
+                              <span
+                                key="rl"
+                                className="text-orange-400 font-semibold"
+                              >
+                                {rateMatch[1]}
+                              </span>,
+                            );
+                            remaining = remaining.slice(
+                              i + rateMatch[1].length,
+                            );
                           }
                           if (retryMatch) {
                             const i = remaining.indexOf(retryMatch[1]);
                             parts.push(remaining.slice(0, i));
-                            parts.push(<span key="rt" className="text-green-400 font-semibold">{retryMatch[1]}</span>);
-                            remaining = remaining.slice(i + retryMatch[1].length);
+                            parts.push(
+                              <span
+                                key="rt"
+                                className="text-green-400 font-semibold"
+                              >
+                                {retryMatch[1]}
+                              </span>,
+                            );
+                            remaining = remaining.slice(
+                              i + retryMatch[1].length,
+                            );
                           }
                           parts.push(remaining);
                           return <>{parts}</>;
@@ -1000,22 +642,43 @@ export function KwikMapsContainer() {
                       )}
                     <div className="whitespace-pre-wrap">
                       {(() => {
-                        const retryMatch = msg.content.match(/(Please try again in [\d.]+[smhd][\w.]*)/i);
-                        const rateMatch = msg.content.match(/(Rate limit reached)/i);
+                        const retryMatch = msg.content.match(
+                          /(Please try again in [\d.]+[smhd][\w.]*)/i,
+                        );
+                        const rateMatch =
+                          msg.content.match(/(Rate limit reached)/i);
                         if (retryMatch || rateMatch) {
                           let parts: React.ReactNode[] = [];
                           let remaining = msg.content;
                           if (rateMatch) {
                             const i = remaining.indexOf(rateMatch[1]);
                             parts.push(remaining.slice(0, i));
-                            parts.push(<span key="rl" className="text-orange-400 font-semibold">{rateMatch[1]}</span>);
-                            remaining = remaining.slice(i + rateMatch[1].length);
+                            parts.push(
+                              <span
+                                key="rl"
+                                className="text-orange-400 font-semibold"
+                              >
+                                {rateMatch[1]}
+                              </span>,
+                            );
+                            remaining = remaining.slice(
+                              i + rateMatch[1].length,
+                            );
                           }
                           if (retryMatch) {
                             const i = remaining.indexOf(retryMatch[1]);
                             parts.push(remaining.slice(0, i));
-                            parts.push(<span key="rt" className="text-green-400 font-semibold">{retryMatch[1]}</span>);
-                            remaining = remaining.slice(i + retryMatch[1].length);
+                            parts.push(
+                              <span
+                                key="rt"
+                                className="text-green-400 font-semibold"
+                              >
+                                {retryMatch[1]}
+                              </span>,
+                            );
+                            remaining = remaining.slice(
+                              i + retryMatch[1].length,
+                            );
                           }
                           parts.push(remaining);
                           return <>{parts}</>;
@@ -1091,7 +754,9 @@ export function KwikMapsContainer() {
       </div>
 
       {/* ── TOP BAR ── */}
-      <header className={`relative shrink-0 px-3 lg:px-5 py-2 flex items-center gap-4 border-b border-white/5 bg-slate-950/60 ${toolbarOpen ? "z-[60]" : "z-10"}`}>
+      <header
+        className={`relative shrink-0 px-3 lg:px-5 py-2 flex items-center gap-4 border-b border-white/5 bg-slate-950/60 ${toolbarOpen ? "z-[60]" : "z-10"}`}
+      >
         <button
           className="flex items-center gap-2 mr-2 lg:pointer-events-none"
           onClick={() => {
@@ -1217,23 +882,34 @@ export function KwikMapsContainer() {
           </button>
           {toolbarOpen && (
             <>
-              <div className="fixed inset-0 z-[55]" onClick={() => setToolbarOpen(false)} />
+              <div
+                className="fixed inset-0 z-[55]"
+                onClick={() => setToolbarOpen(false)}
+              />
               <div className="absolute right-0 top-full mt-1 z-[60] w-44 rounded-lg bg-slate-900 border border-white/10 shadow-xl shadow-black/40 p-1.5 flex flex-col gap-1">
                 <button
-                  onClick={() => { setFeedbackOpen(true); setToolbarOpen(false); }}
+                  onClick={() => {
+                    setFeedbackOpen(true);
+                    setToolbarOpen(false);
+                  }}
                   className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-indigo-300 hover:bg-indigo-500/15 transition-all"
                 >
                   <MessageSquarePlus size={13} /> Feedback
                 </button>
                 <button
-                  onClick={() => { setBugReportOpen(true); setToolbarOpen(false); }}
+                  onClick={() => {
+                    setBugReportOpen(true);
+                    setToolbarOpen(false);
+                  }}
                   className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-red-300 hover:bg-red-500/15 transition-all"
                 >
                   <Bug size={13} /> Bug Report
                 </button>
                 <button
                   onClick={() => {
-                    coordinates.length > 0 ? setPendingDemo(true) : handleLoadDemo();
+                    coordinates.length > 0
+                      ? setPendingDemo(true)
+                      : handleLoadDemo();
                     setToolbarOpen(false);
                   }}
                   className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-purple-300 hover:bg-purple-500/15 transition-all"
@@ -1242,7 +918,10 @@ export function KwikMapsContainer() {
                 </button>
                 {optimizedRoute && (
                   <button
-                    onClick={() => { setPendingReset(true); setToolbarOpen(false); }}
+                    onClick={() => {
+                      setPendingReset(true);
+                      setToolbarOpen(false);
+                    }}
                     className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-white/50 hover:bg-white/5 transition-all"
                   >
                     <Trash2 size={13} /> Clear
@@ -1250,7 +929,9 @@ export function KwikMapsContainer() {
                 )}
                 {isAdmin && mapsFailureLoaded && (
                   <div className="flex items-center justify-between px-3 py-2 border-t border-white/5 mt-0.5 pt-1.5">
-                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Failure</span>
+                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+                      Failure
+                    </span>
                     <button
                       onClick={async () => {
                         const next = !mapsFailure;

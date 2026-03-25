@@ -64,11 +64,11 @@ const Header = ({ cmsImageUrl, cmsHeader, cmsTagline }: Props) => {
 
   // hide loader only after we have an image URL and the minimum time elapsed
   useEffect(() => {
-    if (imageUrl && minTimeElapsed) {
+    if (minTimeElapsed) {
       setLoading(false);
       document.body.style.overflow = "auto";
     }
-  }, [imageUrl, minTimeElapsed]);
+  }, [minTimeElapsed]);
 
   console.log("cmsheader", header);
 
