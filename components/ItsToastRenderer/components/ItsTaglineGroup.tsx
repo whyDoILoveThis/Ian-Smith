@@ -51,6 +51,15 @@ const ItsTaglineGroup: React.FC<
   const remainingRef = useRef(intervals[0] ?? 2000);
   const timerStartRef = useRef(0);
 
+  // Check if the active child itself has dontCloseIfHovered
+  const activeChildEl =
+    activeIndex < childCount
+      ? (childArray[activeIndex] as React.ReactElement<any>)
+      : null;
+  const childWantsHoverPause =
+    activeChildEl?.props?.dontCloseIfHovered === true;
+  const shouldPauseOnHover = dontCloseIfHovered || childWantsHoverPause;
+
   // Reset remaining time when advancing to a new tagline
   const prevActiveRef = useRef(activeIndex);
   if (prevActiveRef.current !== activeIndex) {
@@ -61,14 +70,14 @@ const ItsTaglineGroup: React.FC<
   /* Timer — hide current tagline after its interval elapses (pauses on hover) */
   useEffect(() => {
     if (!showChild || activeIndex >= childCount) return;
-    if (dontCloseIfHovered && hovered) return;
-    const ms = dontCloseIfHovered
+    if (shouldPauseOnHover && hovered) return;
+    const ms = shouldPauseOnHover
       ? remainingRef.current
       : (intervals[activeIndex] ?? 2000);
     timerStartRef.current = Date.now();
     const timer = setTimeout(() => setShowChild(false), ms);
     return () => {
-      if (dontCloseIfHovered) {
+      if (shouldPauseOnHover) {
         const elapsed = Date.now() - timerStartRef.current;
         remainingRef.current = Math.max(0, remainingRef.current - elapsed);
       }
@@ -79,7 +88,7 @@ const ItsTaglineGroup: React.FC<
     showChild,
     intervals,
     childCount,
-    dontCloseIfHovered,
+    shouldPauseOnHover,
     hovered,
   ]);
 
@@ -104,8 +113,8 @@ const ItsTaglineGroup: React.FC<
       animate="animate"
       exit="exit"
       transition={groupWrapperTransition}
-      onMouseEnter={dontCloseIfHovered ? () => setHovered(true) : undefined}
-      onMouseLeave={dontCloseIfHovered ? () => setHovered(false) : undefined}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={cn("relative w-full h-full", className)}
     >
       <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>

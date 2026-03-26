@@ -43,6 +43,7 @@ const ItsTaglineRenderer: React.FC<ItsTaglineRendererProps> = ({
   loop = false,
   randomizeOrder = false,
   triggers,
+  numOfRenders,
   onComplete,
 }) => {
   const childArray = useMemo(
@@ -68,6 +69,32 @@ const ItsTaglineRenderer: React.FC<ItsTaglineRendererProps> = ({
   const onCompleteExtRef = useRef(onComplete);
   onCompleteExtRef.current = onComplete;
 
+  /* Track how many times each original child index has been rendered */
+  const renderCountsRef = useRef<number[]>(
+    Array.from({ length: childCount }, () => 0),
+  );
+
+  /* Keep render counts length in sync if children change */
+  useEffect(() => {
+    if (renderCountsRef.current.length !== childCount) {
+      renderCountsRef.current = Array.from({ length: childCount }, () => 0);
+    }
+  }, [childCount]);
+
+  /** Check if a child (by original index) has exhausted its render limit */
+  const isExhausted = useCallback(
+    (originalIdx: number) => {
+      const limit = numOfRenders?.[originalIdx];
+      if (!limit || limit <= 0) return false; // 0 or undefined = unlimited
+      // Only applies to interval-based children, not trigger-gated
+      const trigger = triggers?.[originalIdx];
+      const useTrigger = trigger !== undefined && trigger !== 0;
+      if (useTrigger) return false;
+      return renderCountsRef.current[originalIdx] >= limit;
+    },
+    [numOfRenders, triggers],
+  );
+
   /* Keep order length in sync if children change */
   useEffect(() => {
     setOrder((prev) =>
@@ -81,6 +108,25 @@ const ItsTaglineRenderer: React.FC<ItsTaglineRendererProps> = ({
   useEffect(() => {
     if (isShowing || isDone || activeSlot >= childCount) return;
     const originalIdx = order[activeSlot];
+
+    // Skip if this child has exhausted its render limit
+    if (isExhausted(originalIdx)) {
+      // Advance to next slot immediately
+      const nextSlot = activeSlot + 1;
+      if (nextSlot >= childCount) {
+        if (loop) {
+          onCompleteExtRef.current?.();
+          if (randomizeOrder) setOrder(shuffle(order));
+          setActiveSlot(0);
+        } else {
+          setIsDone(true);
+          onCompleteExtRef.current?.();
+        }
+      } else {
+        setActiveSlot(nextSlot);
+      }
+      return;
+    }
 
     // Check if this child has a trigger override
     const trigger = triggers?.[originalIdx];
@@ -97,9 +143,23 @@ const ItsTaglineRenderer: React.FC<ItsTaglineRendererProps> = ({
 
     // Interval mode: use the timeout
     const delay = intervals[originalIdx] ?? 0;
-    const timer = setTimeout(() => setIsShowing(true), delay);
+    const timer = setTimeout(() => {
+      renderCountsRef.current[originalIdx]++;
+      setIsShowing(true);
+    }, delay);
     return () => clearTimeout(timer);
-  }, [isShowing, isDone, activeSlot, order, intervals, triggers, childCount]);
+  }, [
+    isShowing,
+    isDone,
+    activeSlot,
+    order,
+    intervals,
+    triggers,
+    childCount,
+    isExhausted,
+    loop,
+    randomizeOrder,
+  ]);
 
   /* ── Child signals it finished displaying ── */
   const handleChildComplete = useCallback(() => {
@@ -112,6 +172,7 @@ const ItsTaglineRenderer: React.FC<ItsTaglineRendererProps> = ({
 
     if (nextSlot >= childCount) {
       if (loop) {
+        onCompleteExtRef.current?.();
         if (randomizeOrder) {
           setOrder(shuffle(orderRef.current));
         }

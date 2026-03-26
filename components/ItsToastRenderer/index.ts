@@ -11,3 +11,5 @@ export type {
   ItsTaglineRendererProps,
   ItsToastRendererProps,
 } from "./types";
+
+export { useAiReword, useAiRewordGroup } from "./hooks/useAiReword";
