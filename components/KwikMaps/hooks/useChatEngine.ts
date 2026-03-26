@@ -259,8 +259,16 @@ export function useChatEngine({
           }
         }
 
+        // Check for geocoding failures and warn the user
+        let finalMessage = validationResult.data.message;
+        const failedGeocode: string[] = Array.isArray(data.failedGeocode) ? data.failedGeocode : [];
+        if (failedGeocode.length > 0) {
+          const failedList = failedGeocode.map((n: string) => `"${n}"`).join(", ");
+          finalMessage += `\n\n⚠️ Could not find location for ${failedList}. The stop was NOT added. Try a different address format or add city/state/zip.`;
+        }
+
         // ── Step 5: Execute actions deterministically ──
-        applyActions(validationResult.data.actions, validationResult.data.message, geocoded);
+        applyActions(validationResult.data.actions, finalMessage, geocoded);
       } catch (err) {
         const errorMessage: ChatMessage = {
           id: uuidv4(),

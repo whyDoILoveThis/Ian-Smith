@@ -71,7 +71,13 @@ export interface ItsTaglineRendererProps {
    * child 1 uses its interval, child 2 waits for `someState` to be true.
    */
   triggers?: (boolean | 0)[];
-  /** Fires once all children have been displayed (ignored when loop=true) */
+  /**
+   * Per-child render limit. `numOfRenders[i]` caps how many times child `i`
+   * can be shown. Only applies to interval-based children (not trigger-gated ones).
+   * `0` or `undefined` = unlimited.
+   */
+  numOfRenders?: number[];
+  /** Fires once all children have been displayed (also fires on each loop cycle when loop=true) */
   onComplete?: () => void;
 }
 

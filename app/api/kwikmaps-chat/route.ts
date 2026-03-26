@@ -69,13 +69,32 @@ function buildSpatialContext(stops: ChatRequest['stops']): string {
   return analysis;
 }
 
-// ── Geocoding via OpenStreetMap Nominatim (free, no API key) ──
+// ── Geocoding (US Census primary, Nominatim fallback) ── all free, no API keys ──
 
-async function geocodeLocation(
+async function tryCensusGeocode(
+  address: string,
+): Promise<{ latitude: number; longitude: number } | null> {
+  try {
+    const url = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(address)}&benchmark=Public_AR_Current&format=json`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const matches = data?.result?.addressMatches;
+    if (matches && matches.length > 0) {
+      const coords = matches[0].coordinates;
+      return { latitude: coords.y, longitude: coords.x };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function tryNominatimGeocode(
   name: string,
 ): Promise<{ latitude: number; longitude: number } | null> {
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1&countrycodes=us`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'KwikMaps/1.0' },
     });
@@ -89,6 +108,17 @@ async function geocodeLocation(
   } catch {
     return null;
   }
+}
+
+async function geocodeLocation(
+  name: string,
+): Promise<{ latitude: number; longitude: number } | null> {
+  // Try US Census Geocoder first — best for street addresses
+  const census = await tryCensusGeocode(name);
+  if (census) return census;
+
+  // Fallback to Nominatim — better for business names / general places
+  return tryNominatimGeocode(name);
 }
 
 export async function POST(request: NextRequest) {
@@ -140,10 +170,22 @@ ${personalityBlock}
 ACTION TYPES:
 
 1. ADD_STOP — add a new location
-   {"type":"ADD_STOP","payload":{"name":"City, State","afterStop":N}}
+   {"type":"ADD_STOP","payload":{"name":"location string","afterStop":N}}
    - afterStop: 0-indexed insertion point. afterStop=0 means insert at the very beginning. afterStop=3 means insert AFTER stop 3.
-   - Use "City, State" or "City, State, Country" for the name. Be specific for geocoding.
-   - You do NOT provide coordinates — the server geocodes the name.
+   - The "name" field is sent directly to Google Maps Geocoding — it must be as specific as possible.
+   - CRITICAL: Pass through EVERYTHING the user provides — zip codes, street addresses, store names, landmarks. Do NOT simplify or strip information.
+   
+   ALLOWED NAME FORMATS (use the most specific one that matches user input):
+     * With zip code: "Union, MS 39365" — ALWAYS include zip codes when the user provides them, they disambiguate cities
+     * Exact address: "3993 Prospect Cedar Lane Rd, Union, MS 39365"
+     * City + State: "Nashville, TN"
+     * Business + location: "Fastenal, Oak Ridge, TN" or "Walmart, Jackson, TN"
+     * Landmark: "Graceland, Memphis, TN"
+   
+   ZIP CODE RULE: If the user includes a zip code, you MUST include it in the name. "Union MS 39365" → name="Union, MS 39365". Never drop the zip.
+   BUSINESS RULE: For store/business names, ALWAYS include city and state so geocoding finds the right one. If user says "add a Walmart" without a city, infer the nearest city from the current route.
+   ADDRESS RULE: Pass exact addresses through verbatim. "3993 prospect cedar lane rd union ms" → name="3993 Prospect Cedar Lane Rd, Union, MS"
+   - You do NOT provide coordinates — the server geocodes the name via Google Maps.
 
 2. REMOVE_STOP — remove stops by number
    {"type":"REMOVE_STOP","payload":{"stopNumbers":[N]}}
@@ -200,6 +242,10 @@ UNDERSTANDING NATURAL LANGUAGE:
 - "remove the last 3 stops" → REMOVE_STOP with the last 3 stop numbers
 - "skip Nashville" → REMOVE_STOP with Nashville's stop number
 - "optimize without algorithm" or "do it yourself" → Use REORDER_STOPS with YOUR best geographic judgment based on coordinates. Do NOT use OPTIMIZE_ROUTE.
+- "add a stop in union ms 39365" → ADD_STOP with name="Union, MS 39365" (keep the zip code!)
+- "add 3993 prospect cedar lane rd union ms" → ADD_STOP with name="3993 Prospect Cedar Lane Rd, Union, MS"
+- "add a Walmart near Jackson" → ADD_STOP with name="Walmart, Jackson, TN"
+- "I need to stop at Fastenal" → ADD_STOP with name="Fastenal, [nearest city from route], [state]"
 - Compound requests: process ALL parts — never ignore what the user said
 
 RULES:
@@ -217,7 +263,8 @@ RULES:
 - When user says "after N should be M then optimize" → REORDER first, then OPTIMIZE with lockedPrefix to protect the stops the user placed.
 - For optimization requests → OPTIMIZE_ROUTE (never manually guess order), UNLESS user explicitly says "without algorithm" or "do it yourself".
 - For reordering specific stops → REORDER_STOPS with ALL ${stopCount} numbers in the intended new sequence.
-- When adding: be specific with location names (include state/country).
+- When adding: NEVER simplify what the user typed. Include zip codes, full addresses, store names exactly. "Union ms 39365" → "Union, MS 39365", NOT "Union, MS".
+- For store/business names: ALWAYS append city + state from the current route context.
 - Use the spatial analysis above to understand geography — reference distances and directions in your response.${isHigh ? '\n- At high creativity: if you see obvious improvements, mention AND apply them. Be proactive.' : ''}
 
 MESSAGE STYLE:
@@ -308,6 +355,7 @@ MESSAGE STYLE:
 
     // ── Geocode any ADD_STOP actions ──
     const geocoded: { name: string; latitude: number; longitude: number }[] = [];
+    const failedGeocode: string[] = [];
 
     for (const action of actions) {
       if (
@@ -323,6 +371,7 @@ MESSAGE STYLE:
             geocoded.push({ name: name.trim(), ...geo });
           } else {
             console.warn(`[KwikMaps] Geocoding failed for: ${name}`);
+            failedGeocode.push(name.trim());
           }
         }
       }
@@ -333,6 +382,7 @@ MESSAGE STYLE:
       actions,
       message,
       geocoded,
+      failedGeocode,
     });
   } catch (error) {
     console.error('KwikMaps chat API error:', error);
