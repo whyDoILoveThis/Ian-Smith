@@ -23,6 +23,7 @@ A composable, animation-driven tagline and toast notification system built with 
   - [Slide-from-side toast](#slide-from-side-toast)
   - [Toast with taglines inside](#toast-with-taglines-inside)
   - [Custom positioning](#custom-positioning)
+  - [Pause on hover](#pause-on-hover)
 - [Real-World Usage — PortfolioLink](#real-world-usage--portfoliolink)
 - [Animation Details](#animation-details)
 - [File Structure](#file-structure)
@@ -100,14 +101,15 @@ The **atomic unit**. Renders a styled line of text — or any arbitrary React co
 
 #### Props
 
-| Prop        | Type        | Default | Description                                                                                                                               |
-| ----------- | ----------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `text`      | `string`    | —       | Text to display. **Ignored** when `children` are provided.                                                                                |
-| `textColor` | `string`    | —       | CSS color applied to the text (e.g. `"#fff"`, `"rgb(100,200,255)"`).                                                                      |
-| `bgColor`   | `string`    | —       | CSS background color. When set, the tagline also applies `rounded-lg px-4 py-2` for a card look.                                          |
-| `className` | `string`    | —       | Additional Tailwind / CSS classes merged onto the root element.                                                                           |
-| `children`  | `ReactNode` | —       | Custom component or card to render **instead** of plain text. Takes priority over `text`.                                                 |
-| `duration`  | `number`    | `3000`  | How long (ms) the tagline stays visible. Only used when this tagline is a **direct child of ItsTaglineRenderer**. Ignored inside a Group. |
+| Prop                 | Type        | Default | Description                                                                                                                               |
+| -------------------- | ----------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `text`               | `string`    | —       | Text to display. **Ignored** when `children` are provided.                                                                                |
+| `textColor`          | `string`    | —       | CSS color applied to the text (e.g. `"#fff"`, `"rgb(100,200,255)"`).                                                                      |
+| `bgColor`            | `string`    | —       | CSS background color. When set, the tagline also applies `rounded-lg px-4 py-2` for a card look.                                          |
+| `className`          | `string`    | —       | Additional Tailwind / CSS classes merged onto the root element.                                                                           |
+| `children`           | `ReactNode` | —       | Custom component or card to render **instead** of plain text. Takes priority over `text`.                                                 |
+| `duration`           | `number`    | `3000`  | How long (ms) the tagline stays visible. Only used when this tagline is a **direct child of ItsTaglineRenderer**. Ignored inside a Group. |
+| `dontCloseIfHovered` | `boolean`   | `false` | When `true`, pauses the visibility timer while the user hovers. Resumes with the remaining time on mouse-leave.                           |
 
 #### Rendering modes
 
@@ -144,11 +146,12 @@ Groups multiple ItsTaglines and renders them **one at a time**, in order. You co
 
 #### Props
 
-| Prop        | Type        | Default | Description                                                                |
-| ----------- | ----------- | ------- | -------------------------------------------------------------------------- |
-| `children`  | `ReactNode` | —       | One or more `ItsTagline` components.                                       |
-| `intervals` | `number[]`  | —       | Display duration (ms) for each child. `intervals[0]` → first tagline, etc. |
-| `className` | `string`    | —       | Additional Tailwind / CSS classes.                                         |
+| Prop                 | Type        | Default | Description                                                                                                                                |
+| -------------------- | ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `children`           | `ReactNode` | —       | One or more `ItsTagline` components.                                                                                                       |
+| `intervals`          | `number[]`  | —       | Display duration (ms) for each child. `intervals[0]` → first tagline, etc.                                                                 |
+| `className`          | `string`    | —       | Additional Tailwind / CSS classes.                                                                                                         |
+| `dontCloseIfHovered` | `boolean`   | `false` | When `true`, pauses the current tagline's interval timer while the user hovers over the group. Resumes with remaining time on mouse-leave. |
 
 > **Note:** When inside a Group, each tagline's own `duration` prop is **ignored** — the Group's `intervals` array takes full control.
 
@@ -516,6 +519,45 @@ Override default positions with Tailwind utilities in `className`:
   <ItsTagline text="Overridden layout" duration={5000} />
 </ItsTaglineRenderer>;
 ```
+
+### Pause on hover
+
+Keep a tagline visible as long as the user hovers over it. The timer pauses while hovered and resumes with the remaining time when the cursor leaves:
+
+```tsx
+{
+  /* On a standalone tagline */
+}
+<div className="relative h-12">
+  <ItsTaglineRenderer intervals={[0, 1000]} loop>
+    <ItsTagline
+      text="Hover me — I won't disappear!"
+      duration={4000}
+      dontCloseIfHovered
+    />
+    <ItsTagline
+      text="You can hover me too"
+      duration={4000}
+      dontCloseIfHovered
+    />
+  </ItsTaglineRenderer>
+</div>;
+
+{
+  /* On a group — pauses whichever tagline is currently visible */
+}
+<div className="relative h-12">
+  <ItsTaglineRenderer intervals={[500]}>
+    <ItsTaglineGroup intervals={[3000, 3000, 3000]} dontCloseIfHovered>
+      <ItsTagline text="Step 1" />
+      <ItsTagline text="Step 2" />
+      <ItsTagline text="Step 3" />
+    </ItsTaglineGroup>
+  </ItsTaglineRenderer>
+</div>;
+```
+
+> When `dontCloseIfHovered` is set on an **ItsTaglineGroup**, the hover applies to the entire group wrapper — whichever child tagline is currently visible will have its timer paused. Individual taglines inside the group don't need their own `dontCloseIfHovered`.
 
 ---
 

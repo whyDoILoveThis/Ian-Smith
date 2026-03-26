@@ -28,7 +28,13 @@ import {
  */
 const ItsTaglineGroup: React.FC<
   ItsTaglineGroupProps & ItsTaglineGroupInternalProps
-> = ({ children, intervals, className, _onComplete }) => {
+> = ({
+  children,
+  intervals,
+  className,
+  dontCloseIfHovered = false,
+  _onComplete,
+}) => {
   const childArray = Children.toArray(children).filter(isValidElement);
   const childCount = childArray.length;
 
@@ -41,13 +47,41 @@ const ItsTaglineGroup: React.FC<
   const onCompleteRef = useRef(_onComplete);
   onCompleteRef.current = _onComplete;
 
-  /* Timer — hide current tagline after its interval elapses */
+  const [hovered, setHovered] = useState(false);
+  const remainingRef = useRef(intervals[0] ?? 2000);
+  const timerStartRef = useRef(0);
+
+  // Reset remaining time when advancing to a new tagline
+  const prevActiveRef = useRef(activeIndex);
+  if (prevActiveRef.current !== activeIndex) {
+    remainingRef.current = intervals[activeIndex] ?? 2000;
+    prevActiveRef.current = activeIndex;
+  }
+
+  /* Timer — hide current tagline after its interval elapses (pauses on hover) */
   useEffect(() => {
     if (!showChild || activeIndex >= childCount) return;
-    const duration = intervals[activeIndex] ?? 2000;
-    const timer = setTimeout(() => setShowChild(false), duration);
-    return () => clearTimeout(timer);
-  }, [activeIndex, showChild, intervals, childCount]);
+    if (dontCloseIfHovered && hovered) return;
+    const ms = dontCloseIfHovered
+      ? remainingRef.current
+      : (intervals[activeIndex] ?? 2000);
+    timerStartRef.current = Date.now();
+    const timer = setTimeout(() => setShowChild(false), ms);
+    return () => {
+      if (dontCloseIfHovered) {
+        const elapsed = Date.now() - timerStartRef.current;
+        remainingRef.current = Math.max(0, remainingRef.current - elapsed);
+      }
+      clearTimeout(timer);
+    };
+  }, [
+    activeIndex,
+    showChild,
+    intervals,
+    childCount,
+    dontCloseIfHovered,
+    hovered,
+  ]);
 
   /* After exit animation completes, advance or signal done */
   const handleExitComplete = useCallback(() => {
@@ -70,6 +104,8 @@ const ItsTaglineGroup: React.FC<
       animate="animate"
       exit="exit"
       transition={groupWrapperTransition}
+      onMouseEnter={dontCloseIfHovered ? () => setHovered(true) : undefined}
+      onMouseLeave={dontCloseIfHovered ? () => setHovered(false) : undefined}
       className={cn("relative w-full h-full", className)}
     >
       <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>

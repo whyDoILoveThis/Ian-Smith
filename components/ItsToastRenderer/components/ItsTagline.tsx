@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { ItsTaglineProps, ItsTaglineInternalProps } from "../types";
 import { taglineVariants, taglineTransition } from "../utils/animations";
+import EmojiText from "@/components/ui/EmojiText";
 
 /**
  * Atomic tagline unit — renders styled text **or** an arbitrary component/card
@@ -23,18 +24,31 @@ const ItsTagline: React.FC<ItsTaglineProps & ItsTaglineInternalProps> = ({
   className,
   children,
   duration,
+  dontCloseIfHovered = false,
   _onComplete,
 }) => {
   // Stable ref so the effect timer never fires a stale callback
   const onCompleteRef = useRef(_onComplete);
   onCompleteRef.current = _onComplete;
 
+  const [hovered, setHovered] = useState(false);
+  const remainingRef = useRef(duration ?? 3000);
+  const timerStartRef = useRef(0);
+
   useEffect(() => {
     if (!onCompleteRef.current) return;
-    const ms = duration ?? 3000;
+    if (dontCloseIfHovered && hovered) return;
+    const ms = dontCloseIfHovered ? remainingRef.current : (duration ?? 3000);
+    timerStartRef.current = Date.now();
     const timer = setTimeout(() => onCompleteRef.current?.(), ms);
-    return () => clearTimeout(timer);
-  }, [duration]);
+    return () => {
+      if (dontCloseIfHovered) {
+        const elapsed = Date.now() - timerStartRef.current;
+        remainingRef.current = Math.max(0, remainingRef.current - elapsed);
+      }
+      clearTimeout(timer);
+    };
+  }, [duration, dontCloseIfHovered, hovered]);
 
   const style: React.CSSProperties = {};
   if (textColor) style.color = textColor;
@@ -47,15 +61,19 @@ const ItsTagline: React.FC<ItsTaglineProps & ItsTaglineInternalProps> = ({
       animate="animate"
       exit="exit"
       transition={taglineTransition}
+      onMouseEnter={dontCloseIfHovered ? () => setHovered(true) : undefined}
+      onMouseLeave={dontCloseIfHovered ? () => setHovered(false) : undefined}
       className={cn(
         "flex items-center justify-center w-full h-full pointer-events-auto",
         className,
       )}
       style={style}
     >
-      {children ?? (
-        <span className="text-center whitespace-pre-wrap">{text}</span>
-      )}
+      <EmojiText>
+        {children ?? (
+          <span className="text-center whitespace-pre-wrap">{text}</span>
+        )}
+      </EmojiText>
     </motion.div>
   );
 };

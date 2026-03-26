@@ -19,6 +19,8 @@ export interface ItsTaglineProps {
    * Defaults to 3000 ms when managed by a parent.
    */
   duration?: number;
+  /** When true, pauses the visibility timer while the user hovers over the tagline. */
+  dontCloseIfHovered?: boolean;
 }
 
 /** Injected by parent orchestrators – not part of the public API. */
@@ -35,6 +37,8 @@ export interface ItsTaglineGroupProps {
   intervals: number[];
   /** Additional Tailwind / CSS classes */
   className?: string;
+  /** When true, pauses the current tagline's timer while the user hovers over the group. */
+  dontCloseIfHovered?: boolean;
 }
 
 /** Injected by ItsTaglineRenderer. */
