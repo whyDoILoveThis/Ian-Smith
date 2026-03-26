@@ -102,7 +102,7 @@ export default function FloatingParticles({
     <>
       {particles.map((p) =>
         isEmoji ? (
-          <span
+          <EmojiText as="span"
             key={p.id}
             className="absolute sc-float"
             style={
@@ -121,7 +121,7 @@ export default function FloatingParticles({
             }
           >
             {p.content}
-          </span>
+          </EmojiText>
         ) : (
           <div
             key={p.id}
