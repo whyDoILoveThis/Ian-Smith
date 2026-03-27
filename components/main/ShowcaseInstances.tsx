@@ -13,6 +13,7 @@ import PerfOverlayHero from "@/components/main/showcase-visuals/PerfOverlayHero"
    ═══════════════════════════════════════════════════════════ */
 
 import EmojiText from "@/components/ui/EmojiText";
+import QuizMeDemo from "./showcase-visuals/ItsQuizMeDemo";
 const WATER_SORT_EMOJIS = [
   "🍎",
   "🍊",
@@ -216,6 +217,7 @@ export function ItsQuizMeShowcaseCard() {
       ctaLabel="Try ItsQuizMe"
       ctaHref="/itsquizme"
       techNote="Built with React & AI — supports knowledge quizzes, self-assessments & opinion polls"
+      centerSlot={<QuizMeDemo />}
       backgroundSlot={
         <FloatingParticles
           dotColorRgb="139,92,246"

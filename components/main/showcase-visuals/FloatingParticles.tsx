@@ -1,5 +1,6 @@
 "use client";
 
+import EmojiText from "@/components/ui/EmojiText";
 import React, { useState, useEffect } from "react";
 
 /* ── Particle layout configuration (computed once, not animation logic) ── */
@@ -19,7 +20,7 @@ export interface FloatingParticlesProps {
   /** Number of particles (default: 10) */
   count?: number;
   /** Emoji list — now accepts ReactNode[] for custom emoji rendering. Omit for dot particles. */
-  emojis?: React.ReactNode[];
+  emojis?: string[];
   /** RGB triplet for dot particles, e.g. "139,92,246" */
   dotColorRgb?: string;
   /** Total vertical travel in px (default: 500 for emojis, 600 for dots) */
@@ -102,25 +103,26 @@ export default function FloatingParticles({
     <>
       {particles.map((p) =>
         isEmoji ? (
-          <EmojiText as="span"
-            key={p.id}
-            className="absolute sc-float"
-            style={
-              {
-                left: `${p.x}%`,
-                bottom: resolvedBottom,
-                fontSize: p.size,
-                // fontFamily intentionally omitted so EmojiText controls font
-                "--sc-float-y": `${-resolvedDistance}px`,
-                "--sc-float-rotate": `${resolvedRotation}deg`,
-                "--sc-float-peak": String(p.peakOpacity),
-                "--sc-float-mid": String(p.midOpacity),
-                animationDuration: `${p.duration}s`,
-                animationDelay: `${p.delay}s`,
-              } as React.CSSProperties
-            }
-          >
-            {p.content}
+          <EmojiText key={p.id}>
+            <span
+              className="absolute sc-float"
+              style={
+                {
+                  left: `${p.x}%`,
+                  bottom: resolvedBottom,
+                  fontSize: p.size,
+                  // fontFamily intentionally omitted so EmojiText controls font
+                  "--sc-float-y": `${-resolvedDistance}px`,
+                  "--sc-float-rotate": `${resolvedRotation}deg`,
+                  "--sc-float-peak": String(p.peakOpacity),
+                  "--sc-float-mid": String(p.midOpacity),
+                  animationDuration: `${p.duration}s`,
+                  animationDelay: `${p.delay}s`,
+                } as React.CSSProperties
+              }
+            >
+              {p.content}
+            </span>
           </EmojiText>
         ) : (
           <div
