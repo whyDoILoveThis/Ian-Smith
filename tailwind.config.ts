@@ -1,6 +1,14 @@
 import type { Config } from "tailwindcss"
 
 const config = {
+  safelist: [
+  {
+    pattern: /fill-(.*)/,
+  },
+  {
+    pattern: /opacity-(.*)/,
+  },
+],
   darkMode: ["class"],
   content: [
     './pages/**/*.{ts,tsx}',

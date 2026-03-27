@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-// Routes where scroll buttons should be hidden
-const HIDDEN_ROUTES = ["/", "/iconcreator"];
+// Routes where scroll buttons should be visible
+const VISIBLE_ROUTES = ["/", "/iconcreator"];
 
 export default function ScrollJumpButtons() {
   const pathname = usePathname();
   const [showTop, setShowTop] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
-  const isHidden = !HIDDEN_ROUTES.includes(pathname);
+  const isVisible = VISIBLE_ROUTES.includes(pathname);
 
   useEffect(() => {
     const check = () => {
@@ -31,7 +31,7 @@ export default function ScrollJumpButtons() {
     };
   }, []);
 
-  if (isHidden) {
+  if (!isVisible) {
     return null;
   }
 
