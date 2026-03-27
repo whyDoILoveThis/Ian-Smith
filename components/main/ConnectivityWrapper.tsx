@@ -15,7 +15,7 @@ export default function ConnectivityWrapper({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const updateStatus = () => setOnline(!navigator.onLine);
+    const updateStatus = () => setOnline(navigator.onLine);
 
     window.addEventListener("online", updateStatus);
     window.addEventListener("offline", updateStatus);
