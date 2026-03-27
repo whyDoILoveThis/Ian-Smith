@@ -4,6 +4,14 @@
 import "./lib/tracker";
 import { FirebaseRTDBTrackerOverlay } from ".";
 
-export default function FirebaseRTDBTrackerOverlayRenderer() {
+interface Props {
+  disabled?: boolean;
+}
+
+export default function FirebaseRTDBTrackerOverlayRenderer({
+  disabled = false,
+}: Props) {
+  if (disabled) return null;
+
   return <FirebaseRTDBTrackerOverlay />;
 }

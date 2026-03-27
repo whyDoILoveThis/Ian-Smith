@@ -54,10 +54,10 @@ export default function RootLayout({
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <BreadcrumbProvider disabled>
+              <FirebaseRTDBTrackerOverlayRenderer disabled />
               <PerformanceOverlayRouteCheckRenderer />
               <ScrollJumpButtons />
               <VersionGuard />
-              <FirebaseRTDBTrackerOverlayRenderer />
               <SignedIn>
                 <ConnectivityWrapper>
                   <MainWrap>
