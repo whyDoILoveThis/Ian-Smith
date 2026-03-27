@@ -6,15 +6,17 @@ import { useEffect, useState } from "react";
 import ITSLogo from "../sub/ItsLogo";
 import LinkUnderlineAnim from "../sub/LinkUnderlineAnim";
 import ItsDropdown from "@/components/ui/its-dropdown";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Settings, Sparkles, Snail } from "lucide-react";
 import { LINKS } from "@/lib/Links";
 import { useNavFooterTheme } from "./NavFooterTheme";
+import { useOrbSettings } from "@/components/ItsGlowingOrbs/OrbSettingsContext";
 
 const Nav = () => {
   const pathname = usePathname();
   const [hidden, setHidden] = useState(false);
   const theme = useNavFooterTheme();
   const isBlack = theme === "black";
+  const { setShowDashboard, resetSpeeds } = useOrbSettings();
 
   useEffect(() => {
     if (pathname === "/cpp") setHidden(true);
@@ -51,6 +53,33 @@ const Nav = () => {
               ))}
             </span>
             <ThemeToggler isMobile={false} />
+            <ItsDropdown
+              trigger={
+                <button
+                  className={`p-2 rounded-full border border-slate-200/20 ${isBlack ? "dark:border-gray-700/30" : "dark:border-slate-700/30"} bg-white/30 ${isBlack ? "dark:bg-gray-900/30" : "dark:bg-slate-800/30"} backdrop-blur-sm hover:brightness-110 transition`}
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+              }
+              position="down-right"
+              closeWhenItemClick
+              className="!w-56"
+            >
+              <button
+                onClick={() => setShowDashboard(true)}
+                className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm text-neutral-700 dark:text-neutral-200 hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-300 transition-all"
+              >
+                <Sparkles className="w-4 h-4 text-violet-500" />
+                Floating Orb Settings
+              </button>
+              <button
+                onClick={() => resetSpeeds()}
+                className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm text-neutral-700 dark:text-neutral-200 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-300 transition-all"
+              >
+                <Snail className="w-4 h-4 text-blue-500" />
+                Slow Orbs
+              </button>
+            </ItsDropdown>
           </div>
           {/* MOBILE MENU DROPDOWN */}
           <div className="md:hidden relative z-10">
