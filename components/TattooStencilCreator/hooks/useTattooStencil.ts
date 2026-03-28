@@ -7,6 +7,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import type {
+  DepthMapData,
   LimbRegion,
   ProcessingState,
   ProcessingStep,
@@ -27,6 +28,7 @@ import {
 } from '../utils/imageProcessing';
 import { detectPose, disposePoseDetection } from '../utils/poseDetection';
 import { extractLimbRegions, selectBestLimb } from '../utils/limbExtraction';
+import { estimateDepthMap } from '../utils/depthEstimation';
 import { STEP_DESCRIPTIONS } from '../lib/constants';
 
 // ── State factory ────────────────────────────────────────────
@@ -45,6 +47,7 @@ export function useTattooStencil() {
   const [result, setResult] = useState<StencilResult | null>(null);
   const [options, setOptions] = useState<StencilOptions>(DEFAULT_STENCIL_OPTIONS);
   const [regionResult, setRegionResult] = useState<RegionEditorResult | null>(null);
+  const [depthMap, setDepthMap] = useState<DepthMapData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Derived: are we waiting for the user to draw regions?
@@ -111,9 +114,10 @@ export function useTattooStencil() {
       // 1. Pose detection (client-side, AI-assisted) ──────────
       step('detecting-pose', 10);
 
+      let landmarks: import('../types').PoseLandmark[] | null = null;
       try {
         const imgEl = await createImageElement(image.file);
-        const landmarks = await detectPose(imgEl);
+        landmarks = await detectPose(imgEl);
         URL.revokeObjectURL(imgEl.src);
 
         if (landmarks) {
@@ -128,6 +132,21 @@ export function useTattooStencil() {
 
       if (abort.signal.aborted) return;
 
+      // 2. Depth estimation (client-side) ─────────────────────
+      if (options.useDepthFlattening) {
+        step('estimating-depth', 22);
+        try {
+          const dm = await estimateDepthMap(
+            image.file, image.width, image.height, landmarks,
+          );
+          setDepthMap(dm);
+        } catch (depthErr) {
+          console.warn('[TattooStencil] Depth estimation failed:', depthErr);
+        }
+      }
+
+      if (abort.signal.aborted) return;
+
       // 2. Pause — ask user for region editor ─────────────────
       step('awaiting-regions', 25);
       // Execution pauses here. The user interacts with the
@@ -137,7 +156,7 @@ export function useTattooStencil() {
       if ((err as Error).name === 'AbortError') return;
       fail(err instanceof Error ? err.message : 'Unexpected error during processing.');
     }
-  }, [image, step, fail]);
+  }, [image, options.useDepthFlattening, step, fail]);
 
   // Ref to hold auto-detected limbRegion between phases
   const limbRef = useRef<LimbRegion | undefined>(undefined);
@@ -171,6 +190,8 @@ export function useTattooStencil() {
             limbOutline: regions?.limbOutline ?? undefined,
             tattooHighlight: regions?.tattooHighlight ?? undefined,
             curveHighlight: regions?.curveHighlight ?? undefined,
+            reliefHighlight: regions?.reliefHighlight ?? undefined,
+            depthMap: depthMap ?? undefined,
             options,
           }),
           signal: abort.signal,
@@ -195,7 +216,7 @@ export function useTattooStencil() {
         fail(err instanceof Error ? err.message : 'Unexpected error during processing.');
       }
     },
-    [image, options, step, fail],
+    [image, options, depthMap, step, fail],
   );
 
   // ── Reset ────────────────────────────────────────────────
@@ -206,6 +227,7 @@ export function useTattooStencil() {
     setImage(null);
     setResult(null);
     setRegionResult(null);
+    setDepthMap(null);
     limbRef.current = undefined;
     setProcessing(idle);
     disposePoseDetection();

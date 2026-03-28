@@ -3,7 +3,7 @@
    ───────────────────────────────────────────────────────────── */
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState, lazy, Suspense } from "react";
 import { useTattooStencil } from "@/components/TattooStencilCreator/hooks/useTattooStencil";
 import TattooUploader from "@/components/TattooStencilCreator/components/TattooUploader";
 import StencilPreview from "@/components/TattooStencilCreator/components/StencilPreview";
@@ -11,8 +11,18 @@ import ProcessingStatus from "@/components/TattooStencilCreator/components/Proce
 import StencilOptions from "@/components/TattooStencilCreator/components/StencilOptions";
 import RegionEditor from "@/components/TattooStencilCreator/components/RegionEditor";
 import type { RegionEditorResult } from "@/components/TattooStencilCreator/types";
+import Nav from "@/components/main/Nav";
+import Footer from "@/components/main/Footer";
+
+const MeshEditor = lazy(
+  () => import("@/components/TattooStencilCreator/MeshEditor/MeshEditor"),
+);
+
+type EditorMode = "pipeline" | "sculpt";
 
 export default function TattooStencilPage() {
+  const [editorMode, setEditorMode] = useState<EditorMode>("pipeline");
+
   const {
     image,
     processing,
@@ -47,6 +57,7 @@ export default function TattooStencilPage() {
 
   return (
     <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <Nav />
       {/* ── Header ────────────────────────────────────────── */}
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
@@ -58,52 +69,105 @@ export default function TattooStencilPage() {
         </p>
       </div>
 
-      {/* ── Two-column layout (stacks on mobile) ──────────── */}
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* LEFT – Upload & Options / Boundary selector */}
-        <div className="flex flex-col gap-6">
-          {/* Show region editor when awaiting user input */}
-          {awaitingRegions && image ? (
-            <RegionEditor
-              imageSrc={image.preview}
-              imageWidth={image.width}
-              imageHeight={image.height}
-              onConfirm={handleRegionConfirm}
-              onSkip={handleRegionSkip}
-              initialRegions={regionResult}
-            />
-          ) : (
-            <>
-              <TattooUploader
-                image={image}
-                processing={processing}
-                onUpload={handleUpload}
-                onProcess={processImage}
-                onReset={reset}
-              />
-
-              {image && !isBusy && (
-                <StencilOptions
-                  options={options}
-                  onChange={setOptions}
-                  disabled={isBusy}
-                />
-              )}
-            </>
-          )}
-
-          <ProcessingStatus processing={processing} />
-        </div>
-
-        {/* RIGHT – Result */}
-        <div className="flex flex-col gap-6">
-          {result ? (
-            <StencilPreview result={result} />
-          ) : (
-            <EmptyResultPlaceholder />
-          )}
-        </div>
+      {/* ── Mode Toggle ───────────────────────────────────── */}
+      <div className="mb-6 flex items-center justify-center gap-3">
+        <span
+          className={`text-sm font-medium transition-colors ${
+            editorMode === "pipeline"
+              ? "text-foreground"
+              : "text-muted-foreground"
+          }`}
+        >
+          Pipeline
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={editorMode === "sculpt"}
+          onClick={() =>
+            setEditorMode((m) => (m === "pipeline" ? "sculpt" : "pipeline"))
+          }
+          className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+            editorMode === "sculpt" ? "bg-indigo-600" : "bg-zinc-700"
+          }`}
+        >
+          <span
+            className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform ${
+              editorMode === "sculpt" ? "translate-x-7" : "translate-x-1"
+            }`}
+          />
+        </button>
+        <span
+          className={`text-sm font-medium transition-colors ${
+            editorMode === "sculpt"
+              ? "text-foreground"
+              : "text-muted-foreground"
+          }`}
+        >
+          3D Sculpt Editor
+        </span>
       </div>
+
+      {/* ── SCULPT MODE ───────────────────────────────────── */}
+      {editorMode === "sculpt" ? (
+        <Suspense
+          fallback={
+            <div className="flex h-[500px] items-center justify-center rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 text-sm text-zinc-500">
+              Loading 3D Editor&hellip;
+            </div>
+          }
+        >
+          <MeshEditor />
+        </Suspense>
+      ) : (
+        /* ── PIPELINE MODE (existing) ───────────────────────── */
+        <div className="grid gap-8 lg:grid-cols-2">
+          {/* LEFT – Upload & Options / Boundary selector */}
+          <div className="flex flex-col gap-6">
+            {/* Show region editor when awaiting user input */}
+            {awaitingRegions && image ? (
+              <RegionEditor
+                imageSrc={image.preview}
+                imageWidth={image.width}
+                imageHeight={image.height}
+                onConfirm={handleRegionConfirm}
+                onSkip={handleRegionSkip}
+                initialRegions={regionResult}
+              />
+            ) : (
+              <>
+                <TattooUploader
+                  image={image}
+                  processing={processing}
+                  onUpload={handleUpload}
+                  onProcess={processImage}
+                  onReset={reset}
+                />
+
+                {image && !isBusy && (
+                  <StencilOptions
+                    options={options}
+                    onChange={setOptions}
+                    disabled={isBusy}
+                  />
+                )}
+              </>
+            )}
+
+            <ProcessingStatus processing={processing} />
+          </div>
+
+          {/* RIGHT – Result */}
+          <div className="flex flex-col gap-6">
+            {result ? (
+              <StencilPreview result={result} />
+            ) : (
+              <EmptyResultPlaceholder />
+            )}
+          </div>
+        </div>
+      )}
+      <Footer />
     </section>
   );
 }

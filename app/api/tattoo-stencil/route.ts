@@ -68,16 +68,22 @@ interface Point2D { x: number; y: number }
 interface LimbOutline { points: Point2D[] }
 interface TattooHighlight { maskBase64: string; width: number; height: number }
 interface CurveHighlight { maskBase64: string; width: number; height: number; curvaturePercent: number; angleDeg: number }
+interface ReliefHighlight { maskBase64: string; width: number; height: number }
+interface DepthMapData { mapBase64: string; width: number; height: number; source: string }
 interface StencilOptions {
   generateSvg: boolean;
   contrastLevel: 'low' | 'medium' | 'high';
   edgeThickness: 'thin' | 'medium' | 'thick';
   noiseReduction: 'low' | 'medium' | 'high';
   curvatureStrength: number;
+  useMeshWarping: boolean;
+  meshResolution: number;
+  useDepthFlattening: boolean;
+  aiCleanup: boolean;
 }
 interface UnwrapDebugInfo {
   applied: boolean;
-  source: 'outline' | 'landmarks' | 'curve-mask' | 'none';
+  source: 'outline' | 'landmarks' | 'curve-mask' | 'mesh-warp' | 'depth-aware' | 'none';
   centerX?: number;
   centerY?: number;
   radius?: number;
@@ -89,6 +95,9 @@ interface UnwrapDebugInfo {
   tattooHighlightBase64?: string;
   curveHighlightBase64?: string;
   curvaturePercent?: number;
+  meshGridCells?: number;
+  depthAware?: boolean;
+  reliefApplied?: boolean;
 }
 interface UnwrapResult { buf: Buffer; debug: UnwrapDebugInfo }
 
@@ -104,12 +113,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { imageBase64, limbRegion, limbOutline, tattooHighlight, curveHighlight, options } = body as {
+    const { imageBase64, limbRegion, limbOutline, tattooHighlight, curveHighlight, reliefHighlight, depthMap, options } = body as {
       imageBase64: string;
       limbRegion?: LimbRegion;
       limbOutline?: LimbOutline;
       tattooHighlight?: TattooHighlight;
       curveHighlight?: CurveHighlight;
+      reliefHighlight?: ReliefHighlight;
+      depthMap?: DepthMapData;
       options: StencilOptions;
     };
 
@@ -263,6 +274,68 @@ export async function POST(request: NextRequest) {
     // Also attach curve highlight for debug
     if (curveHighlight?.maskBase64) {
       unwrapDebug.curveHighlightBase64 = curveHighlight.maskBase64;
+    }
+
+    /* ── 6b. Mesh grid warping (localized, non-uniform) ─────── */
+    if (options.useMeshWarping) {
+      const hasMeshInputs = depthMap?.mapBase64 || reliefHighlight?.maskBase64 || curveHighlight?.maskBase64;
+      if (hasMeshInputs) {
+        try {
+          const { applyMeshWarp } = await import(
+            '@/components/TattooStencilCreator/utils/meshWarping'
+          );
+
+          // Get current score buffer dimensions
+          const meshMeta = await sharp(scoreBuf).metadata();
+          const meshW = meshMeta.width ?? W;
+          const meshH = meshMeta.height ?? H;
+
+          // Prepare mask buffers for mesh warping
+          let meshDepthBuf: Buffer | undefined;
+          if (depthMap?.mapBase64) {
+            meshDepthBuf = Buffer.from(depthMap.mapBase64, 'base64');
+          }
+
+          let meshReliefBuf: Buffer | undefined;
+          if (reliefHighlight?.maskBase64) {
+            meshReliefBuf = Buffer.from(reliefHighlight.maskBase64, 'base64');
+          }
+
+          let meshCurveBuf: Buffer | undefined;
+          if (curveHighlight?.maskBase64) {
+            meshCurveBuf = Buffer.from(curveHighlight.maskBase64, 'base64');
+          }
+
+          const meshResult = await applyMeshWarp(scoreBuf, meshW, meshH, {
+            resolution: options.meshResolution || 12,
+            depthMap: meshDepthBuf,
+            reliefMask: meshReliefBuf,
+            curveMask: meshCurveBuf,
+            curveMaskAngleDeg: curveHighlight?.angleDeg,
+            strength: curvK,
+          });
+
+          scoreBuf = meshResult.buf;
+          unwrapDebug.meshGridCells = meshResult.gridCells;
+          unwrapDebug.depthAware = !!depthMap?.mapBase64;
+          unwrapDebug.reliefApplied = !!reliefHighlight?.maskBase64;
+
+          // Update source if mesh warp was the primary flattener
+          if (!unwrapDebug.applied) {
+            unwrapDebug.applied = true;
+            unwrapDebug.source = 'mesh-warp';
+          }
+
+          console.log(
+            '[tattoo-stencil] Mesh warp applied: %d cells, depth=%s, relief=%s',
+            meshResult.gridCells,
+            !!depthMap?.mapBase64,
+            !!reliefHighlight?.maskBase64,
+          );
+        } catch (meshErr) {
+          console.warn('[tattoo-stencil] Mesh warp failed, continuing without:', meshErr);
+        }
+      }
     }
 
     /* ── 7. Auto-threshold (Otsu) → binary stencil ─────────── */

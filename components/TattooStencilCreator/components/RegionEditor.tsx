@@ -43,6 +43,7 @@ import {
   Waves,
 } from "lucide-react";
 import type { Point2D, RegionEditorResult } from "../types";
+import { Mountain, ArrowDown } from "lucide-react";
 
 // ── Preset / saved-set types ─────────────────────────────────
 
@@ -76,7 +77,7 @@ function savePresetsToStorage(presets: SavedPreset[]) {
 
 // ── Types ────────────────────────────────────────────────────
 
-type Mode = "outline" | "highlight" | "curves";
+type Mode = "outline" | "highlight" | "curves" | "relief";
 
 interface Props {
   imageSrc: string;
@@ -127,6 +128,10 @@ export default function RegionEditor({
   const [curvaturePercent, setCurvaturePercent] = useState(50);
   const [curveAngle, setCurveAngle] = useState(0);
   const [showHelp, setShowHelp] = useState(true);
+  /** Relief brush mode: emboss (>128) or divot (<128). */
+  const [reliefMode, setReliefMode] = useState<"emboss" | "divot">("emboss");
+  /** Relief intensity 1-100 (maps to distance from neutral 128). */
+  const [reliefIntensity, setReliefIntensity] = useState(60);
 
   /* ── refs ──────────────────────────────────────────────── */
   const containerRef = useRef<HTMLDivElement>(null);
@@ -142,6 +147,9 @@ export default function RegionEditor({
   /** Undo / redo stacks for the curve mask. */
   const curveUndoStackRef = useRef<ImageData[]>([]);
   const curveRedoStackRef = useRef<ImageData[]>([]);
+  /** Undo / redo stacks for the relief mask. */
+  const reliefUndoStackRef = useRef<ImageData[]>([]);
+  const reliefRedoStackRef = useRef<ImageData[]>([]);
   /** Undo / redo stacks for the polygon outline. */
   const outlineUndoRef = useRef<{ pts: Point2D[]; closed: boolean }[]>([]);
   const outlineRedoRef = useRef<{ pts: Point2D[]; closed: boolean }[]>([]);
@@ -175,6 +183,8 @@ export default function RegionEditor({
   }, [showPresetMenu]);
   /** Offscreen canvas for the curve highlight mask (yellow). */
   const curveMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** Offscreen canvas for the relief (emboss/divot) mask. */
+  const reliefMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   /** Initial highlight base64 to restore on canvas init. */
   const initialHighlightRef = useRef(
     initialRegions?.tattooHighlight?.maskBase64 ?? null,
@@ -182,6 +192,10 @@ export default function RegionEditor({
   /** Initial curve highlight base64 to restore. */
   const initialCurveRef = useRef(
     initialRegions?.curveHighlight?.maskBase64 ?? null,
+  );
+  /** Initial relief highlight base64 to restore. */
+  const initialReliefRef = useRef(
+    initialRegions?.reliefHighlight?.maskBase64 ?? null,
   );
   /** Initial curvature percentage to restore. */
   const initialCurvePctRef = useRef(
@@ -229,7 +243,9 @@ export default function RegionEditor({
     }
     maskCanvasRef.current.width = cnv.width;
     maskCanvasRef.current.height = cnv.height;
-    const mctx = maskCanvasRef.current.getContext("2d")!;
+    const mctx = maskCanvasRef.current.getContext("2d", {
+      willReadFrequently: true,
+    })!;
     mctx.fillStyle = "#000";
     mctx.fillRect(0, 0, cnv.width, cnv.height);
 
@@ -255,7 +271,9 @@ export default function RegionEditor({
     }
     curveMaskCanvasRef.current.width = cnv.width;
     curveMaskCanvasRef.current.height = cnv.height;
-    const cctx = curveMaskCanvasRef.current.getContext("2d")!;
+    const cctx = curveMaskCanvasRef.current.getContext("2d", {
+      willReadFrequently: true,
+    })!;
     cctx.fillStyle = "#000";
     cctx.fillRect(0, 0, cnv.width, cnv.height);
 
@@ -280,6 +298,34 @@ export default function RegionEditor({
     }
     curveUndoStackRef.current = [];
     curveRedoStackRef.current = [];
+
+    // Create offscreen relief-mask canvas at same resolution
+    if (!reliefMaskCanvasRef.current) {
+      reliefMaskCanvasRef.current = document.createElement("canvas");
+    }
+    reliefMaskCanvasRef.current.width = cnv.width;
+    reliefMaskCanvasRef.current.height = cnv.height;
+    const rctx = reliefMaskCanvasRef.current.getContext("2d", {
+      willReadFrequently: true,
+    })!;
+    // Fill with neutral gray (128) = flat
+    rctx.fillStyle = "rgb(128,128,128)";
+    rctx.fillRect(0, 0, cnv.width, cnv.height);
+
+    // Restore previous relief mask if re-entering editor
+    const savedRelief = initialReliefRef.current;
+    if (savedRelief) {
+      const img3 = new Image();
+      img3.onload = () => {
+        rctx.drawImage(img3, 0, 0, cnv.width, cnv.height);
+        redraw();
+      };
+      img3.src = `data:image/png;base64,${savedRelief}`;
+      initialReliefRef.current = null;
+    }
+    reliefUndoStackRef.current = [];
+    reliefRedoStackRef.current = [];
+
     outlineUndoRef.current = [];
     outlineRedoRef.current = [];
 
@@ -411,6 +457,43 @@ export default function RegionEditor({
         ctx.fillText(`axis ${curveAngle}°`, cmCx + 8, cmCy - 8);
         ctx.restore();
       }
+    }
+
+    // Draw relief mask overlay (blue = embossed, magenta = divoted)
+    const reliefMask = reliefMaskCanvasRef.current;
+    if (reliefMask) {
+      const rmctx = reliefMask.getContext("2d")!;
+      const rmdata = rmctx.getImageData(
+        0,
+        0,
+        reliefMask.width,
+        reliefMask.height,
+      );
+      const reliefOverlay = ctx.createImageData(w, h);
+      for (let i = 0; i < rmdata.data.length; i += 4) {
+        const v = rmdata.data[i]; // 0-255, 128 = neutral
+        if (v > 138) {
+          // Embossed (raised) → blue
+          const intensity = (v - 128) / 127;
+          reliefOverlay.data[i] = 60;
+          reliefOverlay.data[i + 1] = 130;
+          reliefOverlay.data[i + 2] = 255;
+          reliefOverlay.data[i + 3] = Math.round(intensity * 120);
+        } else if (v < 118) {
+          // Divoted (depressed) → magenta
+          const intensity = (128 - v) / 128;
+          reliefOverlay.data[i] = 255;
+          reliefOverlay.data[i + 1] = 60;
+          reliefOverlay.data[i + 2] = 180;
+          reliefOverlay.data[i + 3] = Math.round(intensity * 120);
+        }
+      }
+      const tempCnv2 = document.createElement("canvas");
+      tempCnv2.width = w;
+      tempCnv2.height = h;
+      const tctx2 = tempCnv2.getContext("2d")!;
+      tctx2.putImageData(reliefOverlay, 0, 0);
+      ctx.drawImage(tempCnv2, 0, 0);
     }
 
     // Draw polygon outline
@@ -719,6 +802,112 @@ export default function RegionEditor({
     lastPaintPt.current = null;
   }, []);
 
+  // ── relief mode handlers (emboss / divot painting) ─────────
+
+  const reliefPaintAt = useCallback(
+    (normX: number, normY: number) => {
+      const mask = reliefMaskCanvasRef.current;
+      if (!mask) return;
+      const mctx = mask.getContext("2d")!;
+      const px = normX * mask.width;
+      const py = normY * mask.height;
+
+      const cnv = displayCanvasRef.current;
+      const scaledBrush = cnv
+        ? (brushSize / cnv.getBoundingClientRect().width) * mask.width
+        : brushSize * (window.devicePixelRatio || 1);
+
+      if (brushMode === "erase") {
+        // Erase → reset to neutral 128
+        mctx.globalCompositeOperation = "source-over";
+        mctx.fillStyle = "rgb(128,128,128)";
+        mctx.beginPath();
+        mctx.arc(px, py, scaledBrush / 2, 0, Math.PI * 2);
+        mctx.fill();
+      } else {
+        // Paint emboss or divot
+        // Emboss: 128 + intensity → 129-255
+        // Divot:  128 - intensity → 0-127
+        const offset = Math.round((reliefIntensity / 100) * 127);
+        const val =
+          reliefMode === "emboss"
+            ? Math.min(255, 128 + offset)
+            : Math.max(0, 128 - offset);
+        mctx.globalCompositeOperation = "source-over";
+        mctx.fillStyle = `rgb(${val},${val},${val})`;
+        mctx.beginPath();
+        mctx.arc(px, py, scaledBrush / 2, 0, Math.PI * 2);
+        mctx.fill();
+      }
+    },
+    [brushSize, brushMode, reliefMode, reliefIntensity],
+  );
+
+  const reliefInterpolatePaint = useCallback(
+    (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      const cnv = displayCanvasRef.current;
+      if (!cnv) return;
+      const distPx = Math.hypot(
+        (to.x - from.x) * cnv.getBoundingClientRect().width,
+        (to.y - from.y) * cnv.getBoundingClientRect().height,
+      );
+      const steps = Math.max(1, Math.ceil(distPx / (brushSize * 0.3)));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        reliefPaintAt(
+          from.x + (to.x - from.x) * t,
+          from.y + (to.y - from.y) * t,
+        );
+      }
+    },
+    [reliefPaintAt, brushSize],
+  );
+
+  const handleReliefPointerDown = useCallback(
+    (e: ReactPointerEvent) => {
+      const norm = toNorm(e);
+      if (!norm) return;
+
+      const mask = reliefMaskCanvasRef.current;
+      if (mask) {
+        const mctx = mask.getContext("2d")!;
+        const snapshot = mctx.getImageData(0, 0, mask.width, mask.height);
+        reliefUndoStackRef.current.push(snapshot);
+        if (reliefUndoStackRef.current.length > 30)
+          reliefUndoStackRef.current.shift();
+        reliefRedoStackRef.current = [];
+      }
+
+      paintingRef.current = true;
+      lastPaintPt.current = norm;
+      reliefPaintAt(norm.x, norm.y);
+      redraw();
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [toNorm, reliefPaintAt, redraw],
+  );
+
+  const handleReliefPointerMove = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!paintingRef.current) return;
+      const norm = toNorm(e);
+      if (!norm) return;
+      if (lastPaintPt.current) {
+        reliefInterpolatePaint(lastPaintPt.current, norm);
+      } else {
+        reliefPaintAt(norm.x, norm.y);
+      }
+      lastPaintPt.current = norm;
+      redraw();
+    },
+    [toNorm, reliefPaintAt, reliefInterpolatePaint, redraw],
+  );
+
+  const handleReliefPointerUp = useCallback(() => {
+    paintingRef.current = false;
+    lastPaintPt.current = null;
+  }, []);
+
   // ── confirm / reset ────────────────────────────────────────
 
   const handleConfirm = useCallback(() => {
@@ -756,6 +945,25 @@ export default function RegionEditor({
       }
     }
 
+    // Check if relief mask has non-neutral pixels
+    const reliefMask = reliefMaskCanvasRef.current;
+    let hasReliefMask = false;
+    if (reliefMask) {
+      const rmctx = reliefMask.getContext("2d")!;
+      const rd = rmctx.getImageData(
+        0,
+        0,
+        reliefMask.width,
+        reliefMask.height,
+      ).data;
+      for (let i = 0; i < rd.length; i += 4) {
+        if (Math.abs(rd[i] - 128) > 10) {
+          hasReliefMask = true;
+          break;
+        }
+      }
+    }
+
     const result: RegionEditorResult = {
       limbOutline:
         outlineClosed && outlinePoints.length >= 3
@@ -777,6 +985,14 @@ export default function RegionEditor({
               height: curveMask.height,
               curvaturePercent,
               angleDeg: curveAngle,
+            }
+          : null,
+      reliefHighlight:
+        hasReliefMask && reliefMask
+          ? {
+              maskBase64: reliefMask.toDataURL("image/png").split(",")[1],
+              width: reliefMask.width,
+              height: reliefMask.height,
             }
           : null,
     };
@@ -881,6 +1097,48 @@ export default function RegionEditor({
     if (curveUndoStackRef.current.length > 30)
       curveUndoStackRef.current.shift();
     const next = curveRedoStackRef.current.pop()!;
+    mctx.putImageData(next, 0, 0);
+    redraw();
+  }, [redraw]);
+
+  // ── relief undo / redo / reset ────────────────────────────
+
+  const resetReliefMask = useCallback(() => {
+    const mask = reliefMaskCanvasRef.current;
+    if (mask) {
+      const mctx = mask.getContext("2d")!;
+      mctx.fillStyle = "rgb(128,128,128)";
+      mctx.fillRect(0, 0, mask.width, mask.height);
+    }
+    reliefUndoStackRef.current = [];
+    reliefRedoStackRef.current = [];
+    redraw();
+  }, [redraw]);
+
+  const undoReliefStroke = useCallback(() => {
+    const mask = reliefMaskCanvasRef.current;
+    if (!mask || reliefUndoStackRef.current.length === 0) return;
+    const mctx = mask.getContext("2d")!;
+    reliefRedoStackRef.current.push(
+      mctx.getImageData(0, 0, mask.width, mask.height),
+    );
+    if (reliefRedoStackRef.current.length > 30)
+      reliefRedoStackRef.current.shift();
+    const prev = reliefUndoStackRef.current.pop()!;
+    mctx.putImageData(prev, 0, 0);
+    redraw();
+  }, [redraw]);
+
+  const redoReliefStroke = useCallback(() => {
+    const mask = reliefMaskCanvasRef.current;
+    if (!mask || reliefRedoStackRef.current.length === 0) return;
+    const mctx = mask.getContext("2d")!;
+    reliefUndoStackRef.current.push(
+      mctx.getImageData(0, 0, mask.width, mask.height),
+    );
+    if (reliefUndoStackRef.current.length > 30)
+      reliefUndoStackRef.current.shift();
+    const next = reliefRedoStackRef.current.pop()!;
     mctx.putImageData(next, 0, 0);
     redraw();
   }, [redraw]);
@@ -992,6 +1250,7 @@ export default function RegionEditor({
   const isOutline = mode === "outline";
   const isHighlight = mode === "highlight";
   const isCurves = mode === "curves";
+  const isRelief = mode === "relief";
   const canConfirm =
     (outlineClosed && outlinePoints.length >= 3) ||
     maskCanvasRef.current !== null;
@@ -1017,6 +1276,12 @@ export default function RegionEditor({
               <strong>Mark Curves</strong> — paint over areas that wrap around a
               curved surface (e.g. an arm or leg) and set the curvature %. The
               algorithm will flatten those areas.
+            </li>
+            <li>
+              <strong>Mark Relief</strong> — paint over raised areas (scar
+              tissue, raised ink) as <em>embossed</em> or sunken areas (between
+              bones, creases) as <em>divoted</em>. This helps the algorithm
+              correct for local surface bumps.
             </li>
             <li>
               Click <strong>Confirm</strong> when done, or <strong>Skip</strong>{" "}
@@ -1063,6 +1328,16 @@ export default function RegionEditor({
           }`}
         >
           <Waves size={14} /> Mark Curves
+        </button>
+        <button
+          onClick={() => setMode("relief")}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            isRelief
+              ? "bg-violet-600 text-white"
+              : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+          }`}
+        >
+          <Mountain size={14} /> Mark Relief
         </button>
 
         <div className="ml-auto flex gap-2">
@@ -1346,6 +1621,120 @@ export default function RegionEditor({
         </div>
       )}
 
+      {/* ── Brush controls (relief mode) ───────────────── */}
+      {isRelief && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3 text-sm text-zinc-300">
+            <button
+              onClick={() =>
+                setBrushMode(brushMode === "add" ? "erase" : "add")
+              }
+              className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
+                brushMode === "add"
+                  ? "bg-violet-700 text-white"
+                  : "bg-amber-700 text-white"
+              }`}
+            >
+              {brushMode === "add" ? (
+                <>
+                  <Paintbrush size={12} /> Paint
+                </>
+              ) : (
+                <>
+                  <Eraser size={12} /> Erase (→ flat)
+                </>
+              )}
+            </button>
+            <label className="flex items-center gap-1.5">
+              Size
+              <input
+                type="range"
+                min={MIN_BRUSH}
+                max={MAX_BRUSH}
+                value={brushSize}
+                onChange={(e) => setBrushSize(Number(e.target.value))}
+                className="w-24 accent-violet-500"
+              />
+              <span className="w-6 text-right text-xs text-zinc-500">
+                {brushSize}
+              </span>
+            </label>
+            <button
+              onClick={resetReliefMask}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+            >
+              <RotateCcw size={12} /> Clear
+            </button>
+            <button
+              onClick={undoReliefStroke}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+            >
+              <Undo2 size={12} /> Undo
+            </button>
+            <button
+              onClick={redoReliefStroke}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+            >
+              <Redo2 size={12} /> Redo
+            </button>
+          </div>
+          <div className="flex items-center gap-3 text-sm text-zinc-300">
+            <div className="flex gap-1">
+              <button
+                onClick={() => setReliefMode("emboss")}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium ${
+                  reliefMode === "emboss"
+                    ? "bg-blue-600 text-white"
+                    : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                }`}
+              >
+                <Mountain size={12} /> Embossed (raised)
+              </button>
+              <button
+                onClick={() => setReliefMode("divot")}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium ${
+                  reliefMode === "divot"
+                    ? "bg-pink-600 text-white"
+                    : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                }`}
+              >
+                <ArrowDown size={12} /> Divoted (depressed)
+              </button>
+            </div>
+            <label className="flex items-center gap-1.5">
+              Intensity
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={reliefIntensity}
+                onChange={(e) => setReliefIntensity(Number(e.target.value))}
+                className="w-28 accent-violet-500"
+              />
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={reliefIntensity}
+                onChange={(e) => {
+                  const v = Math.max(
+                    1,
+                    Math.min(100, Number(e.target.value) || 1),
+                  );
+                  setReliefIntensity(v);
+                }}
+                className="w-14 rounded bg-zinc-800 px-1.5 py-0.5 text-center text-xs text-zinc-200"
+              />
+            </label>
+          </div>
+          <p className="text-xs text-zinc-500">
+            Blue = embossed (raised above skin) · Pink = divoted (depressed
+            below skin). Erase resets to flat. Set type &amp; intensity before
+            each stroke.
+          </p>
+        </div>
+      )}
+
       {/* ── Status bar (outline mode) ───────────────────── */}
       {isOutline && (
         <div className="flex items-center gap-3 text-sm text-zinc-300">
@@ -1408,7 +1797,9 @@ export default function RegionEditor({
               ? handleOutlinePointerDown
               : isCurves
                 ? handleCurvePointerDown
-                : handleHighlightPointerDown
+                : isRelief
+                  ? handleReliefPointerDown
+                  : handleHighlightPointerDown
           }
           onPointerMove={(e) => {
             if (isOutline) {
@@ -1416,6 +1807,8 @@ export default function RegionEditor({
             } else {
               if (isCurves) {
                 handleCurvePointerMove(e);
+              } else if (isRelief) {
+                handleReliefPointerMove(e);
               } else {
                 handleHighlightPointerMove(e);
               }
@@ -1433,13 +1826,17 @@ export default function RegionEditor({
                     const scaledBrush = (brushSize / r.width) * cnv.width;
                     ctx.beginPath();
                     ctx.arc(p.x, p.y, scaledBrush / 2, 0, Math.PI * 2);
-                    ctx.strokeStyle = isCurves
-                      ? brushMode === "add"
-                        ? "rgba(255,220,30,0.8)"
-                        : "rgba(255,200,50,0.8)"
-                      : brushMode === "add"
-                        ? "rgba(255,80,80,0.8)"
-                        : "rgba(255,200,50,0.8)";
+                    ctx.strokeStyle = isRelief
+                      ? reliefMode === "emboss"
+                        ? "rgba(60,130,255,0.8)"
+                        : "rgba(255,60,180,0.8)"
+                      : isCurves
+                        ? brushMode === "add"
+                          ? "rgba(255,220,30,0.8)"
+                          : "rgba(255,200,50,0.8)"
+                        : brushMode === "add"
+                          ? "rgba(255,80,80,0.8)"
+                          : "rgba(255,200,50,0.8)";
                     ctx.lineWidth = 1.5;
                     ctx.stroke();
                   }
@@ -1452,7 +1849,9 @@ export default function RegionEditor({
               ? handleOutlinePointerUp
               : isCurves
                 ? handleCurvePointerUp
-                : handleHighlightPointerUp
+                : isRelief
+                  ? handleReliefPointerUp
+                  : handleHighlightPointerUp
           }
           onDoubleClick={isOutline ? handleOutlineDoubleClick : undefined}
         />

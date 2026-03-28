@@ -70,10 +70,37 @@ export interface CurveHighlight {
   angleDeg: number;
 }
 
-/** Debug info returned when cylindrical unwrap was applied. */
+/**
+ * User-painted relief mask marking embossed (raised) and divoted (depressed) areas.
+ * Encoded as a grayscale PNG where:
+ *   128 = neutral (flat skin)
+ *   129-255 = embossed (raised above skin surface, e.g. scar tissue, raised ink)
+ *   0-127 = divoted (depressed below surface, e.g. between bones, creases)
+ * The magnitude encodes intensity: further from 128 = more pronounced.
+ */
+export interface ReliefHighlight {
+  maskBase64: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Client-side depth map estimated from landmarks + image gradients.
+ * Grayscale PNG where brighter = closer to camera, darker = further.
+ * Normalised to 0-255 range.
+ */
+export interface DepthMapData {
+  mapBase64: string;
+  width: number;
+  height: number;
+  /** Source of the depth estimation. */
+  source: 'landmarks' | 'gradient' | 'combined';
+}
+
+/** Debug info returned when surface flattening was applied. */
 export interface UnwrapDebug {
   applied: boolean;
-  source: 'outline' | 'landmarks' | 'curve-mask' | 'none';
+  source: 'outline' | 'landmarks' | 'curve-mask' | 'mesh-warp' | 'depth-aware' | 'none';
   centerX?: number;
   centerY?: number;
   radius?: number;
@@ -85,6 +112,12 @@ export interface UnwrapDebug {
   tattooHighlightBase64?: string;
   curveHighlightBase64?: string;
   curvaturePercent?: number;
+  /** Number of grid cells used for mesh warping. */
+  meshGridCells?: number;
+  /** Whether depth-aware flattening was used. */
+  depthAware?: boolean;
+  /** Whether relief highlights influenced the warp. */
+  reliefApplied?: boolean;
 }
 
 /** The final stencil output returned by the API. */
@@ -112,11 +145,15 @@ export type ProcessingStep =
   | 'uploading'
   | 'detecting-pose'
   | 'isolating-limb'
+  | 'estimating-depth'
   | 'awaiting-regions'
   | 'processing'
+  | 'reconstructing-surface'
+  | 'mesh-warping'
   | 'flattening'
   | 'generating-stencil'
   | 'vectorizing'
+  | 'ai-cleanup'
   | 'complete'
   | 'error';
 
@@ -142,6 +179,14 @@ export interface StencilOptions {
   edgeThickness: 'thin' | 'medium' | 'thick';
   noiseReduction: 'low' | 'medium' | 'high';
   curvatureStrength: number;
+  /** Use localized mesh grid warping instead of single cylindrical unwrap. */
+  useMeshWarping: boolean;
+  /** Grid resolution for mesh warping (cells per short side). */
+  meshResolution: number;
+  /** Enable depth-aware flattening (uses depth map for better surface reconstruction). */
+  useDepthFlattening: boolean;
+  /** Enable optional AI cleanup pass for final stencil refinement. */
+  aiCleanup: boolean;
 }
 
 /**
@@ -161,6 +206,8 @@ export interface StencilApiPayload {
   limbOutline?: LimbOutline;
   tattooHighlight?: TattooHighlight;
   curveHighlight?: CurveHighlight;
+  reliefHighlight?: ReliefHighlight;
+  depthMap?: DepthMapData;
   options: StencilOptions;
 }
 
@@ -174,12 +221,14 @@ export interface StencilApiResponse {
 /**
  * Combined output from the RegionEditor component.
  * Holds the limb outline polygon, the tattoo highlight mask,
- * and an optional curve highlight mask with curvature %.
+ * an optional curve highlight mask with curvature %, and
+ * an optional relief (emboss/divot) mask.
  */
 export interface RegionEditorResult {
   limbOutline: LimbOutline | null;
   tattooHighlight: TattooHighlight | null;
   curveHighlight: CurveHighlight | null;
+  reliefHighlight: ReliefHighlight | null;
 }
 
 /** Sensible defaults. */
@@ -189,6 +238,10 @@ export const DEFAULT_STENCIL_OPTIONS: StencilOptions = {
   edgeThickness: 'medium',
   noiseReduction: 'medium',
   curvatureStrength: 1.0,
+  useMeshWarping: true,
+  meshResolution: 12,
+  useDepthFlattening: true,
+  aiCleanup: false,
 };
 
 /** Payload for POST /api/tattoo-stencil-repair */
