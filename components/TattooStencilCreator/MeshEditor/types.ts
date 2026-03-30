@@ -38,6 +38,38 @@ export interface MeshShapeParams {
   flatness: number;
 }
 
+// ── Curve deformer ───────────────────────────────────────────
+
+export type CurveDirection = "auto" | "+x" | "-x" | "+y" | "-y" | "+z" | "-z";
+
+export interface CurveControlPoint {
+  id: string;
+  position: [number, number, number];
+}
+
+// ── Hook deformer settings ───────────────────────────────────
+
+export interface HookSettings {
+  /** How far around the hook curves (degrees, 0..360). */
+  angle: number;
+  /** Direction the hook bends toward. */
+  direction: CurveDirection;
+  /** Influence radius around the hook path. */
+  influenceRadius: number;
+  /** When true, flatten the region onto a plane after rotation. */
+  flatten: boolean;
+}
+
+// ── Silhouette overlay settings ──────────────────────────────
+
+export interface SilhouetteSettings {
+  enabled: boolean;
+  opacity: number;
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+}
+
 // ── Sculpt / brush tools ─────────────────────────────────────
 
 export type SculptTool =
@@ -52,7 +84,10 @@ export type SculptTool =
   | "unpin"      // unlock pinned vertices
   | "bend"       // bend / unbend along arc axis
   | "twist"      // twist vertices around a local axis
-  | "region";    // paint region IDs for multi-region deform
+  | "region"     // paint region IDs for multi-region deform
+  | "seam"       // draw seam lines for region splitting
+  | "curve"      // place control points for curve bend deformer
+  | "hook";      // place control points for hook/loop deformer
 
 // ── Overlay visualisations ───────────────────────────────────
 
@@ -79,6 +114,8 @@ export interface VertexState {
   regionId: Int8Array;
   /** Symmetry axis: null = off, otherwise mirror plane normal. */
   symmetryAxis: "x" | "y" | "z" | null;
+  /** Seam edges – set of "a-b" strings where a < b (vertex index pairs). */
+  seams: Set<string>;
 }
 
 // ── Brush settings ───────────────────────────────────────────
@@ -128,6 +165,10 @@ export interface StencilSettings {
   threshold: number;
   /** Whether to invert (white lines on black). */
   invert: boolean;
+  /** Use Sobel edge detection to reinforce outlines. */
+  edgeDetect: boolean;
+  /** Pre-blur radius to eliminate rendering noise (0–10). */
+  smoothing: number;
 }
 
 // ── Export mode ──────────────────────────────────────────────
@@ -209,6 +250,14 @@ export interface MeshEditorState {
 
   // ─ region painting
   activeRegionId: number;
+  /** When true, sculpt ops only affect vertices in workingRegionId. */
+  regionFilterEnabled: boolean;
+  /** Which region to restrict sculpt ops to (separate from paint region). */
+  workingRegionId: number;
+  /** Show coloured region overlay on the mesh. */
+  showRegionOverlay: boolean;
+  /** When true, the region brush erases (sets -1) instead of painting. */
+  regionEraseMode: boolean;
 
   // ─ stencil post-processing
   stencilSettings: StencilSettings;
@@ -223,6 +272,29 @@ export interface MeshEditorState {
 
   // ─ mesh shape params
   meshShapeParams: MeshShapeParams;
+
+  // ─ sync trigger (incremented to force geometry buffer sync without rebuild)
+  syncTrigger: number;
+
+  // ─ curve deformer
+  curvePoints: CurveControlPoint[];
+  curveInfluenceRadius: number;
+  curveDirection: CurveDirection;
+
+  // ─ hook deformer
+  hookPoints: CurveControlPoint[];
+  hookSettings: HookSettings;
+  /** True while the flap/uncurve deformation is actively applied. */
+  flapActive: boolean;
+  /** Snapshot of vertex positions before flap was applied (for live preview). */
+  flapSnapshot: Float32Array | null;
+
+  // ─ silhouette overlay
+  silhouette: SilhouetteSettings;
+
+  // ─ scene settings
+  showGrid: boolean;
+  lightIntensity: number;
 
   // ─ actions
   setImage: (file: File) => void;
@@ -252,6 +324,14 @@ export interface MeshEditorState {
   setAiAssisting: (v: boolean) => void;
   // region
   setActiveRegionId: (id: number) => void;
+  setRegionFilterEnabled: (v: boolean) => void;
+  setWorkingRegionId: (id: number) => void;
+  setShowRegionOverlay: (v: boolean) => void;
+  setRegionEraseMode: (v: boolean) => void;
+  /** Clear all vertices belonging to a specific region (set to -1). */
+  clearRegion: (regionId: number) => void;
+  /** Clear all region assignments (reset everything to -1). */
+  clearAllRegions: () => void;
   // stencil settings
   setStencilSettings: (s: Partial<StencilSettings>) => void;
   // export mode + crop
@@ -262,4 +342,26 @@ export interface MeshEditorState {
   setTextureTransform: (t: Partial<TextureTransform>) => void;
   // mesh shape params
   setMeshShapeParams: (p: Partial<MeshShapeParams>) => void;
+  // curve deformer
+  setCurvePoints: (pts: CurveControlPoint[]) => void;
+  addCurvePoint: (pt: CurveControlPoint) => void;
+  removeCurvePoint: (id: string) => void;
+  updateCurvePoint: (id: string, position: [number, number, number]) => void;
+  setCurveInfluenceRadius: (r: number) => void;
+  setCurveDirection: (d: CurveDirection) => void;
+  applyCurveDeform: () => void;
+  clearCurvePoints: () => void;
+  // hook deformer
+  setHookPoints: (pts: CurveControlPoint[]) => void;
+  addHookPoint: (pt: CurveControlPoint) => void;
+  clearHookPoints: () => void;
+  setHookSettings: (s: Partial<HookSettings>) => void;
+  toggleFlap: () => void;
+  // silhouette overlay
+  setSilhouette: (s: Partial<SilhouetteSettings>) => void;
+  // scene
+  setShowGrid: (v: boolean) => void;
+  setLightIntensity: (v: number) => void;
+  // seam / region split
+  autoSplitRegions: () => void;
 }

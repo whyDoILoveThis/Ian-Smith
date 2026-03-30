@@ -20,6 +20,9 @@ import { useMeshEditorStore } from "./store";
 import MeshEditorToolbar from "./components/MeshEditorToolbar";
 import DeformableMesh from "./components/DeformableMesh";
 import MeshOverlays from "./components/MeshOverlays";
+import SilhouetteOverlay from "./components/SilhouetteOverlay";
+import CurveDeformerOverlay from "./components/CurveDeformerOverlay";
+import HookDeformerOverlay from "./components/HookDeformerOverlay";
 import { unwrapMeshToStencil, applyStencilPostProcessing } from "./uvUnwrap";
 import { buildAdjacency, aiAutoFix, computeDistortion } from "./sculptEngine";
 import { Upload, Crop } from "lucide-react";
@@ -41,49 +44,105 @@ const ScreenshotHelper = forwardRef<ScreenshotHandle>(
     useImperativeHandle(
       ref,
       () => ({
-        capture(crop: CropRegion | null, outputSize: number) {
-          // Force a render so the buffer is fresh
-          gl.render(scene, camera);
+        capture(_crop: CropRegion | null, outputSize: number) {
+          const cam = camera as THREE.PerspectiveCamera;
 
-          const srcCanvas = gl.domElement;
-          const cw = srcCanvas.width;
-          const ch = srcCanvas.height;
+          // ── Save current state ──────────────────────────
+          const prevBg = scene.background;
+          const prevClearColor = gl.getClearColor(new THREE.Color());
+          const prevClearAlpha = gl.getClearAlpha();
+          const prevCamPos = cam.position.clone();
+          const prevCamRot = cam.quaternion.clone();
+          const prevCamFov = cam.fov;
+          const prevCamAspect = cam.aspect;
+          const prevSize = gl.getSize(new THREE.Vector2());
+          const prevPixelRatio = gl.getPixelRatio();
 
-          // Read pixels from the WebGL canvas into a 2D canvas
-          const full = document.createElement("canvas");
-          full.width = cw;
-          full.height = ch;
-          const fullCtx = full.getContext("2d", { willReadFrequently: true })!;
-          fullCtx.drawImage(srcCanvas, 0, 0);
+          // Hide helpers (grid, gizmo, overlays) during capture
+          const hiddenObjects: THREE.Object3D[] = [];
+          scene.traverse((obj) => {
+            if (
+              obj.visible &&
+              (obj instanceof THREE.GridHelper ||
+                obj.type === "GridHelper" ||
+                (obj as unknown as { isGizmoHelper?: boolean }).isGizmoHelper ||
+                obj.userData?.isGizmo)
+            ) {
+              obj.visible = false;
+              hiddenObjects.push(obj);
+            }
+          });
 
-          // Compute pixel crop
-          const sx = crop ? Math.round(crop.x * cw) : 0;
-          const sy = crop ? Math.round(crop.y * ch) : 0;
-          const sw = crop ? Math.max(1, Math.round(crop.w * cw)) : cw;
-          const sh = crop ? Math.max(1, Math.round(crop.h * ch)) : ch;
+          // ── Set white background ────────────────────────
+          scene.background = new THREE.Color("#ffffff");
+          gl.setClearColor("#ffffff", 1);
 
-          // Scale cropped region into a square output canvas
+          // ── Resize renderer to square outputSize ────────
+          gl.setPixelRatio(1);
+          gl.setSize(outputSize, outputSize, false);
+
+          // ── Set camera to square aspect ─────────────────
+          cam.aspect = 1;
+          cam.updateProjectionMatrix();
+
+          // ── Auto-fit camera to mesh bounding box ────────
+          let meshObj: THREE.Mesh | null = null;
+          scene.traverse((obj) => {
+            if (
+              obj.visible &&
+              obj instanceof THREE.Mesh &&
+              obj.geometry &&
+              obj.geometry.attributes.position &&
+              obj.geometry.attributes.position.count > 10
+            ) {
+              meshObj = obj;
+            }
+          });
+
+          if (meshObj) {
+            const box = new THREE.Box3().setFromObject(meshObj);
+            const center = box.getCenter(new THREE.Vector3());
+            const bSize = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(bSize.x, bSize.y, bSize.z);
+
+            // Camera is square now, so vertical FOV is the limiting angle
+            const fovRad = THREE.MathUtils.degToRad(cam.fov) / 2;
+            const dist = (maxDim / 2 / Math.tan(fovRad)) * 1.2; // 20% margin
+            const direction = cam.position.clone().sub(center).normalize();
+            if (direction.lengthSq() < 1e-6) direction.set(0, 0, 1);
+            cam.position.copy(center).addScaledVector(direction, dist);
+            cam.lookAt(center);
+            cam.updateProjectionMatrix();
+            cam.updateMatrixWorld(true);
+          }
+
+          // ── Render at full output resolution ────────────
+          gl.render(scene, cam);
+
+          // Copy from WebGL canvas (now outputSize × outputSize)
           const out = document.createElement("canvas");
           out.width = outputSize;
           out.height = outputSize;
           const outCtx = out.getContext("2d", { willReadFrequently: true })!;
           outCtx.fillStyle = "#fff";
           outCtx.fillRect(0, 0, outputSize, outputSize);
+          outCtx.drawImage(gl.domElement, 0, 0, outputSize, outputSize);
 
-          const aspect = sw / sh;
-          let dw: number, dh: number, dx: number, dy: number;
-          if (aspect >= 1) {
-            dw = outputSize;
-            dh = Math.round(outputSize / aspect);
-            dx = 0;
-            dy = Math.round((outputSize - dh) / 2);
-          } else {
-            dh = outputSize;
-            dw = Math.round(outputSize * aspect);
-            dx = Math.round((outputSize - dw) / 2);
-            dy = 0;
-          }
-          outCtx.drawImage(full, sx, sy, sw, sh, dx, dy, dw, dh);
+          // ── Restore state ───────────────────────────────
+          scene.background = prevBg;
+          gl.setClearColor(prevClearColor, prevClearAlpha);
+          cam.position.copy(prevCamPos);
+          cam.quaternion.copy(prevCamRot);
+          cam.fov = prevCamFov;
+          cam.aspect = prevCamAspect;
+          cam.updateProjectionMatrix();
+          cam.updateMatrixWorld(true);
+          gl.setPixelRatio(prevPixelRatio);
+          gl.setSize(prevSize.x, prevSize.y, false);
+          for (const obj of hiddenObjects) obj.visible = true;
+
+          // Re-render so the user sees their normal view restored
+          gl.render(scene, cam);
 
           return out;
         },
@@ -118,6 +177,8 @@ export default function MeshEditor() {
   const setCropRegion = useMeshEditorStore((s) => s.setCropRegion);
   const setIsCropping = useMeshEditorStore((s) => s.setIsCropping);
   const pushUndo = useMeshEditorStore((s) => s.pushUndo);
+  const showGrid = useMeshEditorStore((s) => s.showGrid);
+  const lightIntensity = useMeshEditorStore((s) => s.lightIntensity);
 
   const [depthStrength, setDepthStrength] = useState(0.3);
 
@@ -360,15 +421,24 @@ export default function MeshEditor() {
             gl={{ preserveDrawingBuffer: true, antialias: true }}
             dpr={[1, 2]}
           >
-            <ambientLight intensity={0.5} />
-            <directionalLight position={[5, 5, 5]} intensity={1} />
-            <directionalLight position={[-3, -2, -4]} intensity={0.3} />
+            <ambientLight intensity={0.5 * lightIntensity} />
+            <directionalLight
+              position={[5, 5, 5]}
+              intensity={1 * lightIntensity}
+            />
+            <directionalLight
+              position={[-3, -2, -4]}
+              intensity={0.3 * lightIntensity}
+            />
 
             <Suspense fallback={null}>
               <ScreenshotHelper ref={screenshotRef} />
+              <SilhouetteOverlay textureUrl={imageUrl} />
               <group ref={meshContainerRef}>
                 <DeformableMesh textureUrl={imageUrl} />
               </group>
+              <CurveDeformerOverlay />
+              <HookDeformerOverlay />
               <MeshOverlays
                 parentMeshRef={meshContainerRef as React.RefObject<THREE.Group>}
               />
@@ -390,7 +460,7 @@ export default function MeshEditor() {
               <GizmoViewport />
             </GizmoHelper>
 
-            <gridHelper args={[10, 20, "#333", "#222"]} />
+            {showGrid && <gridHelper args={[10, 20, "#333", "#222"]} />}
           </Canvas>
 
           {/* Compare overlay */}

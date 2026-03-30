@@ -219,9 +219,11 @@ const DEFAULT_STENCIL_SETTINGS: StencilSettings = {
   outputSize: 2048,
   contrast: 1.0,
   lineThickness: 1.0,
-  denoiseIterations: 1,
+  denoiseIterations: 0,
   threshold: 128,
   invert: false,
+  edgeDetect: true,
+  smoothing: 1,
 };
 
 /**
@@ -342,9 +344,11 @@ export function screenshotToStencil(
     outputSize: 2048,
     contrast: 1.0,
     lineThickness: 1.0,
-    denoiseIterations: 1,
+    denoiseIterations: 0,
     threshold: 128,
     invert: false,
+    edgeDetect: true,
+    smoothing: 1,
     ...settings,
   };
 
@@ -419,7 +423,14 @@ export function applyStencilPostProcessing(
     d[i + 2] = gray;
   }
 
-  // 2) Apply contrast
+  // 2) Light blur to eliminate render noise while preserving detail.
+  //    Uses small kernel — just enough to clean pixel-level grain.
+  if (settings.smoothing > 0) {
+    const radius = Math.max(1, Math.round(settings.smoothing * size / 1024));
+    applyBoxBlur(d, size, radius);
+  }
+
+  // 3) Contrast adjustment
   if (settings.contrast !== 1.0) {
     const factor = (259 * (settings.contrast * 128 + 255)) / (255 * (259 - settings.contrast * 128));
     for (let i = 0; i < d.length; i += 4) {
@@ -429,26 +440,69 @@ export function applyStencilPostProcessing(
     }
   }
 
-  // 3) Line thickness via morphological dilate/erode
+  // 4) Unsharp mask – amplify local contrast so even the subtlest
+  //    ink-vs-skin differences become visible dips. This is the key
+  //    to catching every fine detail.
+  applyUnsharpMask(d, size, Math.max(2, Math.round(size / 256)), 2.0);
+
+  // 5) Edge detect: darken along Sobel edges so outlines & fine detail
+  //    survive thresholding. 
+  if (settings.edgeDetect) {
+    applyEdgeDarken(d, size);
+  }
+
+  // 6) Multi-scale adaptive threshold.
+  //    Runs adaptive threshold at 3 window sizes and UNIONS the results:
+  //    if ANY scale detects a pixel as ink, it's ink.
+  //    Small windows catch hairline details, large ones catch broad strokes.
+  //    Bias auto-calibrated from image std deviation.
+  let sumV = 0, sumV2 = 0;
+  const pixCount = size * size;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = d[i];
+    sumV += v;
+    sumV2 += v * v;
+  }
+  const meanV = sumV / pixCount;
+  const stdDev = Math.sqrt(Math.max(0, sumV2 / pixCount - meanV * meanV));
+  // Threshold slider: 0 = capture everything, 255 = only strongest
+  const biasRatio = 0.08 + (settings.threshold / 255) * 0.55;
+  const baseBias = Math.max(1.5, stdDev * biasRatio);
+
+  // Three scales: fine (size/128), medium (size/32), coarse (size/12)
+  const scales = [
+    Math.max(3, Math.round(size / 128)),
+    Math.max(6, Math.round(size / 32)),
+    Math.max(12, Math.round(size / 12)),
+  ];
+
+  applyMultiScaleThreshold(d, size, scales, baseBias);
+
+  // 6) Morphological close (dilate then erode) to connect
+  //    small gaps in fine lines without thickening them.
+  applyMorphClose(d, size);
+
+  // 7) Line thickness (morphological dilate / erode)
   if (settings.lineThickness !== 1.0) {
     applyLineThickness(d, size, settings.lineThickness);
   }
 
-  // 4) Denoise: median filter passes to remove salt-and-pepper artifacts
+  // 8) Denoise (median filter)
   for (let pass = 0; pass < settings.denoiseIterations; pass++) {
     applyMedianFilter(d, size);
   }
 
-  // 5) Threshold to black/white
-  for (let i = 0; i < d.length; i += 4) {
-    const gray = d[i];
-    let bw = gray < settings.threshold ? 0 : 255;
-    if (settings.invert) bw = 255 - bw;
-    d[i] = bw;
-    d[i + 1] = bw;
-    d[i + 2] = bw;
-    d[i + 3] = 255;
+  // 9) Invert
+  if (settings.invert) {
+    for (let i = 0; i < d.length; i += 4) {
+      d[i] = 255 - d[i];
+      d[i + 1] = 255 - d[i + 1];
+      d[i + 2] = 255 - d[i + 2];
+    }
   }
+
+  // Ensure full opacity
+  for (let i = 3; i < d.length; i += 4) d[i] = 255;
 
   ctx.putImageData(imgData, 0, 0);
 }
@@ -512,6 +566,249 @@ function applyMedianFilter(d: Uint8ClampedArray, size: number): void {
       d[idx] = med;
       d[idx + 1] = med;
       d[idx + 2] = med;
+    }
+  }
+}
+
+/** Separable box blur using running sums – O(n²) regardless of radius. */
+function applyBoxBlur(d: Uint8ClampedArray, size: number, radius: number): void {
+  const len = size * size;
+  const gray = new Float32Array(len);
+  for (let i = 0; i < len; i++) gray[i] = d[i * 4];
+
+  const tmp = new Float32Array(len);
+
+  // Horizontal pass
+  for (let y = 0; y < size; y++) {
+    const row = y * size;
+    let sum = 0, count = 0;
+    for (let x = 0; x <= radius && x < size; x++) { sum += gray[row + x]; count++; }
+    tmp[row] = sum / count;
+    for (let x = 1; x < size; x++) {
+      if (x + radius < size) { sum += gray[row + x + radius]; count++; }
+      if (x - radius - 1 >= 0) { sum -= gray[row + x - radius - 1]; count--; }
+      tmp[row + x] = sum / count;
+    }
+  }
+
+  // Vertical pass
+  for (let x = 0; x < size; x++) {
+    let sum = 0, count = 0;
+    for (let y = 0; y <= radius && y < size; y++) { sum += tmp[y * size + x]; count++; }
+    gray[x] = sum / count;
+    for (let y = 1; y < size; y++) {
+      if (y + radius < size) { sum += tmp[(y + radius) * size + x]; count++; }
+      if (y - radius - 1 >= 0) { sum -= tmp[(y - radius - 1) * size + x]; count--; }
+      gray[y * size + x] = sum / count;
+    }
+  }
+
+  for (let i = 0; i < len; i++) {
+    const v = Math.round(gray[i]);
+    d[i * 4] = v;
+    d[i * 4 + 1] = v;
+    d[i * 4 + 2] = v;
+  }
+}
+
+/** Adaptive threshold using integral image for O(1) per-pixel local mean. */
+function applyAdaptiveThreshold(
+  d: Uint8ClampedArray,
+  size: number,
+  windowRadius: number,
+  bias: number,
+): void {
+  const s1 = size + 1;
+  const integral = new Float64Array(s1 * s1);
+  for (let y = 1; y <= size; y++) {
+    let rowSum = 0;
+    for (let x = 1; x <= size; x++) {
+      rowSum += d[((y - 1) * size + (x - 1)) * 4];
+      integral[y * s1 + x] = rowSum + integral[(y - 1) * s1 + x];
+    }
+  }
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const y1 = Math.max(0, y - windowRadius);
+      const y2 = Math.min(size - 1, y + windowRadius);
+      const x1 = Math.max(0, x - windowRadius);
+      const x2 = Math.min(size - 1, x + windowRadius);
+      const sum =
+        integral[(y2 + 1) * s1 + (x2 + 1)] -
+        integral[y1 * s1 + (x2 + 1)] -
+        integral[(y2 + 1) * s1 + x1] +
+        integral[y1 * s1 + x1];
+      const count = (y2 - y1 + 1) * (x2 - x1 + 1);
+      const localMean = sum / count;
+
+      const idx = (y * size + x) * 4;
+      const v = d[idx] < localMean - bias ? 0 : 255;
+      d[idx] = v;
+      d[idx + 1] = v;
+      d[idx + 2] = v;
+    }
+  }
+}
+
+/** Unsharp mask – sharpens local contrast so subtle ink shows up.
+ *  Subtracts a blurred copy scaled by `amount` from the original. */
+function applyUnsharpMask(
+  d: Uint8ClampedArray,
+  size: number,
+  radius: number,
+  amount: number,
+): void {
+  // Create blurred copy
+  const blurred = new Uint8ClampedArray(d.length);
+  blurred.set(d);
+  applyBoxBlur(blurred, size, radius);
+  applyBoxBlur(blurred, size, radius); // two passes ≈ Gaussian
+
+  for (let i = 0; i < d.length; i += 4) {
+    const sharp = d[i] + (d[i] - blurred[i]) * amount;
+    const v = clamp(sharp);
+    d[i] = v;
+    d[i + 1] = v;
+    d[i + 2] = v;
+  }
+}
+
+/** Multi-scale adaptive threshold – runs at multiple window sizes and
+ *  unions results. If ANY scale says a pixel is ink, it's ink.
+ *  This catches both hairline details (small window) and broad
+ *  strokes (large window) that a single window would miss. */
+function applyMultiScaleThreshold(
+  d: Uint8ClampedArray,
+  size: number,
+  windowRadii: number[],
+  baseBias: number,
+): void {
+  const len = size * size;
+  // Extract grayscale into float array for reuse
+  const gray = new Float32Array(len);
+  for (let i = 0; i < len; i++) gray[i] = d[i * 4];
+
+  // Result: start all white, union (OR) black pixels from each scale
+  const result = new Uint8Array(len);
+  result.fill(255);
+
+  // Build integral image once from the pre-threshold grayscale
+  const s1 = size + 1;
+  const integral = new Float64Array(s1 * s1);
+  for (let y = 1; y <= size; y++) {
+    let rowSum = 0;
+    for (let x = 1; x <= size; x++) {
+      rowSum += gray[(y - 1) * size + (x - 1)];
+      integral[y * s1 + x] = rowSum + integral[(y - 1) * s1 + x];
+    }
+  }
+
+  for (const windowRadius of windowRadii) {
+    // Slightly scale bias with window size — larger windows get
+    // marginally higher bias to avoid false positives from gradients
+    const scaleFactor = 1.0 + (windowRadius / (size / 8)) * 0.3;
+    const bias = baseBias * scaleFactor;
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const y1 = Math.max(0, y - windowRadius);
+        const y2 = Math.min(size - 1, y + windowRadius);
+        const x1 = Math.max(0, x - windowRadius);
+        const x2 = Math.min(size - 1, x + windowRadius);
+        const sum =
+          integral[(y2 + 1) * s1 + (x2 + 1)] -
+          integral[y1 * s1 + (x2 + 1)] -
+          integral[(y2 + 1) * s1 + x1] +
+          integral[y1 * s1 + x1];
+        const count = (y2 - y1 + 1) * (x2 - x1 + 1);
+        const localMean = sum / count;
+        const px = gray[y * size + x];
+
+        if (px < localMean - bias) {
+          result[y * size + x] = 0;
+        }
+      }
+    }
+  }
+
+  // Write result back to RGBA
+  for (let i = 0; i < len; i++) {
+    const v = result[i];
+    d[i * 4] = v;
+    d[i * 4 + 1] = v;
+    d[i * 4 + 2] = v;
+  }
+}
+
+/** Darken pixels along Sobel edges (combine with tonal image, not replace). */
+function applyEdgeDarken(d: Uint8ClampedArray, size: number): void {
+  const src = new Uint8ClampedArray(d.length);
+  src.set(d);
+
+  for (let y = 1; y < size - 1; y++) {
+    for (let x = 1; x < size - 1; x++) {
+      const tl = src[((y - 1) * size + (x - 1)) * 4];
+      const tc = src[((y - 1) * size + x) * 4];
+      const tr = src[((y - 1) * size + (x + 1)) * 4];
+      const ml = src[(y * size + (x - 1)) * 4];
+      const mr = src[(y * size + (x + 1)) * 4];
+      const bl = src[((y + 1) * size + (x - 1)) * 4];
+      const bc = src[((y + 1) * size + x) * 4];
+      const br = src[((y + 1) * size + (x + 1)) * 4];
+
+      const gx = -tl - 2 * ml - bl + tr + 2 * mr + br;
+      const gy = -tl - 2 * tc - tr + bl + 2 * bc + br;
+      const edge = Math.min(255, Math.sqrt(gx * gx + gy * gy) * 2.5);
+
+      // Darken proportional to edge strength — strong multiplier
+      // ensures even subtle texture edges become visible marks
+      const idx = (y * size + x) * 4;
+      const v = clamp(d[idx] - edge);
+      d[idx] = v;
+      d[idx + 1] = v;
+      d[idx + 2] = v;
+    }
+  }
+}
+
+/** Morphological close (dilate then erode) – connects small gaps in fine lines. */
+function applyMorphClose(d: Uint8ClampedArray, size: number): void {
+  const tmp = new Uint8ClampedArray(d.length);
+
+  // Dilate dark (min)
+  tmp.set(d);
+  for (let y = 1; y < size - 1; y++) {
+    for (let x = 1; x < size - 1; x++) {
+      const idx = (y * size + x) * 4;
+      const v = Math.min(
+        tmp[((y - 1) * size + x) * 4],
+        tmp[((y + 1) * size + x) * 4],
+        tmp[(y * size + x - 1) * 4],
+        tmp[(y * size + x + 1) * 4],
+        tmp[idx],
+      );
+      d[idx] = v;
+      d[idx + 1] = v;
+      d[idx + 2] = v;
+    }
+  }
+
+  // Erode dark (max) — restores thickness, keeps connected bridges
+  tmp.set(d);
+  for (let y = 1; y < size - 1; y++) {
+    for (let x = 1; x < size - 1; x++) {
+      const idx = (y * size + x) * 4;
+      const v = Math.max(
+        tmp[((y - 1) * size + x) * 4],
+        tmp[((y + 1) * size + x) * 4],
+        tmp[(y * size + x - 1) * 4],
+        tmp[(y * size + x + 1) * 4],
+        tmp[idx],
+      );
+      d[idx] = v;
+      d[idx + 1] = v;
+      d[idx + 2] = v;
     }
   }
 }

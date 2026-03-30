@@ -20,6 +20,10 @@ import type {
   CropRegion,
   TextureTransform,
   MeshShapeParams,
+  CurveControlPoint,
+  CurveDirection,
+  HookSettings,
+  SilhouetteSettings,
 } from "./types";
 
 const DEFAULT_BRUSH: BrushSettings = {
@@ -32,9 +36,11 @@ const DEFAULT_STENCIL: StencilSettings = {
   outputSize: 2048,
   contrast: 1.0,
   lineThickness: 1.0,
-  denoiseIterations: 1,
+  denoiseIterations: 0,
   threshold: 128,
   invert: false,
+  edgeDetect: true,
+  smoothing: 1,
 };
 
 const DEFAULT_TEXTURE_TRANSFORM: TextureTransform = {
@@ -50,6 +56,14 @@ const DEFAULT_SHAPE_PARAMS: MeshShapeParams = {
   height: 1.0,
   taper: 0,
   flatness: 0,
+};
+
+const DEFAULT_SILHOUETTE: SilhouetteSettings = {
+  enabled: false,
+  opacity: 0.4,
+  offsetX: 0,
+  offsetY: 0,
+  scale: 1,
 };
 
 export const useMeshEditorStore = create<MeshEditorState>((set, get) => ({
@@ -80,7 +94,7 @@ export const useMeshEditorStore = create<MeshEditorState>((set, get) => ({
   unwrapResult: null,
 
   // ─ solver
-  liveSmoothing: true,
+  liveSmoothing: false,
 
   // ─ compare mode
   snapshots: [],
@@ -96,6 +110,10 @@ export const useMeshEditorStore = create<MeshEditorState>((set, get) => ({
 
   // ─ region painting
   activeRegionId: 0,
+  regionFilterEnabled: false,
+  workingRegionId: 0,
+  showRegionOverlay: false,
+  regionEraseMode: false,
 
   // ─ stencil settings
   stencilSettings: { ...DEFAULT_STENCIL },
@@ -110,6 +128,27 @@ export const useMeshEditorStore = create<MeshEditorState>((set, get) => ({
 
   // ─ mesh shape params
   meshShapeParams: { ...DEFAULT_SHAPE_PARAMS },
+
+  // ─ sync trigger
+  syncTrigger: 0,
+
+  // ─ curve deformer
+  curvePoints: [] as CurveControlPoint[],
+  curveInfluenceRadius: 2.0,
+  curveDirection: "auto" as CurveDirection,
+
+  // ─ hook deformer
+  hookPoints: [] as CurveControlPoint[],
+  hookSettings: { angle: 180, direction: "auto" as CurveDirection, influenceRadius: 2.0, flatten: false } as HookSettings,
+  flapActive: false,
+  flapSnapshot: null as Float32Array | null,
+
+  // ─ silhouette overlay
+  silhouette: { ...DEFAULT_SILHOUETTE },
+
+  // ─ scene settings
+  showGrid: true,
+  lightIntensity: 1.0,
 
   /* ── actions ──────────────────────────────────────────────── */
 
@@ -171,9 +210,10 @@ export const useMeshEditorStore = create<MeshEditorState>((set, get) => ({
     const pinned = new Array(count).fill(false) as boolean[];
     const edgeLocked = new Array(count).fill(false) as boolean[];
     const regionId = new Int8Array(count).fill(-1);
+    const seams = new Set<string>();
     set({
       vertexState: {
-        original, current: arr, pinned, edgeLocked, regionId, symmetryAxis: null,
+        original, current: arr, pinned, edgeLocked, regionId, symmetryAxis: null, seams,
       } as VertexState,
       undoStack: [],
       redoStack: [],
@@ -289,6 +329,25 @@ export const useMeshEditorStore = create<MeshEditorState>((set, get) => ({
 
   // ── region painting ────────────────────────────────────────
   setActiveRegionId: (id) => set({ activeRegionId: id }),
+  setRegionFilterEnabled: (v) => set({ regionFilterEnabled: v }),
+  setWorkingRegionId: (id) => set({ workingRegionId: id }),
+  setShowRegionOverlay: (v) => set({ showRegionOverlay: v }),
+  setRegionEraseMode: (v) => set({ regionEraseMode: v }),
+  clearRegion: (regionId) => {
+    const vs = get().vertexState;
+    if (!vs) return;
+    const count = vs.current.length / 3;
+    for (let i = 0; i < count; i++) {
+      if (vs.regionId[i] === regionId) vs.regionId[i] = -1;
+    }
+    set((st) => ({ syncTrigger: st.syncTrigger + 1 }));
+  },
+  clearAllRegions: () => {
+    const vs = get().vertexState;
+    if (!vs) return;
+    vs.regionId.fill(-1);
+    set((st) => ({ syncTrigger: st.syncTrigger + 1 }));
+  },
 
   // ── stencil settings ───────────────────────────────────────
   setStencilSettings: (s) => set((st) => ({ stencilSettings: { ...st.stencilSettings, ...s } })),
@@ -302,4 +361,96 @@ export const useMeshEditorStore = create<MeshEditorState>((set, get) => ({
     meshShapeParams: { ...st.meshShapeParams, ...p },
     meshKey: st.meshKey + 1,
   })),
+  // ── curve deformer ────────────────────────────────────────────
+  setCurvePoints: (pts) => set({ curvePoints: pts }),
+  addCurvePoint: (pt) => set((st) => ({ curvePoints: [...st.curvePoints, pt] })),
+  removeCurvePoint: (id) => set((st) => ({ curvePoints: st.curvePoints.filter((p) => p.id !== id) })),
+  updateCurvePoint: (id, position) => set((st) => ({
+    curvePoints: st.curvePoints.map((p) => p.id === id ? { ...p, position } : p),
+  })),
+  setCurveInfluenceRadius: (r) => set({ curveInfluenceRadius: r }),
+  setCurveDirection: (d) => set({ curveDirection: d }),
+  applyCurveDeform: () => {
+    const { vertexState: vs, curvePoints, curveInfluenceRadius, curveDirection } = get();
+    if (!vs || curvePoints.length < 2) return;
+    // push undo before applying
+    const snap = new Float32Array(vs.current.length);
+    snap.set(vs.current);
+    set((st) => ({
+      undoStack: [...st.undoStack.slice(-49), {
+        positions: snap,
+        pinned: [...vs.pinned],
+        edgeLocked: [...vs.edgeLocked],
+        label: "curve-deform",
+      }],
+      redoStack: [],
+    }));
+    // lazy import to avoid circular
+    import("./curveDeformer").then(({ applyCurveDeformation }) => {
+      applyCurveDeformation(vs, curvePoints, curveInfluenceRadius, curveDirection);
+      // Increment syncTrigger so DeformableMesh syncs the buffer (without rebuilding geometry)
+      set((st) => ({ syncTrigger: st.syncTrigger + 1 }));
+    });
+  },
+  clearCurvePoints: () => set({ curvePoints: [] }),
+  // ── hook deformer ───────────────────────────────────────────
+  setHookPoints: (pts) => set({ hookPoints: pts }),
+  addHookPoint: (pt) => set((st) => ({ hookPoints: [...st.hookPoints, pt] })),
+  clearHookPoints: () => set({ hookPoints: [], flapActive: false, flapSnapshot: null }),
+  setHookSettings: (s) => {
+    set((st) => ({ hookSettings: { ...st.hookSettings, ...s } }));
+    // Live-update when flap is active
+    const { flapActive, flapSnapshot, vertexState: vs, hookPoints, regionFilterEnabled, workingRegionId } = get();
+    if (flapActive && flapSnapshot && vs && hookPoints.length >= 2) {
+      vs.current.set(flapSnapshot);
+      const regionFilter = regionFilterEnabled ? workingRegionId : undefined;
+      const { hookSettings: latest } = get();
+      import("./curveDeformer").then(({ applyHookDeformation }) => {
+        applyHookDeformation(vs, hookPoints, latest, regionFilter);
+        set((st) => ({ syncTrigger: st.syncTrigger + 1 }));
+      });
+    }
+  },
+  toggleFlap: () => {
+    const { flapActive, flapSnapshot, vertexState: vs, hookPoints, hookSettings, regionFilterEnabled, workingRegionId } = get();
+    if (!vs) return;
+    if (!flapActive) {
+      // Turning ON: save snapshot then apply
+      if (hookPoints.length < 2) return;
+      const snap = new Float32Array(vs.current.length);
+      snap.set(vs.current);
+      set((st) => ({
+        flapActive: true,
+        flapSnapshot: snap,
+        undoStack: [...st.undoStack.slice(-49), {
+          positions: snap,
+          pinned: [...vs.pinned],
+          edgeLocked: [...vs.edgeLocked],
+          label: "flap",
+        }],
+        redoStack: [],
+      }));
+      const regionFilter = regionFilterEnabled ? workingRegionId : undefined;
+      import("./curveDeformer").then(({ applyHookDeformation }) => {
+        applyHookDeformation(vs, hookPoints, hookSettings, regionFilter);
+        set((st) => ({ syncTrigger: st.syncTrigger + 1 }));
+      });
+    } else {
+      // Turning OFF: restore snapshot
+      if (flapSnapshot) {
+        vs.current.set(flapSnapshot);
+      }
+      set((st) => ({ flapActive: false, flapSnapshot: null, syncTrigger: st.syncTrigger + 1 }));
+    }
+  },
+  // ── scene settings ────────────────────────────────────────
+  setShowGrid: (v) => set({ showGrid: v }),
+  setLightIntensity: (v) => set({ lightIntensity: v }),
+  // ── silhouette overlay ─────────────────────────────────────
+  setSilhouette: (s) => set((st) => ({ silhouette: { ...st.silhouette, ...s } })),
+  // ── seam / region auto-split ───────────────────────────────
+  autoSplitRegions: () => {
+    // Implemented via DeformableMesh geometry access (see CurveDeformerOverlay)
+    set({}); // placeholder trigger
+  },
 }));

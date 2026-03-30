@@ -130,6 +130,9 @@ function findMirrorVertex(
  * Apply one sculpt stroke at the given hit for the chosen tool.
  * Mutates `vs.current` positions in place.
  * Returns the set of affected vertex indices.
+ *
+ * When `regionFilter` is provided, only vertices whose regionId
+ * matches the given value will be affected.
  */
 export function applySculpt(
   vs: VertexState,
@@ -137,12 +140,16 @@ export function applySculpt(
   tool: SculptTool,
   brush: BrushSettings,
   dragDir?: THREE.Vector3,
+  regionFilter?: number,
 ): Set<number> {
   const affected = new Set<number>();
   const count = vs.current.length / 3;
 
   for (let i = 0; i < count; i++) {
     if (isLocked(vs, i) && tool !== "unpin" && tool !== "edge" && tool !== "region") continue;
+
+    // Region filter: skip vertices not in working region
+    if (regionFilter !== undefined && vs.regionId[i] !== regionFilter) continue;
 
     const vx = vs.current[i * 3];
     const vy = vs.current[i * 3 + 1];
