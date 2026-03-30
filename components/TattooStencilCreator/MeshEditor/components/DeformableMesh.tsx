@@ -85,8 +85,8 @@ function buildGeometry(
     case "plane":
     default:
       return new THREE.PlaneGeometry(
-        3,
-        3,
+        3 * (shapeParams?.radiusX ?? 1),
+        3 * (shapeParams?.height ?? 1),
         segCount(48, level),
         segCount(48, level),
       );

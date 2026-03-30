@@ -580,6 +580,28 @@ export default function MeshEditorToolbar({
         </div>
       </Section>
 
+      {/* ── Plane Size Sliders ─────────────────────────────── */}
+      {meshShape === "plane" && (
+        <Section label="Plane Size" collapsible defaultOpen>
+          <RangeRow
+            label="Width"
+            value={meshShapeParams.radiusX}
+            min={0.3}
+            max={3}
+            step={0.05}
+            onChange={(v) => setMeshShapeParams({ radiusX: v })}
+          />
+          <RangeRow
+            label="Height"
+            value={meshShapeParams.height}
+            min={0.3}
+            max={3}
+            step={0.05}
+            onChange={(v) => setMeshShapeParams({ height: v })}
+          />
+        </Section>
+      )}
+
       {/* ── Mesh Shape Sliders (body parts only) ──────────── */}
       {BODY_SHAPES.has(meshShape) && (
         <Section label="Shape Adjust" collapsible defaultOpen>
