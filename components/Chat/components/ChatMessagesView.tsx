@@ -9,7 +9,7 @@ import React, {
   useState,
 } from "react";
 import { MESSAGES_PER_PAGE } from "../constants";
-import type { Message, ThemeColors, ChatTheme } from "../types";
+import type { Message, ThemeColors, ChatTheme, RecordedDrawingStroke } from "../types";
 import { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
 import { CloudPoofAnimation } from "./CloudPoofAnimation";
 import {
@@ -28,13 +28,27 @@ const emojiSegmentRe = new RegExp(
   "^(?:\\p{Emoji_Presentation}|\\p{Emoji}\\uFE0F)(?:\\u200D(?:\\p{Emoji_Presentation}|\\p{Emoji}\\uFE0F))*$",
   "u",
 );
+const _emojiOnlyCache = new Map<string, boolean>();
+const _sharedSegmenter: Intl.Segmenter | null =
+  typeof Intl !== "undefined" && Intl.Segmenter
+    ? new Intl.Segmenter("en", { granularity: "grapheme" })
+    : null;
+
 function isEmojiOnly(text: string): boolean {
+  const cached = _emojiOnlyCache.get(text);
+  if (cached !== undefined) return cached;
+  const result = _isEmojiOnlyImpl(text);
+  if (_emojiOnlyCache.size > 500) _emojiOnlyCache.clear();
+  _emojiOnlyCache.set(text, result);
+  return result;
+}
+
+function _isEmojiOnlyImpl(text: string): boolean {
   const stripped = text.replace(/\s/g, "");
   if (!stripped) return false;
   // Use Intl.Segmenter to split into grapheme clusters, then check each one.
-  if (typeof Intl !== "undefined" && Intl.Segmenter) {
-    const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
-    for (const { segment } of segmenter.segment(stripped)) {
+  if (_sharedSegmenter) {
+    for (const { segment } of _sharedSegmenter.segment(stripped)) {
       if (!emojiSegmentRe.test(segment)) return false;
     }
     return true;
@@ -144,6 +158,568 @@ const BgEmojiOverlay = React.memo(function BgEmojiOverlay({
     </EmojiText>
   );
 });
+
+// ── Memoized per-message component ─────────────────────────────────
+type MessageBubbleProps = {
+  msg: Message;
+  isMine: boolean;
+  slotId: "1" | "2" | null;
+  themeColors: ThemeColors;
+  chatTheme: ChatTheme;
+  gradientColors: string[];
+  privacyMode: boolean;
+  isLockedOut: boolean;
+  isHighlighted: boolean;
+  isPrivacyHovered: boolean;
+  isCopied: boolean;
+  isLongPressed: boolean;
+  isPoofing: boolean;
+  setPrivacyHoveredMsgId: React.Dispatch<React.SetStateAction<string | null>>;
+  setCopiedMsgId: React.Dispatch<React.SetStateAction<string | null>>;
+  setLongPressedMsgId: React.Dispatch<React.SetStateAction<string | null>>;
+  setDeleteConfirmMsg: React.Dispatch<
+    React.SetStateAction<{
+      id: string;
+      imageFileId?: string;
+      videoFileId?: string;
+    } | null>
+  >;
+  setActiveEphemeralVideo: React.Dispatch<
+    React.SetStateAction<{
+      messageId: string;
+      videoUrl: string;
+      sender: string;
+      videoFileId?: string;
+      isMine: boolean;
+    } | null>
+  >;
+  setActiveDrawing: React.Dispatch<
+    React.SetStateAction<{
+      strokes: RecordedDrawingStroke[];
+      duration: number;
+    } | null>
+  >;
+  handleSwipeStart: (
+    e: React.TouchEvent<HTMLDivElement>,
+    msg: Message,
+    isMine: boolean,
+  ) => void;
+  handleLongPressStart: (msgId: string, isMine: boolean) => void;
+  handleLongPressEnd: () => void;
+  setReplyingTo: (msg: Message | null) => void;
+  scrollToMessage: (messageId: string) => void;
+  onReact: (messageId: string, emoji: string) => void;
+  onColorChange?: (messageId: string, color: string | null) => void;
+  onBgEmojisChange?: (
+    messageId: string,
+    data: { emojis: string[]; density: number } | null,
+  ) => void;
+  formatTimestamp: (createdAt?: number | object) => string;
+};
+
+const MessageBubble = React.memo(
+  function MessageBubble({
+    msg,
+    isMine,
+    slotId,
+    themeColors,
+    chatTheme,
+    gradientColors,
+    privacyMode,
+    isLockedOut,
+    isHighlighted,
+    isPrivacyHovered,
+    isCopied,
+    isLongPressed,
+    isPoofing,
+    setPrivacyHoveredMsgId,
+    setCopiedMsgId,
+    setLongPressedMsgId,
+    setDeleteConfirmMsg,
+    setActiveEphemeralVideo,
+    setActiveDrawing,
+    handleSwipeStart,
+    handleLongPressStart,
+    handleLongPressEnd,
+    setReplyingTo,
+    scrollToMessage,
+    onReact,
+    onColorChange,
+    onBgEmojisChange,
+    formatTimestamp,
+  }: MessageBubbleProps) {
+    const timestamp = formatTimestamp(msg.createdAt);
+
+    return (
+      <EmojiText>
+        <div
+          data-msg-id={msg.id}
+          className={`group flex ${isMine ? "justify-end" : "justify-start"} relative transition-colors duration-700 rounded-2xl ${
+            isHighlighted ? "bg-white/10" : ""
+          }`}
+          onMouseEnter={() => privacyMode && setPrivacyHoveredMsgId(msg.id)}
+          onMouseLeave={() => privacyMode && setPrivacyHoveredMsgId(null)}
+        >
+          {/* Cloud Poof Animation overlay */}
+          {isPoofing && (
+            <div className="absolute inset-0 z-20">
+              <CloudPoofAnimation onComplete={() => {}} />
+            </div>
+          )}
+          <div
+            className={`flex flex-col ${isMine ? "items-end" : "items-start"} max-w-[85%] sm:max-w-[75%]`}
+          >
+            <div
+              className={`relative w-full rounded-2xl px-3 py-2 text-sm shadow-md select-none transition-all duration-300 ${
+                isPoofing ? "opacity-0 scale-75" : ""
+              } ${
+                privacyMode && !isPrivacyHovered
+                  ? "opacity-0"
+                  : ""
+              } ${
+                isMine
+                  ? `${
+                      chatTheme === "gradient" && !msg.bgColor
+                        ? ""
+                        : msg.bgColor
+                          ? ""
+                          : themeColors.bg
+                    } ${themeColors.text} rounded-br-none`
+                  : `${msg.bgColor ? "" : "bg-white/10"} text-white rounded-bl-none`
+              }`}
+              style={
+                msg.bgColor
+                  ? { background: msg.bgColor }
+                  : isMine &&
+                      chatTheme === "gradient" &&
+                      gradientColors.length >= 2
+                    ? {
+                        background: `linear-gradient(to bottom, ${gradientColors.join(", ")})`,
+                        backgroundAttachment: "fixed",
+                        backgroundSize: "100% 100vh",
+                      }
+                    : undefined
+              }
+              onTouchStart={(e) => {
+                handleSwipeStart(e, msg, isMine);
+                handleLongPressStart(msg.id, isMine);
+              }}
+              onTouchEnd={handleLongPressEnd}
+              onTouchMove={handleLongPressEnd}
+              onMouseDown={() => handleLongPressStart(msg.id, isMine)}
+              onMouseUp={handleLongPressEnd}
+              onMouseLeave={handleLongPressEnd}
+            >
+              {/* Bg emoji overlay */}
+              {msg.bgEmojis && msg.bgEmojis.emojis.length > 0 && (
+                <BgEmojiOverlay
+                  messageId={msg.id}
+                  emojis={msg.bgEmojis.emojis}
+                  density={msg.bgEmojis.density}
+                />
+              )}
+              {/* Delete button (long-press) */}
+              {isMine && isLongPressed && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConfirmMsg({
+                      id: msg.id,
+                      imageFileId: msg.imageFileId,
+                      videoFileId: msg.videoFileId,
+                    });
+                    setLongPressedMsgId(null);
+                  }}
+                  className={`absolute z-30 top-1/2 -translate-y-1/2 ${
+                    isMine ? "-left-10" : "-right-10"
+                  } w-8 h-8 flex items-center justify-center rounded-full bg-red-500/90 hover:bg-red-600 shadow-lg transition-all animate-in fade-in zoom-in duration-200`}
+                >
+                  <svg
+                    className="w-4 h-4 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              )}
+              {/* Reply button on hover (desktop) */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReplyingTo(msg);
+                }}
+                className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 w-7 h-7 rounded-full hover:bg-white/10 ${
+                  isMine ? "-left-8" : "-right-8"
+                }`}
+              >
+                <span
+                  className="text-xs text-neutral-400"
+                  style={{
+                    transform: isMine ? "scaleX(-1)" : "none",
+                    display: "inline-block",
+                  }}
+                >
+                  <ReplyIcon size={14} />
+                </span>
+              </button>
+              {/* Emoji reaction picker on hover (desktop) */}
+              <EmojiReactionPicker
+                messageId={msg.id}
+                isMine={isMine}
+                currentReactions={msg.reactions}
+                slotId={slotId}
+                onReact={onReact}
+                currentBgColor={msg.bgColor}
+                onColorChange={onColorChange}
+                currentBgEmojis={msg.bgEmojis}
+                onBgEmojisChange={onBgEmojisChange}
+              />
+              {/* All message content above the bg emoji overlay */}
+              <div className="relative" style={{ zIndex: 1 }}>
+                {/* Reply preview if this is a reply */}
+                {(msg.replyToText || msg.replyToImageUrl) &&
+                  !isLockedOut && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (msg.replyToId) scrollToMessage(msg.replyToId);
+                      }}
+                      className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] text-left w-full cursor-pointer active:opacity-70 transition-opacity ${
+                        isMine
+                          ? "bg-black/10 border-black/40"
+                          : "bg-white/5 border-white/20"
+                      }`}
+                      style={{
+                        boxShadow:
+                          "inset 0 3px 5px rgba(0, 0, 0, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.4), inset 3px 0 5px rgba(0, 0, 0, 0.25), inset -3px 0 5px rgba(0, 0, 0, 0.25)",
+                      }}
+                    >
+                      <p className="font-semibold opacity-80">
+                        {msg.replyToSender}
+                      </p>
+                      {msg.replyToImageUrl && (
+                        <img
+                          src={toProxyUrl(msg.replyToImageUrl)}
+                          alt="Reply"
+                          className="mt-1 mb-1 w-12 h-12 rounded object-cover border border-white/10"
+                        />
+                      )}
+                      {msg.replyToText && (
+                        <p className="truncate opacity-60 max-w-[200px]">
+                          {msg.replyToText}
+                        </p>
+                      )}
+                    </button>
+                  )}
+                <p className="text-[11px] uppercase tracking-wide opacity-70 flex items-center justify-between gap-2">
+                  <span>
+                    {isLockedOut ? "???" : msg.sender}
+                    {!isLockedOut && msg.decryptionFailed && (
+                      <span className="ml-2 text-amber-400">
+                        ⚠️ unencrypted
+                      </span>
+                    )}
+                  </span>
+                  {(msg.decryptedText ||
+                    msg.imageUrl ||
+                    msg.videoUrl ||
+                    msg.drawingData) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const textToCopy = msg.decryptedText || "";
+                        if (textToCopy) {
+                          navigator.clipboard.writeText(textToCopy);
+                          setCopiedMsgId(msg.id);
+                          setTimeout(() => setCopiedMsgId(null), 2000);
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 w-5 h-5 rounded hover:bg-white/10 flex items-center justify-center"
+                      title="Copy message text"
+                      disabled={!msg.decryptedText}
+                    >
+                      {isCopied ? (
+                        <svg
+                          className="w-3.5 h-3.5 text-emerald-400 animate-in scale-in duration-200"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="w-3.5 h-3.5 text-neutral-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                </p>
+                {msg.decryptedText && (
+                  <p
+                    className={`mt-1 whitespace-pre-line break-words ${isLockedOut ? "select-none" : ""} ${
+                      !isLockedOut && isEmojiOnly(msg.decryptedText)
+                        ? "emoji text-4xl leading-snug"
+                        : ""
+                    }`}
+                  >
+                    {isLockedOut
+                      ? msg.text || "\u2022\u2022\u2022\u2022\u2022\u2022"
+                      : msg.decryptedText}
+                  </p>
+                )}
+                {msg.imageUrl &&
+                  (isLockedOut ? (
+                    <div className="mt-2 w-full h-40 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-neutral-500 text-sm">
+                      <svg
+                        className="w-5 h-5 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
+                      </svg>
+                      Join to view
+                    </div>
+                  ) : (
+                    <Image
+                      src={toProxyUrl(msg.imageUrl)}
+                      alt="Uploaded"
+                      width={500}
+                      height={320}
+                      className="mt-2 w-full rounded-xl border border-white/10"
+                    />
+                  ))}
+                {/* Drawing message - tap to play fullscreen */}
+                {msg.drawingData &&
+                  msg.drawingData.length > 0 &&
+                  !isLockedOut && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveDrawing({
+                          strokes: msg.drawingData!,
+                          duration: msg.drawingDuration || 3000,
+                        });
+                      }}
+                      className="mt-2 w-full rounded-xl border border-white/10 overflow-hidden aspect-video relative bg-black/60 group/draw"
+                    >
+                      {/* Static thumbnail showing all strokes */}
+                      <svg
+                        className="w-full h-full absolute inset-0"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                      >
+                        {msg.drawingData.map((s, idx) => {
+                          if (s.points.length < 2) return null;
+                          let path = `M ${s.points[0].x} ${s.points[0].y}`;
+                          for (let i = 1; i < s.points.length - 1; i++) {
+                            const curr = s.points[i];
+                            const next = s.points[i + 1];
+                            path += ` Q ${curr.x} ${curr.y} ${(curr.x + next.x) / 2} ${(curr.y + next.y) / 2}`;
+                          }
+                          const last = s.points[s.points.length - 1];
+                          path += ` L ${last.x} ${last.y}`;
+                          return (
+                            <path
+                              key={idx}
+                              d={path}
+                              stroke={s.color}
+                              strokeWidth="0.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              fill="none"
+                              opacity={0.7}
+                            />
+                          );
+                        })}
+                      </svg>
+                      {/* Play icon */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/draw:bg-black/10 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                          <svg
+                            className="w-5 h-5 text-white ml-0.5"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                {msg.videoUrl && !msg.isEphemeral && !isLockedOut && (
+                  <video
+                    src={toProxyUrl(msg.videoUrl)}
+                    controls
+                    className="mt-2 w-full rounded-xl border border-white/10"
+                  />
+                )}
+                {/* Ephemeral video - show icon button instead of inline video */}
+                {msg.videoUrl &&
+                  msg.isEphemeral &&
+                  !isLockedOut &&
+                  (isMine || !msg.disappearedFor?.[slotId ?? "1"]) && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveEphemeralVideo({
+                          messageId: msg.id,
+                          videoUrl: toProxyUrl(msg.videoUrl)!,
+                          sender: msg.sender,
+                          videoFileId: msg.videoFileId,
+                          isMine,
+                        })
+                      }
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-6 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-600/20 hover:from-amber-500/30 hover:to-orange-600/30 transition-all duration-300 group"
+                    >
+                      <div className="relative">
+                        {/* Play icon */}
+                        <svg
+                          className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                        {/* Ephemeral indicator */}
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+                      </div>
+                      <div className="flex flex-col items-start">
+                        <span className="text-amber-300 text-sm font-medium">
+                          Ephemeral Video
+                        </span>
+                        <span className="text-amber-400/60 text-[10px]">
+                          {isMine
+                            ? "Tap to view • Disappears when they watch"
+                            : "Tap to view • Disappears after watching"}
+                        </span>
+                      </div>
+                    </button>
+                  )}
+                {/* Ephemeral video that has been viewed - show placeholder (only for recipient) */}
+                {msg.videoUrl &&
+                  msg.isEphemeral &&
+                  !isMine &&
+                  msg.disappearedFor?.[slotId ?? "1"] && (
+                    <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        />
+                      </svg>
+                      Video has been viewed
+                    </div>
+                  )}
+                {timestamp && (
+                  <div
+                    className={`mt-1 flex items-center gap-1 ${
+                      isMine ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <span
+                      className={`text-[9px] ${
+                        isMine ? themeColors.accent : "text-neutral-400"
+                      }`}
+                    >
+                      {timestamp}
+                    </span>
+                    {/* Read receipt checkmarks */}
+                    {isMine && msg.readBy?.[slotId === "1" ? "2" : "1"] && (
+                      <span className={`text-[9px] ${themeColors.accent}`}>
+                        ✓
+                        {/* Second checkmark - shows when they've seen that you saw it */}
+                        {msg.seenReceiptBy?.[slotId === "1" ? "2" : "1"] &&
+                          "✓"}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* end content wrapper above bg emoji overlay */}
+            </div>
+            {/* Emoji reactions display below bubble */}
+            {msg.reactions && !isLockedOut && (
+              <div
+                className={`w-full ${isMine ? "flex justify-end" : "flex justify-start"} ${
+                  privacyMode && !isPrivacyHovered
+                    ? "opacity-0"
+                    : ""
+                } transition-opacity`}
+              >
+                <EmojiReactionsDisplay
+                  reactions={msg.reactions}
+                  slotId={slotId}
+                  onReact={onReact}
+                  messageId={msg.id}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </EmojiText>
+    );
+  },
+  (prev, next) => {
+    // Custom equality — only re-render when message-specific data changes.
+    // Callback props are stable (useState setters + useCallback) so we skip them.
+    return (
+      prev.msg === next.msg &&
+      prev.isHighlighted === next.isHighlighted &&
+      prev.isPrivacyHovered === next.isPrivacyHovered &&
+      prev.isCopied === next.isCopied &&
+      prev.isLongPressed === next.isLongPressed &&
+      prev.isPoofing === next.isPoofing &&
+      prev.isMine === next.isMine &&
+      prev.slotId === next.slotId &&
+      prev.themeColors === next.themeColors &&
+      prev.chatTheme === next.chatTheme &&
+      prev.gradientColors === next.gradientColors &&
+      prev.privacyMode === next.privacyMode &&
+      prev.isLockedOut === next.isLockedOut
+    );
+  },
+);
 
 type ChatMessagesViewProps = {
   messages: Message[];
@@ -273,7 +849,10 @@ export function ChatMessagesView({
     Math.min(winStart, messages.length - MESSAGES_PER_PAGE),
   );
   const windowEnd = Math.min(messages.length, windowStart + MESSAGES_PER_PAGE);
-  const visibleMessages = messages.slice(windowStart, windowEnd);
+  const visibleMessages = useMemo(
+    () => messages.slice(windowStart, windowEnd),
+    [messages, windowStart, windowEnd],
+  );
   const hasOlder = windowStart > 0;
   const hasNewer = windowEnd < messages.length;
 
@@ -335,6 +914,14 @@ export function ChatMessagesView({
       }
     },
     [messages],
+  );
+
+  // Stable ref so MessageBubble never re-renders due to scrollToMessage identity
+  const scrollToMessageRef = useRef(scrollToMessage);
+  scrollToMessageRef.current = scrollToMessage;
+  const stableScrollToMessage = useCallback(
+    (id: string) => scrollToMessageRef.current(id),
+    [],
   );
 
   // External scroll-to trigger from search
@@ -458,7 +1045,7 @@ export function ChatMessagesView({
           });
         });
       }
-    }, 300);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [messages]);
@@ -480,10 +1067,19 @@ export function ChatMessagesView({
     }
   }, [isOtherTyping]);
 
-  // Auto-load older/newer messages on scroll
+  // Auto-load older/newer messages on scroll (rAF-throttled)
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
+    let rafId = 0;
+
+    const handleScrollThrottled = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        handleScroll();
+      });
+    };
 
     const handleScroll = () => {
       const distFromBottom =
@@ -556,8 +1152,11 @@ export function ChatMessagesView({
       }
     };
 
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
+    container.addEventListener("scroll", handleScrollThrottled, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScrollThrottled);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [
     hasOlder,
     hasNewer,
@@ -568,20 +1167,34 @@ export function ChatMessagesView({
     loadOlderFromServer,
   ]);
 
-  // Mark messages from the other person as read (only visible window)
+  // Mark messages from the other person as read (only visible window, debounced)
+  const markedReadRef = useRef(new Set<string>());
   useEffect(() => {
     if (!slotId) return;
-    visibleMessages.forEach((msg) => {
-      markMessageAsRead(msg);
-    });
+    const timer = setTimeout(() => {
+      visibleMessages.forEach((msg) => {
+        if (!markedReadRef.current.has(msg.id)) {
+          markedReadRef.current.add(msg.id);
+          markMessageAsRead(msg);
+        }
+      });
+    }, 150);
+    return () => clearTimeout(timer);
   }, [visibleMessages, slotId, markMessageAsRead]);
 
-  // Mark that I've seen my read receipts (only visible window)
+  // Mark that I've seen my read receipts (only visible window, debounced)
+  const markedSeenRef = useRef(new Set<string>());
   useEffect(() => {
     if (!slotId) return;
-    visibleMessages.forEach((msg) => {
-      markReceiptAsSeen(msg);
-    });
+    const timer = setTimeout(() => {
+      visibleMessages.forEach((msg) => {
+        if (!markedSeenRef.current.has(msg.id)) {
+          markedSeenRef.current.add(msg.id);
+          markReceiptAsSeen(msg);
+        }
+      });
+    }, 150);
+    return () => clearTimeout(timer);
   }, [visibleMessages, slotId, markReceiptAsSeen]);
 
   // Long-press delete state
@@ -705,458 +1318,38 @@ export function ChatMessagesView({
       {/* Only render the current window of messages */}
       {visibleMessages.map((msg) => {
         const isMine = slotId === msg.slotId;
-        const timestamp = formatTimestamp(msg.createdAt);
-        const isPoofing = poofingMessageIds.has(msg.id);
-
         return (
-          <EmojiText key={msg.id}>
-            <div
-              data-msg-id={msg.id}
-              className={`group flex ${isMine ? "justify-end" : "justify-start"} relative transition-colors duration-700 rounded-2xl ${
-                highlightedMsgId === msg.id ? "bg-white/10" : ""
-              }`}
-              onMouseEnter={() => privacyMode && setPrivacyHoveredMsgId(msg.id)}
-              onMouseLeave={() => privacyMode && setPrivacyHoveredMsgId(null)}
-            >
-              {/* Cloud Poof Animation overlay */}
-              {isPoofing && (
-                <div className="absolute inset-0 z-20">
-                  <CloudPoofAnimation onComplete={() => {}} />
-                </div>
-              )}
-              <div
-                className={`flex flex-col ${isMine ? "items-end" : "items-start"} max-w-[85%] sm:max-w-[75%]`}
-              >
-                <div
-                  className={`relative w-full rounded-2xl px-3 py-2 text-sm shadow-md select-none transition-all duration-300 ${
-                    isPoofing ? "opacity-0 scale-75" : ""
-                  } ${
-                    privacyMode && privacyHoveredMsgId !== msg.id
-                      ? "opacity-0"
-                      : ""
-                  } ${
-                    isMine
-                      ? `${
-                          chatTheme === "gradient" && !msg.bgColor
-                            ? ""
-                            : msg.bgColor
-                              ? ""
-                              : themeColors.bg
-                        } ${themeColors.text} rounded-br-none`
-                      : `${msg.bgColor ? "" : "bg-white/10"} text-white rounded-bl-none`
-                  }`}
-                  style={
-                    msg.bgColor
-                      ? { background: msg.bgColor }
-                      : isMine &&
-                          chatTheme === "gradient" &&
-                          gradientColors.length >= 2
-                        ? {
-                            background: `linear-gradient(to bottom, ${gradientColors.join(", ")})`,
-                            backgroundAttachment: "fixed",
-                            backgroundSize: "100% 100vh",
-                          }
-                        : undefined
-                  }
-                  onTouchStart={(e) => {
-                    handleSwipeStart(e, msg, isMine);
-                    handleLongPressStart(msg.id, isMine);
-                  }}
-                  onTouchEnd={handleLongPressEnd}
-                  onTouchMove={handleLongPressEnd}
-                  onMouseDown={() => handleLongPressStart(msg.id, isMine)}
-                  onMouseUp={handleLongPressEnd}
-                  onMouseLeave={handleLongPressEnd}
-                >
-                  {/* Bg emoji overlay */}
-                  {msg.bgEmojis && msg.bgEmojis.emojis.length > 0 && (
-                    <BgEmojiOverlay
-                      messageId={msg.id}
-                      emojis={msg.bgEmojis.emojis}
-                      density={msg.bgEmojis.density}
-                    />
-                  )}
-                  {/* Delete button (long-press) */}
-                  {isMine && longPressedMsgId === msg.id && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirmMsg({
-                          id: msg.id,
-                          imageFileId: msg.imageFileId,
-                          videoFileId: msg.videoFileId,
-                        });
-                        setLongPressedMsgId(null);
-                      }}
-                      className={`absolute z-30 top-1/2 -translate-y-1/2 ${
-                        isMine ? "-left-10" : "-right-10"
-                      } w-8 h-8 flex items-center justify-center rounded-full bg-red-500/90 hover:bg-red-600 shadow-lg transition-all animate-in fade-in zoom-in duration-200`}
-                    >
-                      <svg
-                        className="w-4 h-4 text-white"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  )}
-                  {/* Reply button on hover (desktop) */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setReplyingTo(msg);
-                    }}
-                    className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 w-7 h-7 rounded-full hover:bg-white/10 ${
-                      isMine ? "-left-8" : "-right-8"
-                    }`}
-                  >
-                    <span
-                      className="text-xs text-neutral-400"
-                      style={{
-                        transform: isMine ? "scaleX(-1)" : "none",
-                        display: "inline-block",
-                      }}
-                    >
-                      <ReplyIcon size={14} />
-                    </span>
-                  </button>
-                  {/* Emoji reaction picker on hover (desktop) */}
-                  <EmojiReactionPicker
-                    messageId={msg.id}
-                    isMine={isMine}
-                    currentReactions={msg.reactions}
-                    slotId={slotId}
-                    onReact={onReact}
-                    currentBgColor={msg.bgColor}
-                    onColorChange={onColorChange}
-                    currentBgEmojis={msg.bgEmojis}
-                    onBgEmojisChange={onBgEmojisChange}
-                  />
-                  {/* All message content above the bg emoji overlay */}
-                  <div className="relative" style={{ zIndex: 1 }}>
-                    {/* Reply preview if this is a reply */}
-                    {/**perfectly inset shadow all the way around */}
-                    {(msg.replyToText || msg.replyToImageUrl) &&
-                      !isLockedOut && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (msg.replyToId) scrollToMessage(msg.replyToId);
-                          }}
-                          className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] text-left w-full cursor-pointer active:opacity-70 transition-opacity ${
-                            isMine
-                              ? "bg-black/10 border-black/40"
-                              : "bg-white/5 border-white/20"
-                          }`}
-                          style={{
-                            boxShadow:
-                              "inset 0 3px 5px rgba(0, 0, 0, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.4), inset 3px 0 5px rgba(0, 0, 0, 0.25), inset -3px 0 5px rgba(0, 0, 0, 0.25)",
-                          }}
-                        >
-                          <p className="font-semibold opacity-80">
-                            {msg.replyToSender}
-                          </p>
-                          {msg.replyToImageUrl && (
-                            <img
-                              src={toProxyUrl(msg.replyToImageUrl)}
-                              alt="Reply"
-                              className="mt-1 mb-1 w-12 h-12 rounded object-cover border border-white/10"
-                            />
-                          )}
-                          {msg.replyToText && (
-                            <p className="truncate opacity-60 max-w-[200px]">
-                              {msg.replyToText}
-                            </p>
-                          )}
-                        </button>
-                      )}
-                    <p className="text-[11px] uppercase tracking-wide opacity-70 flex items-center justify-between gap-2">
-                      <span>
-                        {isLockedOut ? "???" : msg.sender}
-                        {!isLockedOut && msg.decryptionFailed && (
-                          <span className="ml-2 text-amber-400">
-                            ⚠️ unencrypted
-                          </span>
-                        )}
-                      </span>
-                      {(msg.decryptedText ||
-                        msg.imageUrl ||
-                        msg.videoUrl ||
-                        msg.drawingData) && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const textToCopy = msg.decryptedText || "";
-                            if (textToCopy) {
-                              navigator.clipboard.writeText(textToCopy);
-                              setCopiedMsgId(msg.id);
-                              setTimeout(() => setCopiedMsgId(null), 2000);
-                            }
-                          }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 w-5 h-5 rounded hover:bg-white/10 flex items-center justify-center"
-                          title="Copy message text"
-                          disabled={!msg.decryptedText}
-                        >
-                          {copiedMsgId === msg.id ? (
-                            <svg
-                              className="w-3.5 h-3.5 text-emerald-400 animate-in scale-in duration-200"
-                              fill="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-                            </svg>
-                          ) : (
-                            <svg
-                              className="w-3.5 h-3.5 text-neutral-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                              />
-                            </svg>
-                          )}
-                        </button>
-                      )}
-                    </p>
-                    {msg.decryptedText && (
-                      <p
-                        className={`mt-1 whitespace-pre-line break-words ${isLockedOut ? "select-none" : ""} ${
-                          !isLockedOut && isEmojiOnly(msg.decryptedText)
-                            ? "emoji text-4xl leading-snug"
-                            : ""
-                        }`}
-                      >
-                        {isLockedOut
-                          ? msg.text || "\u2022\u2022\u2022\u2022\u2022\u2022"
-                          : msg.decryptedText}
-                      </p>
-                    )}
-                    {msg.imageUrl &&
-                      (isLockedOut ? (
-                        <div className="mt-2 w-full h-40 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-neutral-500 text-sm">
-                          <svg
-                            className="w-5 h-5 mr-2"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                          Join to view
-                        </div>
-                      ) : (
-                        <Image
-                          src={toProxyUrl(msg.imageUrl)}
-                          alt="Uploaded"
-                          width={500}
-                          height={320}
-                          className="mt-2 w-full rounded-xl border border-white/10"
-                        />
-                      ))}
-                    {/* Drawing message - tap to play fullscreen */}
-                    {msg.drawingData &&
-                      msg.drawingData.length > 0 &&
-                      !isLockedOut && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveDrawing({
-                              strokes: msg.drawingData!,
-                              duration: msg.drawingDuration || 3000,
-                            });
-                          }}
-                          className="mt-2 w-full rounded-xl border border-white/10 overflow-hidden aspect-video relative bg-black/60 group/draw"
-                        >
-                          {/* Static thumbnail showing all strokes */}
-                          <svg
-                            className="w-full h-full absolute inset-0"
-                            viewBox="0 0 100 100"
-                            preserveAspectRatio="none"
-                          >
-                            {msg.drawingData.map((s, idx) => {
-                              if (s.points.length < 2) return null;
-                              let path = `M ${s.points[0].x} ${s.points[0].y}`;
-                              for (let i = 1; i < s.points.length - 1; i++) {
-                                const curr = s.points[i];
-                                const next = s.points[i + 1];
-                                path += ` Q ${curr.x} ${curr.y} ${(curr.x + next.x) / 2} ${(curr.y + next.y) / 2}`;
-                              }
-                              const last = s.points[s.points.length - 1];
-                              path += ` L ${last.x} ${last.y}`;
-                              return (
-                                <path
-                                  key={idx}
-                                  d={path}
-                                  stroke={s.color}
-                                  strokeWidth="0.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  fill="none"
-                                  opacity={0.7}
-                                />
-                              );
-                            })}
-                          </svg>
-                          {/* Play icon */}
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/draw:bg-black/10 transition-colors">
-                            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                              <svg
-                                className="w-5 h-5 text-white ml-0.5"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
-                            </div>
-                          </div>
-                        </button>
-                      )}
-                    {msg.videoUrl && !msg.isEphemeral && !isLockedOut && (
-                      <video
-                        src={toProxyUrl(msg.videoUrl)}
-                        controls
-                        className="mt-2 w-full rounded-xl border border-white/10"
-                      />
-                    )}
-                    {/* Ephemeral video - show icon button instead of inline video */}
-                    {msg.videoUrl &&
-                      msg.isEphemeral &&
-                      !isLockedOut &&
-                      (isMine || !msg.disappearedFor?.[slotId ?? "1"]) && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setActiveEphemeralVideo({
-                              messageId: msg.id,
-                              videoUrl: toProxyUrl(msg.videoUrl)!,
-                              sender: msg.sender,
-                              videoFileId: msg.videoFileId,
-                              isMine,
-                            })
-                          }
-                          className="mt-2 w-full flex items-center justify-center gap-2 py-6 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-600/20 hover:from-amber-500/30 hover:to-orange-600/30 transition-all duration-300 group"
-                        >
-                          <div className="relative">
-                            {/* Play icon */}
-                            <svg
-                              className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform"
-                              fill="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                            {/* Ephemeral indicator */}
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
-                          </div>
-                          <div className="flex flex-col items-start">
-                            <span className="text-amber-300 text-sm font-medium">
-                              Ephemeral Video
-                            </span>
-                            <span className="text-amber-400/60 text-[10px]">
-                              {isMine
-                                ? "Tap to view • Disappears when they watch"
-                                : "Tap to view • Disappears after watching"}
-                            </span>
-                          </div>
-                        </button>
-                      )}
-                    {/* Ephemeral video that has been viewed - show placeholder (only for recipient) */}
-                    {msg.videoUrl &&
-                      msg.isEphemeral &&
-                      !isMine &&
-                      msg.disappearedFor?.[slotId ?? "1"] && (
-                        <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                            />
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                            />
-                          </svg>
-                          Video has been viewed
-                        </div>
-                      )}
-                    {timestamp && (
-                      <div
-                        className={`mt-1 flex items-center gap-1 ${
-                          isMine ? "justify-end" : "justify-start"
-                        }`}
-                      >
-                        <span
-                          className={`text-[9px] ${
-                            isMine ? themeColors.accent : "text-neutral-400"
-                          }`}
-                        >
-                          {timestamp}
-                        </span>
-                        {/* Read receipt checkmarks */}
-                        {isMine && msg.readBy?.[slotId === "1" ? "2" : "1"] && (
-                          <span className={`text-[9px] ${themeColors.accent}`}>
-                            ✓
-                            {/* Second checkmark - shows when they've seen that you saw it */}
-                            {msg.seenReceiptBy?.[slotId === "1" ? "2" : "1"] &&
-                              "✓"}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {/* end content wrapper above bg emoji overlay */}
-                </div>
-                {/* Emoji reactions display below bubble */}
-                {msg.reactions && !isLockedOut && (
-                  <div
-                    className={`w-full ${isMine ? "flex justify-end" : "flex justify-start"} ${
-                      privacyMode && privacyHoveredMsgId !== msg.id
-                        ? "opacity-0"
-                        : ""
-                    } transition-opacity`}
-                  >
-                    <EmojiReactionsDisplay
-                      reactions={msg.reactions}
-                      slotId={slotId}
-                      onReact={onReact}
-                      messageId={msg.id}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </EmojiText>
+          <MessageBubble
+            key={msg.id}
+            msg={msg}
+            isMine={isMine}
+            slotId={slotId}
+            themeColors={themeColors}
+            chatTheme={chatTheme}
+            gradientColors={gradientColors}
+            privacyMode={privacyMode}
+            isLockedOut={isLockedOut}
+            isHighlighted={highlightedMsgId === msg.id}
+            isPrivacyHovered={privacyHoveredMsgId === msg.id}
+            isCopied={copiedMsgId === msg.id}
+            isLongPressed={longPressedMsgId === msg.id}
+            isPoofing={poofingMessageIds.has(msg.id)}
+            setPrivacyHoveredMsgId={setPrivacyHoveredMsgId}
+            setCopiedMsgId={setCopiedMsgId}
+            setLongPressedMsgId={setLongPressedMsgId}
+            setDeleteConfirmMsg={setDeleteConfirmMsg}
+            setActiveEphemeralVideo={setActiveEphemeralVideo}
+            setActiveDrawing={setActiveDrawing}
+            handleSwipeStart={handleSwipeStart}
+            handleLongPressStart={handleLongPressStart}
+            handleLongPressEnd={handleLongPressEnd}
+            setReplyingTo={setReplyingTo}
+            scrollToMessage={stableScrollToMessage}
+            onReact={onReact}
+            onColorChange={onColorChange}
+            onBgEmojisChange={onBgEmojisChange}
+            formatTimestamp={formatTimestamp}
+          />
         );
       })}
 
