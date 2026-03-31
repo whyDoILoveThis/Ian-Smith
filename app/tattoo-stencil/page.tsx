@@ -17,8 +17,17 @@ import Footer from "@/components/main/Footer";
 const MeshEditor = lazy(
   () => import("@/components/TattooStencilCreator/MeshEditor/MeshEditor"),
 );
+const TattooUnwrap = lazy(
+  () => import("@/components/TattooStencilCreator/ai-fixer/TattooUnwrap"),
+);
 
-type EditorMode = "pipeline" | "sculpt";
+type EditorMode = "pipeline" | "sculpt" | "unwrap";
+
+const TABS: { id: EditorMode; label: string; icon: string }[] = [
+  { id: "pipeline", label: "Pipeline", icon: "⚙️" },
+  { id: "sculpt", label: "3D Sculpt", icon: "🧊" },
+  { id: "unwrap", label: "AI Unwrap", icon: "🧠" },
+];
 
 export default function TattooStencilPage() {
   const [editorMode, setEditorMode] = useState<EditorMode>("pipeline");
@@ -69,43 +78,24 @@ export default function TattooStencilPage() {
         </p>
       </div>
 
-      {/* ── Mode Toggle ───────────────────────────────────── */}
-      <div className="mb-6 flex items-center justify-center gap-3">
-        <span
-          className={`text-sm font-medium transition-colors ${
-            editorMode === "pipeline"
-              ? "text-foreground"
-              : "text-muted-foreground"
-          }`}
-        >
-          Pipeline
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={editorMode === "sculpt"}
-          onClick={() =>
-            setEditorMode((m) => (m === "pipeline" ? "sculpt" : "pipeline"))
-          }
-          className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-            editorMode === "sculpt" ? "bg-indigo-600" : "bg-zinc-700"
-          }`}
-        >
-          <span
-            className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform ${
-              editorMode === "sculpt" ? "translate-x-7" : "translate-x-1"
-            }`}
-          />
-        </button>
-        <span
-          className={`text-sm font-medium transition-colors ${
-            editorMode === "sculpt"
-              ? "text-foreground"
-              : "text-muted-foreground"
-          }`}
-        >
-          3D Sculpt Editor
-        </span>
+      {/* ── Mode Tabs ─────────────────────────────────────── */}
+      <div className="mb-6 flex items-center justify-center">
+        <div className="inline-flex rounded-xl bg-zinc-800/80 p-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setEditorMode(tab.id)}
+              className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                editorMode === tab.id
+                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <span className="text-base">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── SCULPT MODE ───────────────────────────────────── */}
@@ -118,6 +108,17 @@ export default function TattooStencilPage() {
           }
         >
           <MeshEditor />
+        </Suspense>
+      ) : editorMode === "unwrap" ? (
+        /* ── AI UNWRAP MODE ──────────────────────────────────── */
+        <Suspense
+          fallback={
+            <div className="flex h-[500px] items-center justify-center rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 text-sm text-zinc-500">
+              Loading AI Unwrap&hellip;
+            </div>
+          }
+        >
+          <TattooUnwrap />
         </Suspense>
       ) : (
         /* ── PIPELINE MODE (existing) ───────────────────────── */
