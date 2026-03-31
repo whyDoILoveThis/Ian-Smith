@@ -17,8 +17,8 @@ import { BreadcrumbProvider } from "@/breadcrumb";
 import PerformanceOverlayRouteCheckRenderer from "@/components/PerformanceOverlay/PerformanceOverlayRoute";
 import ScrollJumpButtons from "@/components/main/ScrollJumpButtons";
 import VersionGuard from "@/components/main/VersionGuard";
-import { OrbSettingsProvider } from "@/components/ItsGlowingOrbs/OrbSettingsContext";
-import OrbsWithSettings from "@/components/ItsGlowingOrbs/OrbsWithSettings";
+// import { OrbSettingsProvider } from "@/components/ItsGlowingOrbs/OrbSettingsContext";
+// import OrbsWithSettings from "@/components/ItsGlowingOrbs/OrbsWithSettings";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -55,29 +55,29 @@ export default function RootLayout({
            ${inter.className} ${inter.variable}`}
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <OrbSettingsProvider>
-              <BreadcrumbProvider disabled>
-                <FirebaseRTDBTrackerOverlayRenderer disabled />
-                <PerformanceOverlayRouteCheckRenderer />
-                <ScrollJumpButtons />
-                <OrbsWithSettings />
-                <VersionGuard />
-                <SignedIn>
-                  <ConnectivityWrapper>
-                    <MainWrap>
-                      <SignedInJSX adminUserId={AdminsUserId}>
-                        {children}
-                      </SignedInJSX>
-                    </MainWrap>
-                  </ConnectivityWrapper>
-                </SignedIn>
-                <SignedOut>
-                  <ConnectivityWrapper>
-                    <MainWrap>{children}</MainWrap>
-                  </ConnectivityWrapper>
-                </SignedOut>
-              </BreadcrumbProvider>
-            </OrbSettingsProvider>
+            {/* <OrbSettingsProvider> */}
+            <BreadcrumbProvider disabled>
+              <FirebaseRTDBTrackerOverlayRenderer disabled />
+              <PerformanceOverlayRouteCheckRenderer />
+              <ScrollJumpButtons />
+              {/* <OrbsWithSettings /> */}
+              <VersionGuard />
+              <SignedIn>
+                <ConnectivityWrapper>
+                  <MainWrap>
+                    <SignedInJSX adminUserId={AdminsUserId}>
+                      {children}
+                    </SignedInJSX>
+                  </MainWrap>
+                </ConnectivityWrapper>
+              </SignedIn>
+              <SignedOut>
+                <ConnectivityWrapper>
+                  <MainWrap>{children}</MainWrap>
+                </ConnectivityWrapper>
+              </SignedOut>
+            </BreadcrumbProvider>
+            {/* </OrbSettingsProvider> */}
           </ThemeProvider>
           <script
             src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`}

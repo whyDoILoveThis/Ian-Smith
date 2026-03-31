@@ -9,14 +9,14 @@ import ItsDropdown from "@/components/ui/its-dropdown";
 import { Menu, X, Settings, Sparkles, Snail } from "lucide-react";
 import { LINKS } from "@/lib/Links";
 import { useNavFooterTheme } from "./NavFooterTheme";
-import { useOrbSettings } from "@/components/ItsGlowingOrbs/OrbSettingsContext";
+//import { useOrbSettings } from "@/components/ItsGlowingOrbs/OrbSettingsContext";
 
 const Nav = () => {
   const pathname = usePathname();
   const [hidden, setHidden] = useState(false);
   const theme = useNavFooterTheme();
   const isBlack = theme === "black";
-  const { setShowDashboard, resetSpeeds } = useOrbSettings();
+  // const { setShowDashboard, resetSpeeds } = useOrbSettings();
 
   useEffect(() => {
     if (pathname === "/cpp") setHidden(true);
@@ -53,7 +53,7 @@ const Nav = () => {
               ))}
             </span>
             <ThemeToggler isMobile={false} />
-            <ItsDropdown
+            {/* <ItsDropdown
               trigger={
                 <button
                   className={`p-2 rounded-full border border-slate-200/20 ${isBlack ? "dark:border-gray-700/30" : "dark:border-slate-700/30"} bg-white/30 ${isBlack ? "dark:bg-gray-900/30" : "dark:bg-slate-800/30"} backdrop-blur-sm hover:brightness-110 transition`}
@@ -79,7 +79,7 @@ const Nav = () => {
                 <Snail className="w-4 h-4 text-blue-500" />
                 Slow Orbs
               </button>
-            </ItsDropdown>
+            </ItsDropdown> */}
           </div>
           {/* MOBILE MENU DROPDOWN */}
           <div className="md:hidden relative z-10">
