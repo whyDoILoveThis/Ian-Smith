@@ -61,7 +61,6 @@ async function estimateDepth(
     raw = depthObj.data;
   } else {
     // Last resort: use input image dimensions
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ri = rawImg as any;
     const inputW = Math.round(
       ri?.width ?? ri?.dims?.[ri.dims.length - 1] ?? 256,
