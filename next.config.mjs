@@ -32,6 +32,14 @@ const nextConfig = {
           test: /\.node$/,
           use: "null-loader",
         });
+        // Treat onnxruntime-web .mjs files as ES modules so Terser
+        // correctly handles import.meta instead of rejecting it.
+        config.module.rules.push({
+          test: /\.mjs$/,
+          include: /node_modules[\\/]onnxruntime-web/,
+          type: "javascript/esm",
+          resolve: { fullySpecified: false },
+        });
       }
       return config;
     },
