@@ -3,6 +3,18 @@ const nextConfig = {
     images: {
         domains: ['firebasestorage.googleapis.com', 'fra.cloud.appwrite.io', 'nyc.cloud.appwrite.io', 'img.clerk.com', 'picsum.photos'],
       },
+    // Exclude client-only ML binaries from Vercel's serverless function
+    // file tracing. onnxruntime-node alone is ~355 MB and blows past the
+    // 250 MB uncompressed limit even though it's never used server-side.
+    experimental: {
+      outputFileTracingExcludes: {
+        '*': [
+          './node_modules/onnxruntime-node/**',
+          './node_modules/onnxruntime-web/**',
+          './node_modules/@huggingface/transformers/**',
+        ],
+      },
+    },
     headers: async () => [
       {
         source: "/sw.js",
@@ -14,10 +26,15 @@ const nextConfig = {
     ],
     webpack: (config, { isServer }) => {
       if (isServer) {
-        // Server: externalize ML packages entirely — they're only used
-        // at runtime on the client via dynamic import().
+        // Server: externalize heavy native / ML packages to stay under
+        // Vercel's 50 MB serverless function limit.
+        // • sharp — Vercel auto-installs it; bundling duplicates ~35 MB of libvips
+        // • potrace — native C++ addon (~5-10 MB)
+        // • @huggingface/transformers + onnxruntime — client-only ML
         config.externals = [
           ...(Array.isArray(config.externals) ? config.externals : []),
+          "sharp",
+          "potrace",
           "@huggingface/transformers",
           "onnxruntime-node",
           "onnxruntime-web",
