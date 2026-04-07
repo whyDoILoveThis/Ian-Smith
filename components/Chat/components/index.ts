@@ -11,6 +11,7 @@ export { ActiveCallBanner } from "./ActiveCallBanner";
 export { WordSearchGame } from "./WordSearchGame";
 export { VideoRecorder } from "./VideoRecorder";
 export { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
+export { EphemeralPhotoViewer } from "./EphemeralPhotoViewer";
 export { CloudPoofAnimation } from "./CloudPoofAnimation";
 export { TouchIndicatorsOverlay } from "./TouchIndicatorsOverlay";
 export { DrawingOverlay } from "./DrawingOverlay";

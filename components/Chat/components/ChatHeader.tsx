@@ -31,6 +31,13 @@ type ChatHeaderProps = {
   isRecordingDrawing: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
+  // Emoji stamp props
+  selectedEmoji: string | null;
+  onSelectEmoji: (emoji: string | null) => void;
+  emojiSize: number;
+  onEmojiSizeChange: (size: number) => void;
+  randomEmojiSize: boolean;
+  onRandomEmojiSizeChange: (random: boolean) => void;
   // Search props
   messages: Message[];
   slots: Slots;
@@ -58,6 +65,12 @@ export function ChatHeader({
   isRecordingDrawing,
   onStartRecording,
   onStopRecording,
+  selectedEmoji,
+  onSelectEmoji,
+  emojiSize,
+  onEmojiSizeChange,
+  randomEmojiSize,
+  onRandomEmojiSizeChange,
   messages,
   slots,
   onScrollToMessage,
@@ -245,6 +258,7 @@ export function ChatHeader({
       // If color picker is open, close it and deselect
       setShowColorPicker(false);
       onSelectDrawingColor(null);
+      onSelectEmoji(null);
     } else {
       // If color picker is closed, open it
       setShowColorPicker(true);
@@ -253,11 +267,65 @@ export function ChatHeader({
 
   const handleColorSelect = (color: string) => {
     onSelectDrawingColor(color);
+    onSelectEmoji(null); // clear emoji when picking a color
     setShowColorPicker(false);
   };
 
   const handleDeselect = () => {
     onSelectDrawingColor(null);
+    onSelectEmoji(null);
+    setShowColorPicker(false);
+  };
+
+  // Emoji stamp picking
+  const [showEmojiGrid, setShowEmojiGrid] = useState(false);
+  const STAMP_EMOJIS = [
+    "❤️",
+    "🔥",
+    "😂",
+    "😍",
+    "🥺",
+    "😭",
+    "🤣",
+    "✨",
+    "💀",
+    "👀",
+    "🎉",
+    "💯",
+    "🙌",
+    "👏",
+    "😎",
+    "🥵",
+    "🤯",
+    "😈",
+    "💋",
+    "🌹",
+    "⭐",
+    "🌈",
+    "🦋",
+    "🐸",
+    "🍑",
+    "🍒",
+    "💎",
+    "🪄",
+    "👑",
+    "🎵",
+    "💜",
+    "💙",
+    "💚",
+    "💛",
+    "🧡",
+    "🤍",
+    "🖤",
+    "❤️‍🔥",
+    "💝",
+    "💖",
+  ];
+
+  const handleEmojiSelect = (emoji: string) => {
+    onSelectEmoji(emoji);
+    onSelectDrawingColor(null); // clear color when picking emoji
+    setShowEmojiGrid(false);
     setShowColorPicker(false);
   };
 
@@ -295,7 +363,7 @@ export function ChatHeader({
           <span className="text-sm font-semibold text-white flex items-center gap-1.5">
             {activeTab === "chat" ? (
               <span>
-                Chat <span className="text-[8px]">v3.1</span>
+                Chat <span className="text-[8px]">v3.2</span>
               </span>
             ) : (
               <span>
@@ -359,18 +427,27 @@ export function ChatHeader({
               type="button"
               onClick={handlePencilClick}
               className={`h-7 w-7 rounded-full flex items-center justify-center transition-all active:ring-2 ring-white/20 ${
-                selectedDrawingColor
+                selectedDrawingColor || selectedEmoji
                   ? "ring-2 ring-offset-1 ring-offset-black/60"
                   : "hover:bg-white/10"
               }`}
               style={
                 selectedDrawingColor
                   ? { backgroundColor: selectedDrawingColor, color: "white" }
-                  : { color: "white" }
+                  : selectedEmoji
+                    ? {
+                        backgroundColor: "rgba(255,255,255,0.15)",
+                        color: "white",
+                      }
+                    : { color: "white" }
               }
               title="Drawing color picker"
             >
-              <Pencil className="w-5 h-5" />
+              {selectedEmoji ? (
+                <span className="text-base leading-none">{selectedEmoji}</span>
+              ) : (
+                <Pencil className="w-5 h-5" />
+              )}
             </button>
             {/* Color Picker Popup - rainbow palette grid with circles */}
             {showColorPicker && (
@@ -417,6 +494,79 @@ export function ChatHeader({
                   </span>
                   Record Drawing
                 </button>
+
+                {/* Emoji stamp section */}
+                <div className="mt-2 border-t border-white/10 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiGrid((v) => !v)}
+                    className={`w-full py-1.5 rounded-lg flex items-center justify-center gap-2 transition-colors text-xs font-medium ${
+                      selectedEmoji
+                        ? "bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-300"
+                        : "bg-white/10 hover:bg-white/20 text-white"
+                    }`}
+                  >
+                    <span className="text-sm">{selectedEmoji || "😀"}</span>
+                    {selectedEmoji
+                      ? `Emoji: ${selectedEmoji}`
+                      : "Emoji Stamp Mode"}
+                  </button>
+
+                  {/* Emoji grid */}
+                  {showEmojiGrid && (
+                    <div className="mt-2 grid grid-cols-10 gap-1">
+                      {STAMP_EMOJIS.map((emoji, i) => (
+                        <button
+                          key={`stamp-${i}`}
+                          type="button"
+                          onClick={() => handleEmojiSelect(emoji)}
+                          className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-md text-sm hover:bg-white/20 transition-all hover:scale-125 ${
+                            selectedEmoji === emoji
+                              ? "bg-white/20 ring-1 ring-purple-400 scale-110"
+                              : ""
+                          }`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Size slider + random toggle (only when emoji is selected) */}
+                  {selectedEmoji && (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center justify-between text-[10px] text-neutral-400">
+                        <span>Size</span>
+                        <span>
+                          {randomEmojiSize ? "Random" : `${emojiSize}px`}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="16"
+                        max="72"
+                        value={emojiSize}
+                        onChange={(e) =>
+                          onEmojiSizeChange(Number(e.target.value))
+                        }
+                        disabled={randomEmojiSize}
+                        className="w-full h-2 rounded-full appearance-none cursor-pointer bg-white/10 disabled:opacity-40 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-purple-400 [&::-moz-range-thumb]:cursor-pointer"
+                      />
+                      <label className="flex items-center gap-2 text-[10px] text-neutral-300 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={randomEmojiSize}
+                          onChange={(e) =>
+                            onRandomEmojiSizeChange(e.target.checked)
+                          }
+                          className="rounded border-white/20 bg-white/10 text-purple-500 focus:ring-purple-400/40 h-3.5 w-3.5"
+                        />
+                        Random size each tap
+                      </label>
+                    </div>
+                  )}
+                </div>
+
                 {/* Deselect button */}
                 <button
                   type="button"

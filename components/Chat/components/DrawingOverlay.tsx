@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import type { DrawingStroke } from "../hooks/useDrawing";
+import type { DrawingStroke, EmojiStamp } from "../hooks/useDrawing";
 import { isNeonColor } from "../hooks/useDrawing";
+import EmojiText from "@/components/ui/EmojiText";
 
 type DrawingOverlayProps = {
   strokes: DrawingStroke[];
@@ -12,6 +13,12 @@ type DrawingOverlayProps = {
   onEndStroke: () => void;
   strokeDuration: number;
   fadeDuration: number;
+  // Emoji stamp props
+  emojiStamps: EmojiStamp[];
+  isEmojiMode: boolean;
+  onEmojiTap: (x: number, y: number) => void;
+  emojiStampDuration: number;
+  emojiStampFade: number;
 };
 
 export function DrawingOverlay({
@@ -22,6 +29,11 @@ export function DrawingOverlay({
   onEndStroke,
   strokeDuration,
   fadeDuration,
+  emojiStamps,
+  isEmojiMode,
+  onEmojiTap,
+  emojiStampDuration,
+  emojiStampFade,
 }: DrawingOverlayProps) {
   const [, forceUpdate] = useState(0);
   const isDrawingRef = useRef(false);
@@ -34,7 +46,7 @@ export function DrawingOverlay({
 
   // Animation loop for smooth fading
   useEffect(() => {
-    if (strokes.length === 0) return;
+    if (strokes.length === 0 && emojiStamps.length === 0) return;
 
     let animationId: number;
     const animate = () => {
@@ -46,11 +58,11 @@ export function DrawingOverlay({
     return () => {
       if (animationId) cancelAnimationFrame(animationId);
     };
-  }, [strokes.length]);
+  }, [strokes.length, emojiStamps.length]);
 
-  // Lock scrolling when in drawing mode
+  // Lock scrolling when in drawing mode or emoji mode
   useEffect(() => {
-    if (!isDrawingMode) return;
+    if (!isDrawingMode && !isEmojiMode) return;
 
     // Save current overflow style
     const originalOverflow = document.body.style.overflow;
@@ -65,11 +77,11 @@ export function DrawingOverlay({
       document.body.style.overflow = originalOverflow;
       document.body.style.touchAction = originalTouchAction;
     };
-  }, [isDrawingMode]);
+  }, [isDrawingMode, isEmojiMode]);
 
-  // Handle touch/mouse events for drawing
+  // Handle touch/mouse events for drawing and emoji stamps
   useEffect(() => {
-    if (!isDrawingMode) return;
+    if (!isDrawingMode && !isEmojiMode) return;
 
     // Get color from the last stroke or fallback
     const getCurrentColor = () => {
@@ -84,6 +96,12 @@ export function DrawingOverlay({
     };
 
     const handleStart = (clientX: number, clientY: number) => {
+      if (isEmojiMode) {
+        // Emoji mode: place stamp on tap
+        const { x, y } = getPosition(clientX, clientY);
+        onEmojiTap(x, y);
+        return;
+      }
       isDrawingRef.current = true;
       const { x, y } = getPosition(clientX, clientY);
       onStartStroke(x, y);
@@ -92,6 +110,7 @@ export function DrawingOverlay({
     };
 
     const handleMove = (clientX: number, clientY: number) => {
+      if (isEmojiMode) return; // no drag for emoji stamps
       if (!isDrawingRef.current) return;
       const { x, y } = getPosition(clientX, clientY);
       onAddPoint(x, y);
@@ -101,6 +120,7 @@ export function DrawingOverlay({
     };
 
     const handleEnd = () => {
+      if (isEmojiMode) return;
       if (isDrawingRef.current) {
         isDrawingRef.current = false;
         onEndStroke();
@@ -164,7 +184,14 @@ export function DrawingOverlay({
       overlay.removeEventListener("mouseup", handleMouseUp);
       overlay.removeEventListener("mouseleave", handleMouseUp);
     };
-  }, [isDrawingMode, onStartStroke, onAddPoint, onEndStroke]);
+  }, [
+    isDrawingMode,
+    isEmojiMode,
+    onStartStroke,
+    onAddPoint,
+    onEndStroke,
+    onEmojiTap,
+  ]);
 
   // Calculate opacity for a stroke based on its age
   const getStrokeOpacity = (stroke: DrawingStroke) => {
@@ -206,11 +233,27 @@ export function DrawingOverlay({
     return path;
   };
 
+  // Calculate opacity for an emoji stamp based on its age
+  const getStampOpacity = (stamp: EmojiStamp) => {
+    const age = Date.now() - stamp.timestamp;
+    if (age < emojiStampDuration) return 1;
+    const fadeProgress = (age - emojiStampDuration) / emojiStampFade;
+    return Math.max(0, 1 - fadeProgress);
+  };
+
+  // Calculate scale for emoji stamp (pop-in effect)
+  const getStampScale = (stamp: EmojiStamp) => {
+    const age = Date.now() - stamp.timestamp;
+    if (age < 120) return 0.3 + (age / 120) * 0.9; // pop-in: 0.3 → 1.2
+    if (age < 200) return 1.2 - ((age - 120) / 80) * 0.2; // settle: 1.2 → 1.0
+    return 1;
+  };
+
   return (
     <div
       ref={overlayRef}
       className={`fixed inset-0 z-[140] overflow-hidden ${
-        isDrawingMode
+        isDrawingMode || isEmojiMode
           ? "pointer-events-auto cursor-crosshair"
           : "pointer-events-none"
       }`}
@@ -281,6 +324,32 @@ export function DrawingOverlay({
           />
         )}
       </svg>
+
+      {/* Emoji stamps overlay */}
+      {emojiStamps.map((stamp) => {
+        const opacity = getStampOpacity(stamp);
+        if (opacity <= 0) return null;
+        const scale = getStampScale(stamp);
+        return (
+          <div
+            key={stamp.id}
+            className="absolute pointer-events-none select-none"
+            style={{
+              left: `${stamp.x}%`,
+              top: `${stamp.y}%`,
+              transform: `translate(-50%, -50%) scale(${scale})`,
+              fontSize: `${stamp.size}px`,
+              opacity,
+              lineHeight: 1,
+              transition: "opacity 0.1s ease-out",
+              // Add a subtle text shadow for depth
+              filter: opacity < 1 ? `blur(${(1 - opacity) * 2}px)` : undefined,
+            }}
+          >
+            <EmojiText>{stamp.emoji}</EmojiText>
+          </div>
+        );
+      })}
     </div>
   );
 }

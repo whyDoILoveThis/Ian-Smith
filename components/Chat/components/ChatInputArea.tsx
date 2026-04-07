@@ -184,6 +184,7 @@ type ChatInputAreaProps = {
   handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setReplyingTo: (msg: Message | null) => void;
   onOpenVideoRecorder: () => void;
+  onEphemeralPhotoSelected: (file: File) => void;
   chatTheme: string;
   gradientColors: string[];
   /** Incremented on each local keystroke */
@@ -213,6 +214,7 @@ export function ChatInputArea({
   handleImageUpload,
   setReplyingTo,
   onOpenVideoRecorder,
+  onEphemeralPhotoSelected,
   chatTheme,
   gradientColors,
   localPulseKey = 0,
@@ -231,6 +233,46 @@ export function ChatInputArea({
   const [showImageMenu, setShowImageMenu] = useState(false);
   const [showGalleryPicker, setShowGalleryPicker] = useState(false);
   const imageMenuRef = useRef<HTMLDivElement>(null);
+
+  // ── Ephemeral menu state ───────────────────────────────────────────
+  const [showEphemeralMenu, setShowEphemeralMenu] = useState(false);
+  const [showEphemeralGalleryPicker, setShowEphemeralGalleryPicker] =
+    useState(false);
+  const ephemeralMenuRef = useRef<HTMLDivElement>(null);
+  const ephemeralFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Close ephemeral menu on outside click
+  useEffect(() => {
+    if (!showEphemeralMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        ephemeralMenuRef.current &&
+        !ephemeralMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowEphemeralMenu(false);
+      }
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [showEphemeralMenu]);
+
+  const handleEphemeralGallerySelect = useCallback(
+    (file: File) => {
+      setShowEphemeralGalleryPicker(false);
+      onEphemeralPhotoSelected(file);
+    },
+    [onEphemeralPhotoSelected],
+  );
+
+  const handleEphemeralDeviceSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      onEphemeralPhotoSelected(file);
+      e.target.value = "";
+    },
+    [onEphemeralPhotoSelected],
+  );
 
   // Close image menu on outside click
   useEffect(() => {
@@ -609,28 +651,75 @@ export function ChatInputArea({
               </svg>
             </button>
           </div>
-          {/* Ephemeral video record button */}
-          <button
-            type="button"
-            onClick={onOpenVideoRecorder}
-            disabled={!slotId || isSending}
-            className={`flex-shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 p-2.5 text-amber-400 transition ${slotId ? "hover:bg-amber-500/20" : "opacity-50"} disabled:opacity-50`}
-            title="Record ephemeral video"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Ephemeral dropdown (photo + video) */}
+          <div className="relative" ref={ephemeralMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowEphemeralMenu((v) => !v)}
+              disabled={!slotId || isSending}
+              className={`flex-shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 p-2.5 text-amber-400 transition ${slotId ? "hover:bg-amber-500/20" : "opacity-50"} disabled:opacity-50`}
+              title="Ephemeral media"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+            </button>
+            {showEphemeralMenu && (
+              <div className="absolute bottom-full right-0 mb-2 w-48 rounded-xl border border-amber-500/20 bg-neutral-900/95 shadow-xl shadow-black/50 backdrop-blur-md overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <div className="px-3 py-2 border-b border-amber-500/10">
+                  <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">
+                    Ephemeral
+                  </p>
+                </div>
+                {/* Ephemeral Photo — device picker */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEphemeralMenu(false);
+                    ephemeralFileInputRef.current?.click();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/85 hover:bg-amber-500/10 transition"
+                >
+                  <span>📷</span>
+                  <span>Photo (Camera)</span>
+                </button>
+                {/* Ephemeral Photo — gallery */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEphemeralMenu(false);
+                    setShowEphemeralGalleryPicker(true);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/85 hover:bg-amber-500/10 transition"
+                >
+                  <span>🖼️</span>
+                  <span>Photo (Gallery)</span>
+                </button>
+                {/* Ephemeral Video */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEphemeralMenu(false);
+                    onOpenVideoRecorder();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/85 hover:bg-amber-500/10 transition"
+                >
+                  <span>📹</span>
+                  <span>Video</span>
+                </button>
+              </div>
+            )}
+          </div>
           {/* Send / Magic button + popup menu */}
           <div className="relative">
             {/* Magic-menu popup (appears above the button) */}
@@ -823,6 +912,23 @@ export function ChatInputArea({
         <PhoneGalleryPicker
           onSelect={handleGallerySelect}
           onClose={() => setShowGalleryPicker(false)}
+        />
+      )}
+
+      {/* Ephemeral Photo — hidden device file input */}
+      <input
+        ref={ephemeralFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleEphemeralDeviceSelect}
+        className="hidden"
+      />
+
+      {/* Ephemeral Photo — In-app Gallery Picker */}
+      {showEphemeralGalleryPicker && (
+        <PhoneGalleryPicker
+          onSelect={handleEphemeralGallerySelect}
+          onClose={() => setShowEphemeralGalleryPicker(false)}
         />
       )}
     </>

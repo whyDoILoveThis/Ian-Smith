@@ -9,8 +9,14 @@ import React, {
   useState,
 } from "react";
 import { MESSAGES_PER_PAGE } from "../constants";
-import type { Message, ThemeColors, ChatTheme, RecordedDrawingStroke } from "../types";
+import type {
+  Message,
+  ThemeColors,
+  ChatTheme,
+  RecordedDrawingStroke,
+} from "../types";
 import { EphemeralVideoPlayer } from "./EphemeralVideoPlayer";
+import { EphemeralPhotoViewer } from "./EphemeralPhotoViewer";
 import { CloudPoofAnimation } from "./CloudPoofAnimation";
 import {
   EmojiReactionPicker,
@@ -193,6 +199,17 @@ type MessageBubbleProps = {
       isMine: boolean;
     } | null>
   >;
+  setActiveEphemeralPhoto: React.Dispatch<
+    React.SetStateAction<{
+      messageId: string;
+      imageUrl: string;
+      sender: string;
+      imageFileId?: string;
+      duration: number;
+      caption?: string;
+      isMine: boolean;
+    } | null>
+  >;
   setActiveDrawing: React.Dispatch<
     React.SetStateAction<{
       strokes: RecordedDrawingStroke[];
@@ -237,6 +254,7 @@ const MessageBubble = React.memo(
     setLongPressedMsgId,
     setDeleteConfirmMsg,
     setActiveEphemeralVideo,
+    setActiveEphemeralPhoto,
     setActiveDrawing,
     handleSwipeStart,
     handleLongPressStart,
@@ -260,23 +278,19 @@ const MessageBubble = React.memo(
           onMouseEnter={() => privacyMode && setPrivacyHoveredMsgId(msg.id)}
           onMouseLeave={() => privacyMode && setPrivacyHoveredMsgId(null)}
         >
-          {/* Cloud Poof Animation overlay */}
-          {isPoofing && (
-            <div className="absolute inset-0 z-20">
-              <CloudPoofAnimation onComplete={() => {}} />
-            </div>
-          )}
           <div
-            className={`flex flex-col ${isMine ? "items-end" : "items-start"} max-w-[85%] sm:max-w-[75%]`}
+            className={`relative flex flex-col ${isMine ? "items-end" : "items-start"} max-w-[85%] sm:max-w-[75%]`}
           >
+            {/* Cloud Poof Animation — sibling to bubble so opacity-0 doesn't hide it */}
+            {isPoofing && (
+              <div className="absolute inset-0 z-20 overflow-visible flex items-center justify-center pointer-events-none">
+                <CloudPoofAnimation onComplete={() => {}} />
+              </div>
+            )}
             <div
               className={`relative w-full rounded-2xl px-3 py-2 text-sm shadow-md select-none transition-all duration-300 ${
                 isPoofing ? "opacity-0 scale-75" : ""
-              } ${
-                privacyMode && !isPrivacyHovered
-                  ? "opacity-0"
-                  : ""
-              } ${
+              } ${privacyMode && !isPrivacyHovered ? "opacity-0" : ""} ${
                 isMine
                   ? `${
                       chatTheme === "gradient" && !msg.bgColor
@@ -386,41 +400,40 @@ const MessageBubble = React.memo(
               {/* All message content above the bg emoji overlay */}
               <div className="relative" style={{ zIndex: 1 }}>
                 {/* Reply preview if this is a reply */}
-                {(msg.replyToText || msg.replyToImageUrl) &&
-                  !isLockedOut && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (msg.replyToId) scrollToMessage(msg.replyToId);
-                      }}
-                      className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] text-left w-full cursor-pointer active:opacity-70 transition-opacity ${
-                        isMine
-                          ? "bg-black/10 border-black/40"
-                          : "bg-white/5 border-white/20"
-                      }`}
-                      style={{
-                        boxShadow:
-                          "inset 0 3px 5px rgba(0, 0, 0, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.4), inset 3px 0 5px rgba(0, 0, 0, 0.25), inset -3px 0 5px rgba(0, 0, 0, 0.25)",
-                      }}
-                    >
-                      <p className="font-semibold opacity-80">
-                        {msg.replyToSender}
+                {(msg.replyToText || msg.replyToImageUrl) && !isLockedOut && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (msg.replyToId) scrollToMessage(msg.replyToId);
+                    }}
+                    className={`mb-2 rounded-lg pl-3 pr-2.5 py-1.5 text-[11px] text-left w-full cursor-pointer active:opacity-70 transition-opacity ${
+                      isMine
+                        ? "bg-black/10 border-black/40"
+                        : "bg-white/5 border-white/20"
+                    }`}
+                    style={{
+                      boxShadow:
+                        "inset 0 3px 5px rgba(0, 0, 0, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.4), inset 3px 0 5px rgba(0, 0, 0, 0.25), inset -3px 0 5px rgba(0, 0, 0, 0.25)",
+                    }}
+                  >
+                    <p className="font-semibold opacity-80">
+                      {msg.replyToSender}
+                    </p>
+                    {msg.replyToImageUrl && (
+                      <img
+                        src={toProxyUrl(msg.replyToImageUrl)}
+                        alt="Reply"
+                        className="mt-1 mb-1 w-12 h-12 rounded object-cover border border-white/10"
+                      />
+                    )}
+                    {msg.replyToText && (
+                      <p className="truncate opacity-60 max-w-[200px]">
+                        {msg.replyToText}
                       </p>
-                      {msg.replyToImageUrl && (
-                        <img
-                          src={toProxyUrl(msg.replyToImageUrl)}
-                          alt="Reply"
-                          className="mt-1 mb-1 w-12 h-12 rounded object-cover border border-white/10"
-                        />
-                      )}
-                      {msg.replyToText && (
-                        <p className="truncate opacity-60 max-w-[200px]">
-                          {msg.replyToText}
-                        </p>
-                      )}
-                    </button>
-                  )}
+                    )}
+                  </button>
+                )}
                 <p className="text-[11px] uppercase tracking-wide opacity-70 flex items-center justify-between gap-2">
                   <span>
                     {isLockedOut ? "???" : msg.sender}
@@ -489,6 +502,7 @@ const MessageBubble = React.memo(
                   </p>
                 )}
                 {msg.imageUrl &&
+                  !msg.isEphemeral &&
                   (isLockedOut ? (
                     <div className="mt-2 w-full h-40 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-neutral-500 text-sm">
                       <svg
@@ -651,6 +665,82 @@ const MessageBubble = React.memo(
                       Video has been viewed
                     </div>
                   )}
+                {/* Ephemeral photo - show icon button instead of inline image */}
+                {msg.imageUrl &&
+                  msg.isEphemeral &&
+                  !isLockedOut &&
+                  (isMine || !msg.disappearedFor?.[slotId ?? "1"]) && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveEphemeralPhoto({
+                          messageId: msg.id,
+                          imageUrl: toProxyUrl(msg.imageUrl)!,
+                          sender: msg.sender,
+                          imageFileId: msg.imageFileId,
+                          duration: msg.ephemeralDuration ?? 3,
+                          caption: msg.text || undefined,
+                          isMine,
+                        })
+                      }
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-6 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-600/20 hover:from-amber-500/30 hover:to-orange-600/30 transition-all duration-300 group"
+                    >
+                      <div className="relative">
+                        <svg
+                          className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                          />
+                        </svg>
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+                      </div>
+                      <div className="flex flex-col items-start">
+                        <span className="text-amber-300 text-sm font-medium">
+                          Ephemeral Photo
+                        </span>
+                        <span className="text-amber-400/60 text-[10px]">
+                          {isMine
+                            ? `Tap to view • ${msg.ephemeralDuration ?? 3}s • Disappears when they view`
+                            : `Tap to view • ${msg.ephemeralDuration ?? 3}s • Disappears after viewing`}
+                        </span>
+                      </div>
+                    </button>
+                  )}
+                {/* Ephemeral photo that has been viewed - show placeholder (only for recipient) */}
+                {msg.imageUrl &&
+                  msg.isEphemeral &&
+                  !isMine &&
+                  msg.disappearedFor?.[slotId ?? "1"] && (
+                    <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        />
+                      </svg>
+                      Photo has been viewed
+                    </div>
+                  )}
                 {timestamp && (
                   <div
                     className={`mt-1 flex items-center gap-1 ${
@@ -669,8 +759,7 @@ const MessageBubble = React.memo(
                       <span className={`text-[9px] ${themeColors.accent}`}>
                         ✓
                         {/* Second checkmark - shows when they've seen that you saw it */}
-                        {msg.seenReceiptBy?.[slotId === "1" ? "2" : "1"] &&
-                          "✓"}
+                        {msg.seenReceiptBy?.[slotId === "1" ? "2" : "1"] && "✓"}
                       </span>
                     )}
                   </div>
@@ -682,9 +771,7 @@ const MessageBubble = React.memo(
             {msg.reactions && !isLockedOut && (
               <div
                 className={`w-full ${isMine ? "flex justify-end" : "flex justify-start"} ${
-                  privacyMode && !isPrivacyHovered
-                    ? "opacity-0"
-                    : ""
+                  privacyMode && !isPrivacyHovered ? "opacity-0" : ""
                 } transition-opacity`}
               >
                 <EmojiReactionsDisplay
@@ -733,7 +820,11 @@ type ChatMessagesViewProps = {
   markMessageAsRead: (msg: Message) => void;
   markReceiptAsSeen: (msg: Message) => void;
   onMarkEphemeralViewed: (messageId: string) => void;
-  onDeleteEphemeralMessage: (messageId: string, videoFileId?: string) => void;
+  onDeleteEphemeralMessage: (
+    messageId: string,
+    videoFileId?: string,
+    imageFileId?: string,
+  ) => void;
   onDeleteMessage: (
     messageId: string,
     imageFileId?: string,
@@ -943,6 +1034,16 @@ export function ChatMessagesView({
     videoFileId?: string;
     isMine: boolean;
   } | null>(null);
+  // Ephemeral photo state
+  const [activeEphemeralPhoto, setActiveEphemeralPhoto] = useState<{
+    messageId: string;
+    imageUrl: string;
+    sender: string;
+    imageFileId?: string;
+    duration: number;
+    caption?: string;
+    isMine: boolean;
+  } | null>(null);
   const [poofingMessageIds, setPoofingMessageIds] = useState<Set<string>>(
     new Set(),
   );
@@ -959,19 +1060,47 @@ export function ChatMessagesView({
       onMarkEphemeralViewed(messageId);
       // Start poof animation
       setPoofingMessageIds((prev) => new Set(prev).add(messageId));
-      // After animation completes, delete the message completely
+      // After animation completes, delete the message
+      // Don't clear isPoofing — keep bubble hidden until Firebase removes it
       setTimeout(() => {
         onDeleteEphemeralMessage(messageId, videoFileId);
-        setPoofingMessageIds((prev) => {
-          const next = new Set(prev);
-          next.delete(messageId);
-          return next;
-        });
-      }, 800);
+      }, 1100);
     }
     setActiveEphemeralVideo(null);
   }, [
     activeEphemeralVideo,
+    slotId,
+    onMarkEphemeralViewed,
+    onDeleteEphemeralMessage,
+  ]);
+
+  // Handle ephemeral photo close - poof always plays; deletion only for recipient
+  const handleEphemeralPhotoClose = useCallback(() => {
+    if (activeEphemeralPhoto && slotId) {
+      const { messageId, imageFileId, isMine } = activeEphemeralPhoto;
+      // Always play poof animation
+      setPoofingMessageIds((prev) => new Set(prev).add(messageId));
+      if (!isMine) {
+        // Recipient: mark viewed + delete after animation
+        // Don't clear isPoofing — keep bubble hidden until Firebase removes it
+        onMarkEphemeralViewed(messageId);
+        setTimeout(() => {
+          onDeleteEphemeralMessage(messageId, undefined, imageFileId);
+        }, 1100);
+      } else {
+        // Sender: just clear the animation after it plays
+        setTimeout(() => {
+          setPoofingMessageIds((prev) => {
+            const next = new Set(prev);
+            next.delete(messageId);
+            return next;
+          });
+        }, 1100);
+      }
+    }
+    setActiveEphemeralPhoto(null);
+  }, [
+    activeEphemeralPhoto,
     slotId,
     onMarkEphemeralViewed,
     onDeleteEphemeralMessage,
@@ -1152,7 +1281,9 @@ export function ChatMessagesView({
       }
     };
 
-    container.addEventListener("scroll", handleScrollThrottled, { passive: true });
+    container.addEventListener("scroll", handleScrollThrottled, {
+      passive: true,
+    });
     return () => {
       container.removeEventListener("scroll", handleScrollThrottled);
       if (rafId) cancelAnimationFrame(rafId);
@@ -1339,6 +1470,7 @@ export function ChatMessagesView({
             setLongPressedMsgId={setLongPressedMsgId}
             setDeleteConfirmMsg={setDeleteConfirmMsg}
             setActiveEphemeralVideo={setActiveEphemeralVideo}
+            setActiveEphemeralPhoto={setActiveEphemeralPhoto}
             setActiveDrawing={setActiveDrawing}
             handleSwipeStart={handleSwipeStart}
             handleLongPressStart={handleLongPressStart}
@@ -1392,6 +1524,17 @@ export function ChatMessagesView({
           sender={activeEphemeralVideo.sender}
           onClose={handleEphemeralVideoClose}
           onViewed={() => {}}
+        />
+      )}
+
+      {/* Ephemeral Photo Viewer Modal */}
+      {activeEphemeralPhoto && (
+        <EphemeralPhotoViewer
+          imageUrl={activeEphemeralPhoto.imageUrl}
+          sender={activeEphemeralPhoto.sender}
+          duration={activeEphemeralPhoto.duration}
+          caption={activeEphemeralPhoto.caption}
+          onClose={handleEphemeralPhotoClose}
         />
       )}
 

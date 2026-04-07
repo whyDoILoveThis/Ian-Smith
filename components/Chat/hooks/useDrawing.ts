@@ -47,16 +47,35 @@ export type DrawingStroke = {
   isComplete: boolean;
 };
 
+export type EmojiStamp = {
+  id: string;
+  x: number; // percentage 0-100
+  y: number; // percentage 0-100
+  emoji: string;
+  size: number; // px
+  slotId: "1" | "2";
+  timestamp: number;
+};
+
 const STROKE_DURATION = 4000; // How long strokes stay visible before fading (ms)
 const FADE_DURATION = 1500; // How long the fade takes (ms)
+const EMOJI_STAMP_DURATION = 2500; // How long emoji stamps stay visible (ms)
+const EMOJI_STAMP_FADE = 1000; // How long the emoji fade takes (ms)
 
 export function useDrawing(slotId: "1" | "2" | null, roomPath: string) {
   const DRAWING_PATH = `${roomPath}/drawing`;
+  const EMOJI_STAMPS_PATH = `${roomPath}/emojiStamps`;
   const [strokes, setStrokes] = useState<DrawingStroke[]>([]);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const currentStrokeId = useRef<string | null>(null);
   // Buffer for local points during drawing
   const localPoints = useRef<{ x: number; y: number }[] | null>(null);
+
+  // Emoji stamp state
+  const [emojiStamps, setEmojiStamps] = useState<EmojiStamp[]>([]);
+  const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
+  const [emojiSize, setEmojiSize] = useState(32);
+  const [randomEmojiSize, setRandomEmojiSize] = useState(false);
 
   // Listen to all strokes from Firebase (only when we have a slot)
   useEffect(() => {
@@ -91,6 +110,78 @@ export function useDrawing(slotId: "1" | "2" | null, roomPath: string) {
 
     return () => unsubscribe();
   }, [slotId, DRAWING_PATH]);
+
+  // Listen to emoji stamps from Firebase
+  useEffect(() => {
+    if (!slotId) {
+      setEmojiStamps([]);
+      return;
+    }
+
+    const stampsRef = ref(rtdb, EMOJI_STAMPS_PATH);
+
+    const unsubscribe = onValue(stampsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        setEmojiStamps([]);
+        return;
+      }
+
+      const now = Date.now();
+      const stampList: EmojiStamp[] = [];
+
+      Object.entries(data).forEach(([id, stamp]) => {
+        const s = stamp as EmojiStamp;
+        const totalDuration = EMOJI_STAMP_DURATION + EMOJI_STAMP_FADE;
+        if (now - s.timestamp < totalDuration) {
+          stampList.push({ ...s, id });
+        }
+      });
+
+      setEmojiStamps(stampList);
+    });
+
+    return () => unsubscribe();
+  }, [slotId, EMOJI_STAMPS_PATH]);
+
+  // Add an emoji stamp at position
+  const addEmojiStamp = useCallback(
+    async (x: number, y: number) => {
+      if (!slotId || !selectedEmoji) return;
+
+      const size = randomEmojiSize
+        ? Math.round(16 + Math.random() * 56) // 16–72px
+        : emojiSize;
+
+      const stampRef = push(ref(rtdb, EMOJI_STAMPS_PATH));
+      const stampId = stampRef.key;
+      if (!stampId) return;
+
+      const stampData: Omit<EmojiStamp, "id"> = {
+        x,
+        y,
+        emoji: selectedEmoji,
+        size,
+        slotId,
+        timestamp: Date.now(),
+      };
+
+      try {
+        await set(stampRef, stampData);
+        // Schedule removal
+        setTimeout(async () => {
+          try {
+            await remove(ref(rtdb, `${EMOJI_STAMPS_PATH}/${stampId}`));
+          } catch {
+            // Ignore removal errors
+          }
+        }, EMOJI_STAMP_DURATION + EMOJI_STAMP_FADE);
+      } catch (err) {
+        console.error("Failed to add emoji stamp:", err);
+      }
+    },
+    [slotId, selectedEmoji, emojiSize, randomEmojiSize, EMOJI_STAMPS_PATH],
+  );
 
   // Start a new stroke
   const startStroke = useCallback(
@@ -170,8 +261,8 @@ export function useDrawing(slotId: "1" | "2" | null, roomPath: string) {
     localPoints.current = null;
   }, [strokes, DRAWING_PATH]);
 
-  // Check if drawing mode is active
-  const isDrawingMode = selectedColor !== null;
+  // Check if drawing mode is active (color or emoji selected)
+  const isDrawingMode = selectedColor !== null || selectedEmoji !== null;
 
   return {
     strokes,
@@ -183,5 +274,16 @@ export function useDrawing(slotId: "1" | "2" | null, roomPath: string) {
     endStroke,
     STROKE_DURATION,
     FADE_DURATION,
+    // Emoji stamp
+    emojiStamps,
+    selectedEmoji,
+    setSelectedEmoji,
+    emojiSize,
+    setEmojiSize,
+    randomEmojiSize,
+    setRandomEmojiSize,
+    addEmojiStamp,
+    EMOJI_STAMP_DURATION,
+    EMOJI_STAMP_FADE,
   };
 }

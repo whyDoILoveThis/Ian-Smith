@@ -1217,6 +1217,7 @@ export function RoomSpotsView({
                 <input
                   type="number"
                   min="1"
+                  max="999"
                   placeholder="Minutes..."
                   value={customTimeoutValue}
                   onChange={(e) => setCustomTimeoutValue(e.target.value)}
@@ -1228,9 +1229,9 @@ export function RoomSpotsView({
                     !customTimeoutValue || Number(customTimeoutValue) < 1
                   }
                   onClick={() => {
-                    const mins = Math.max(
-                      1,
-                      Math.round(Number(customTimeoutValue)),
+                    const mins = Math.min(
+                      999,
+                      Math.max(1, Math.round(Number(customTimeoutValue))),
                     );
                     onSetDisguiseTimeout(mins);
                     setCustomTimeoutValue("");

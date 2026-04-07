@@ -10,15 +10,13 @@ export function CloudPoofAnimation({ onComplete }: CloudPoofAnimationProps) {
   const [stage, setStage] = useState<"poof" | "fade">("poof");
 
   useEffect(() => {
-    // Stage 1: Poof explosion
     const poofTimer = setTimeout(() => {
       setStage("fade");
-    }, 400);
+    }, 600);
 
-    // Stage 2: Complete
     const completeTimer = setTimeout(() => {
       onComplete();
-    }, 800);
+    }, 1100);
 
     return () => {
       clearTimeout(poofTimer);
@@ -27,25 +25,59 @@ export function CloudPoofAnimation({ onComplete }: CloudPoofAnimationProps) {
   }, [onComplete]);
 
   return (
-    <div className="relative flex items-center justify-center w-full h-full">
+    <div className="relative flex items-center justify-center w-full h-full overflow-visible">
       {/* Cloud poof particles */}
       <div
-        className={`absolute inset-0 flex items-center justify-center transition-all duration-400 ${
+        className={`absolute inset-0 flex items-center justify-center transition-all duration-600 ${
           stage === "fade" ? "opacity-0 scale-150" : "opacity-100 scale-100"
         }`}
       >
         {/* Center cloud burst */}
         <div className="relative">
-          {/* Animated cloud puffs */}
-          {[...Array(8)].map((_, i) => {
-            const angle = (i / 8) * 360;
-            const delay = i * 30;
+          {/* Primary cloud puffs — large, 12 directions */}
+          {[...Array(12)].map((_, i) => {
+            const angle = (i / 12) * 360;
+            const delay = i * 25;
             return (
               <div
-                key={i}
+                key={`cloud-${i}`}
                 className="absolute w-6 h-6 rounded-full bg-gradient-to-br from-white/80 to-purple-200/60"
                 style={{
-                  animation: `cloudPoof 0.5s ease-out ${delay}ms forwards`,
+                  animation: `cloudPoof 0.7s ease-out ${delay}ms forwards`,
+                  transform: `rotate(${angle}deg) translateX(0)`,
+                  transformOrigin: "center center",
+                }}
+              />
+            );
+          })}
+
+          {/* Secondary mini puffs — smaller, offset angles, staggered */}
+          {[...Array(16)].map((_, i) => {
+            const angle = (i / 16) * 360 + 11.25;
+            const delay = 40 + i * 20;
+            return (
+              <div
+                key={`mini-${i}`}
+                className="absolute w-3 h-3 rounded-full bg-gradient-to-br from-white/60 to-purple-300/40"
+                style={{
+                  animation: `cloudPoofSmall 0.6s ease-out ${delay}ms forwards`,
+                  transform: `rotate(${angle}deg) translateX(0)`,
+                  transformOrigin: "center center",
+                }}
+              />
+            );
+          })}
+
+          {/* Micro debris particles — tiny dots flying out fast */}
+          {[...Array(20)].map((_, i) => {
+            const angle = (i / 20) * 360 + i * 7;
+            const delay = 20 + i * 15;
+            return (
+              <div
+                key={`debris-${i}`}
+                className="absolute w-1 h-1 rounded-full bg-white/70"
+                style={{
+                  animation: `debrisFly 0.55s ease-out ${delay}ms forwards`,
                   transform: `rotate(${angle}deg) translateX(0)`,
                   transformOrigin: "center center",
                 }}
@@ -57,20 +89,20 @@ export function CloudPoofAnimation({ onComplete }: CloudPoofAnimationProps) {
           <div
             className="absolute -inset-4 rounded-full bg-white/40"
             style={{
-              animation: "cloudFlash 0.3s ease-out forwards",
+              animation: "cloudFlash 0.45s ease-out forwards",
             }}
           />
 
-          {/* Sparkles */}
-          {[...Array(12)].map((_, i) => {
-            const angle = (i / 12) * 360;
-            const distance = 20 + Math.random() * 30;
+          {/* Sparkles — more of them */}
+          {[...Array(18)].map((_, i) => {
+            const angle = (i / 18) * 360;
+            const distance = 20 + Math.random() * 35;
             return (
               <div
                 key={`sparkle-${i}`}
                 className="absolute w-1.5 h-1.5 rounded-full bg-amber-300"
                 style={{
-                  animation: `sparkle 0.6s ease-out ${i * 20}ms forwards`,
+                  animation: `sparkle 0.85s ease-out ${i * 15}ms forwards`,
                   left: "50%",
                   top: "50%",
                   transform: `rotate(${angle}deg) translateX(${distance}px)`,
@@ -81,28 +113,28 @@ export function CloudPoofAnimation({ onComplete }: CloudPoofAnimationProps) {
         </div>
       </div>
 
-      {/* Smoke wisps */}
+      {/* Smoke wisps — more and spread wider */}
       <div
-        className={`absolute inset-0 transition-opacity duration-500 ${
+        className={`absolute inset-0 transition-opacity duration-700 ${
           stage === "fade" ? "opacity-0" : "opacity-100"
         }`}
       >
-        {[...Array(5)].map((_, i) => (
+        {[...Array(8)].map((_, i) => (
           <div
             key={`smoke-${i}`}
             className="absolute rounded-full bg-white/20"
             style={{
-              width: `${15 + i * 5}px`,
-              height: `${15 + i * 5}px`,
-              left: `${30 + i * 10}%`,
-              top: `${20 + i * 12}%`,
-              animation: `smokeRise 0.8s ease-out ${i * 100}ms forwards`,
+              width: `${12 + i * 4}px`,
+              height: `${12 + i * 4}px`,
+              left: `${15 + i * 10}%`,
+              top: `${15 + i * 10}%`,
+              animation: `smokeRise 1.1s ease-out ${i * 80}ms forwards`,
             }}
           />
         ))}
       </div>
 
-      {/* CSS Keyframes injected via style tag */}
+      {/* CSS Keyframes */}
       <style jsx>{`
         @keyframes cloudPoof {
           0% {
@@ -111,6 +143,28 @@ export function CloudPoofAnimation({ onComplete }: CloudPoofAnimationProps) {
           }
           100% {
             transform: rotate(var(--angle, 0deg)) translateX(50px) scale(0);
+            opacity: 0;
+          }
+        }
+
+        @keyframes cloudPoofSmall {
+          0% {
+            transform: rotate(var(--angle, 0deg)) translateX(0) scale(0.4);
+            opacity: 0.9;
+          }
+          100% {
+            transform: rotate(var(--angle, 0deg)) translateX(35px) scale(0);
+            opacity: 0;
+          }
+        }
+
+        @keyframes debrisFly {
+          0% {
+            transform: rotate(var(--angle, 0deg)) translateX(0) scale(1);
+            opacity: 1;
+          }
+          100% {
+            transform: rotate(var(--angle, 0deg)) translateX(70px) scale(0);
             opacity: 0;
           }
         }

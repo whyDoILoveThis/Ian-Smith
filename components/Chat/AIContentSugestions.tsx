@@ -82,6 +82,14 @@ export default function AIContentSugestions() {
   const [activeTab, setActiveTab] = useState<"chat" | "room">("chat");
   const [isCallExpanded, setIsCallExpanded] = useState(true);
   const [isVideoRecorderOpen, setIsVideoRecorderOpen] = useState(false);
+  const [isEphemeralPhotoConfirmOpen, setIsEphemeralPhotoConfirmOpen] =
+    useState(false);
+  const [ephemeralPendingFile, setEphemeralPendingFile] = useState<File | null>(
+    null,
+  );
+  const [ephemeralPendingUrl, setEphemeralPendingUrl] = useState<string | null>(
+    null,
+  );
   const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(
     null,
   );
@@ -849,6 +857,42 @@ export default function AIContentSugestions() {
     [chatMessages, showToast],
   );
 
+  // Ephemeral photo handlers
+  const handleEphemeralPhotoSelected = useCallback((file: File) => {
+    const url = URL.createObjectURL(file);
+    setEphemeralPendingFile(file);
+    setEphemeralPendingUrl(url);
+    setIsEphemeralPhotoConfirmOpen(true);
+  }, []);
+
+  const handleConfirmEphemeralPhoto = useCallback(
+    async (caption: string, duration: number) => {
+      if (!ephemeralPendingFile) return;
+      try {
+        await chatMessages.handleSendEphemeralPhoto(
+          ephemeralPendingFile,
+          duration,
+          caption || undefined,
+        );
+      } catch {
+        showToast("Ephemeral photo failed to send.");
+      } finally {
+        if (ephemeralPendingUrl) URL.revokeObjectURL(ephemeralPendingUrl);
+        setEphemeralPendingFile(null);
+        setEphemeralPendingUrl(null);
+        setIsEphemeralPhotoConfirmOpen(false);
+      }
+    },
+    [chatMessages, ephemeralPendingFile, ephemeralPendingUrl, showToast],
+  );
+
+  const handleCancelEphemeralPhoto = useCallback(() => {
+    if (ephemeralPendingUrl) URL.revokeObjectURL(ephemeralPendingUrl);
+    setEphemeralPendingFile(null);
+    setEphemeralPendingUrl(null);
+    setIsEphemeralPhotoConfirmOpen(false);
+  }, [ephemeralPendingUrl]);
+
   // Drawing recording handlers
   const handleStartRecording = useCallback(() => {
     drawingRecorder.startRecording();
@@ -996,6 +1040,22 @@ export default function AIContentSugestions() {
         />
       )}
 
+      {/* Ephemeral Photo Confirm Modal */}
+      {isEphemeralPhotoConfirmOpen && ephemeralPendingUrl && (
+        <ImageConfirmModal
+          pendingMediaUrl={ephemeralPendingUrl}
+          themeColors={themeColors}
+          chatTheme={chatTheme}
+          gradientColors={gradientColors}
+          isVideo={false}
+          isSending={chatMessages.isSending}
+          onConfirm={() => {}}
+          onCancel={handleCancelEphemeralPhoto}
+          isEphemeral
+          onConfirmEphemeral={handleConfirmEphemeralPhoto}
+        />
+      )}
+
       {/* Drawing Record Preview Modal */}
       {pendingDrawing && (
         <DrawingRecordPreview
@@ -1040,6 +1100,12 @@ export default function AIContentSugestions() {
         isRecordingDrawing={drawingRecorder.isRecording}
         onStartRecording={handleStartRecording}
         onStopRecording={handleStopRecording}
+        selectedEmoji={drawing.selectedEmoji}
+        onSelectEmoji={drawing.setSelectedEmoji}
+        emojiSize={drawing.emojiSize}
+        onEmojiSizeChange={drawing.setEmojiSize}
+        randomEmojiSize={drawing.randomEmojiSize}
+        onRandomEmojiSizeChange={drawing.setRandomEmojiSize}
         messages={firebaseWithSlot.messages}
         slots={slots}
         onScrollToMessage={(id) => setScrollToMessageId(id + ":" + Date.now())}
@@ -1155,6 +1221,7 @@ export default function AIContentSugestions() {
               handleImageUpload={handleImageUploadWrapper}
               setReplyingTo={chatMessages.setReplyingTo}
               onOpenVideoRecorder={() => setIsVideoRecorderOpen(true)}
+              onEphemeralPhotoSelected={handleEphemeralPhotoSelected}
               localPulseKey={chatMessages.localPulseKey}
               keystrokePulse={firebaseWithSlot.keystrokePulse}
               backspacePulse={firebaseWithSlot.backspacePulse}
@@ -1210,6 +1277,11 @@ export default function AIContentSugestions() {
             }}
             strokeDuration={drawing.STROKE_DURATION}
             fadeDuration={drawing.FADE_DURATION}
+            emojiStamps={drawing.emojiStamps}
+            isEmojiMode={drawing.selectedEmoji !== null}
+            onEmojiTap={(x, y) => drawing.addEmojiStamp(x, y)}
+            emojiStampDuration={drawing.EMOJI_STAMP_DURATION}
+            emojiStampFade={drawing.EMOJI_STAMP_FADE}
           />
         )}
     </div>

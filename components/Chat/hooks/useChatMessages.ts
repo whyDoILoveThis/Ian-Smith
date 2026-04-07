@@ -295,6 +295,43 @@ export function useChatMessages(
     [screenName, slotId, roomPath, encryptionKey, useFallbackBucket],
   );
 
+  // Handle sending ephemeral photo (from file picker or gallery)
+  const handleSendEphemeralPhoto = useCallback(
+    async (imageFile: File, duration: number, caption?: string) => {
+      if (!slotId || !screenName.trim()) return;
+      setIsSending(true);
+
+      try {
+        const upload = await appwrImgUp(imageFile, { useFallbackBucket });
+        const msgRef = ref(rtdb, `${roomPath}/messages`);
+
+        const msgData: Record<string, unknown> = {
+          slotId,
+          sender: screenName.trim(),
+          imageUrl: upload.url,
+          imageFileId: upload.fileId,
+          mediaBucket: useFallbackBucket ? "2" : "1",
+          isEphemeral: true,
+          ephemeralDuration: duration,
+          createdAt: { ".sv": "timestamp" },
+        };
+
+        if (caption?.trim() && encryptionKey) {
+          msgData.text = await encryptMessage(caption.trim(), encryptionKey);
+        }
+
+        await push(msgRef, msgData);
+        if (useFallbackBucket) setLastUploadUsedFallback(true);
+      } catch {
+        setSendError("Ephemeral photo failed to send.");
+        throw new Error("Ephemeral photo failed to send.");
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [screenName, slotId, roomPath, encryptionKey, useFallbackBucket],
+  );
+
   // Handle sending a recorded drawing
   const handleSendDrawing = useCallback(
     async (strokes: RecordedDrawingStroke[], duration: number, caption?: string) => {
@@ -345,7 +382,7 @@ export function useChatMessages(
 
   // Delete ephemeral video completely from Appwrite storage and Firebase
   const deleteEphemeralMessage = useCallback(
-    async (messageId: string, videoFileId?: string) => {
+    async (messageId: string, videoFileId?: string, imageFileId?: string) => {
       if (!slotId) return;
       try {
         // Delete video file from Appwrite storage
@@ -355,6 +392,15 @@ export function useChatMessages(
             console.log(`✅ Deleted ephemeral video from Appwrite: ${videoFileId}`);
           } catch (err) {
             console.error("Failed to delete video from Appwrite:", err);
+          }
+        }
+        // Delete image file from Appwrite storage
+        if (imageFileId) {
+          try {
+            await appwrImgDelete(imageFileId);
+            console.log(`✅ Deleted ephemeral photo from Appwrite: ${imageFileId}`);
+          } catch (err) {
+            console.error("Failed to delete image from Appwrite:", err);
           }
         }
 
@@ -469,6 +515,7 @@ export function useChatMessages(
     localPulseKey,
     sendBackspacePulse,
     handleSendEphemeralVideo,
+    handleSendEphemeralPhoto,
     handleSendDrawing,
     markEphemeralViewed,
     deleteEphemeralMessage,
