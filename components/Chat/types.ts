@@ -37,6 +37,7 @@ export type Message = {
   seenReceiptBy?: { "1"?: boolean; "2"?: boolean };
   // Ephemeral video fields
   isEphemeral?: boolean;
+  ephemeralDuration?: number; // seconds — for ephemeral photos
   viewedBy?: { "1"?: boolean; "2"?: boolean };
   disappearedFor?: { "1"?: boolean; "2"?: boolean };
   // Reactions

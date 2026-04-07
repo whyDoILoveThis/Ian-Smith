@@ -13,6 +13,7 @@ import Footer from "@/components/main/Footer";
 import PurpleParticleToggle from "@/components/main/PurpleParticleToggle";
 import BrainfTodo from "@/components/sub/BrainfTodo";
 import NetworkSpeedMini from "@/components/main/NetworkSpeedMini";
+import LivingLine from "@/components/sub/LivingLine";
 import {
   WaterSortShowcaseCard,
   TimelineShowcaseCard,
@@ -20,6 +21,7 @@ import {
   IconCreatorShowcaseCard,
   PerformanceOverlayShowcaseCard,
 } from "@/components/main/ShowcaseInstances";
+import MostRecentProjects from "@/components/main/showcase-visuals/MostRecentProjects";
 
 export default function Home() {
   const [showBot, setShowBot] = useState(false);
@@ -32,7 +34,6 @@ export default function Home() {
 
   return (
     <article className={`w-full col-flex items-center`}>
-      <NetworkSpeedMini />
       {!showBot && <Nav />}
       <div className="w-full col-flex items-center mb-6">
         <Header />
@@ -41,22 +42,27 @@ export default function Home() {
       <div className="w-full mt-10 px-4">
         <ConfettiCelebration />
       </div>
+      <SectionHeading title="Most Recent Projects" />
+      <MostRecentProjects />
+      <SectionHeading title="My Older Projects" />
       <Projects />
-      <h2 className="text-center text-4xl md:text-5xl font-extrabold mt-24 mb-4 tracking-tight bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent">
-        Most Recent Projects
-      </h2>
-      <div className="h-1 w-24 bg-gradient-to-r from-indigo-500 via-blue-500 to-transparent rounded-full mb-20 mx-auto" />
-      <div className="flex flex-col justify-center items-center gap-20">
-        <WaterSortShowcaseCard />
-        <TimelineShowcaseCard />
-        <ItsQuizMeShowcaseCard />
-        <IconCreatorShowcaseCard />
-        <PerformanceOverlayShowcaseCard />
-      </div>
+      <div className="h-6" />
+      {/* FIXED POSITIONS 👇*/}
       <BotBtn showBot={showBot} setShowBot={setShowBot} />
       {showBot && <ItsBot show={showBot} setShow={setShowBot} />}
-      <div className="h-6" />
+      <NetworkSpeedMini />
       <Footer />
     </article>
   );
 }
+
+const SectionHeading = ({ title }: { title: string }) => {
+  return (
+    <>
+      <h2 className="text-center text-4xl md:text-5xl font-extrabold mt-24 mb-4 tracking-tight bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent">
+        {title}
+      </h2>
+      <LivingLine className="mb-12" />
+    </>
+  );
+};

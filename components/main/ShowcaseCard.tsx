@@ -10,7 +10,7 @@ import {
 } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import "@/styles/ShowcaseAnimations.css";
+import "@/styles/ShowcaseAnimations.module.css";
 import EmojiText from "@/components/ui/EmojiText";
 
 /* ── Visibility context ──

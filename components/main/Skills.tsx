@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSkills } from "@/hooks/useSkills";
+import LivingLine from "@/components/sub/LivingLine";
 
 /* ------------------------------------------------------------------ */
 /*  Sparkle burst                                                     */
@@ -217,13 +218,7 @@ const Skills = () => {
       >
         My Skills
       </motion.h2>
-      <motion.div
-        initial={{ scaleX: 0 }}
-        whileInView={{ scaleX: 1 }}
-        viewport={{ once: true, margin: "-40px" }}
-        transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-        className="h-1 w-24 bg-gradient-to-r from-indigo-500 via-blue-500 to-transparent rounded-full mb-8 origin-center"
-      />
+      <LivingLine className="mb-8" />
 
       {/* Skills Grid */}
       <ul className="flex flex-wrap justify-center gap-3 w-full max-w-3xl px-4">

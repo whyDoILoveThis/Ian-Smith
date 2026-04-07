@@ -98,7 +98,7 @@ export default function UnwrapUploader() {
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
       onClick={() => inputRef.current?.click()}
-      className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 p-10 text-center transition-colors hover:border-indigo-500/50 hover:bg-zinc-900/70"
+      className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-900/50 p-10 text-center transition-colors hover:border-indigo-500/50 hover:bg-indigo-900/20"
     >
       <input
         ref={inputRef}
