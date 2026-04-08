@@ -206,7 +206,11 @@ export function useChatFirebase(
               existing.viewedBy !== fresh.viewedBy ||
               existing.disappearedFor !== fresh.disappearedFor ||
               existing.bgColor !== fresh.bgColor ||
-              existing.bgEmojis !== fresh.bgEmojis
+              existing.bgEmojis !== fresh.bgEmojis ||
+              existing.ephemeralExpired !== fresh.ephemeralExpired ||
+              existing.imageUrl !== fresh.imageUrl ||
+              existing.videoUrl !== fresh.videoUrl ||
+              existing.screenshotSeenBy !== fresh.screenshotSeenBy
             )) {
               if (!patchedTail) {
                 // Lazily copy just the tail
@@ -221,6 +225,12 @@ export function useChatFirebase(
                 disappearedFor: fresh.disappearedFor,
                 bgColor: fresh.bgColor,
                 bgEmojis: fresh.bgEmojis,
+                ephemeralExpired: fresh.ephemeralExpired,
+                imageUrl: fresh.imageUrl,
+                imageFileId: fresh.imageFileId,
+                videoUrl: fresh.videoUrl,
+                videoFileId: fresh.videoFileId,
+                screenshotSeenBy: fresh.screenshotSeenBy,
               };
               changed = true;
             }

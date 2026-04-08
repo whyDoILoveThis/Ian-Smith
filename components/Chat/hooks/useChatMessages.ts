@@ -380,7 +380,22 @@ export function useChatMessages(
     [slotId, roomPath],
   );
 
-  // Delete ephemeral video completely from Appwrite storage and Firebase
+  // Mark a screenshot event as seen by current user
+  const markScreenshotSeen = useCallback(
+    async (messageId: string) => {
+      if (!slotId) return;
+      try {
+        const seenRef = ref(
+          rtdb,
+          `${roomPath}/messages/${messageId}/screenshotSeenBy/${slotId}`,
+        );
+        await set(seenRef, true);
+      } catch {
+        // Ignore errors
+      }
+    },
+    [slotId, roomPath],
+  );
   const deleteEphemeralMessage = useCallback(
     async (messageId: string, videoFileId?: string, imageFileId?: string) => {
       if (!slotId) return;
@@ -404,10 +419,17 @@ export function useChatMessages(
           }
         }
 
-        // Delete message from Firebase
+        // Update message to mark as expired (keep text, remove media)
         const messageRef = ref(rtdb, `${roomPath}/messages/${messageId}`);
-        await remove(messageRef);
-        console.log(`✅ Deleted ephemeral message from Firebase: ${messageId}`);
+        await update(messageRef, {
+          imageUrl: null,
+          imageFileId: null,
+          videoUrl: null,
+          videoFileId: null,
+          mediaBucket: null,
+          ephemeralExpired: videoFileId ? "video" : "photo",
+        });
+        console.log(`✅ Marked ephemeral message as expired: ${messageId}`);
       } catch (err) {
         console.error("Failed to delete ephemeral message:", err);
       }
@@ -523,5 +545,6 @@ export function useChatMessages(
     toggleReaction,
     setMessageBgColor,
     setMessageBgEmojis,
+    markScreenshotSeen,
   };
 }

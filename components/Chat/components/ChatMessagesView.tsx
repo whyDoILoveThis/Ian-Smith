@@ -424,7 +424,7 @@ const MessageBubble = React.memo(
                       <img
                         src={toProxyUrl(msg.replyToImageUrl)}
                         alt="Reply"
-                        className="mt-1 mb-1 w-12 h-12 rounded object-cover border border-white/10"
+                        className="mt-1 mb-1 w-[90px] h-[90px] rounded object-cover border border-white/10"
                       />
                     )}
                     {msg.replyToText && (
@@ -637,34 +637,7 @@ const MessageBubble = React.memo(
                       </div>
                     </button>
                   )}
-                {/* Ephemeral video that has been viewed - show placeholder (only for recipient) */}
-                {msg.videoUrl &&
-                  msg.isEphemeral &&
-                  !isMine &&
-                  msg.disappearedFor?.[slotId ?? "1"] && (
-                    <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                        />
-                      </svg>
-                      Video has been viewed
-                    </div>
-                  )}
+
                 {/* Ephemeral photo - show icon button instead of inline image */}
                 {msg.imageUrl &&
                   msg.isEphemeral &&
@@ -713,34 +686,34 @@ const MessageBubble = React.memo(
                       </div>
                     </button>
                   )}
-                {/* Ephemeral photo that has been viewed - show placeholder (only for recipient) */}
-                {msg.imageUrl &&
-                  msg.isEphemeral &&
-                  !isMine &&
-                  msg.disappearedFor?.[slotId ?? "1"] && (
-                    <div className="mt-2 w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-neutral-500 text-sm">
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                        />
-                      </svg>
-                      Photo has been viewed
-                    </div>
-                  )}
+
+                {/* Ephemeral media expired — ghost indicator */}
+                {msg.ephemeralExpired && (
+                  <div className="mt-2 flex items-center justify-center gap-1.5 py-1 px-3 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400/70 text-[11px]">
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </svg>
+                    {msg.ephemeralExpired === "video"
+                      ? "Expired ephemeral video"
+                      : "Expired ephemeral photo"}
+                  </div>
+                )}
                 {timestamp && (
                   <div
                     className={`mt-1 flex items-center gap-1 ${
@@ -824,7 +797,7 @@ type ChatMessagesViewProps = {
     messageId: string,
     videoFileId?: string,
     imageFileId?: string,
-  ) => void;
+  ) => Promise<void> | void;
   onDeleteMessage: (
     messageId: string,
     imageFileId?: string,
@@ -847,6 +820,10 @@ type ChatMessagesViewProps = {
   privacyMode?: boolean;
   /** Room is full and user doesn't hold a spot — restrict visible content */
   isLockedOut?: boolean;
+  /** Callback to mark a screenshot event as seen */
+  onMarkScreenshotSeen?: (messageId: string) => void;
+  /** Ref that will be populated with a function to get center message ID */
+  getCenterMessageIdRef?: React.MutableRefObject<(() => string | null) | null>;
 };
 
 export function ChatMessagesView({
@@ -872,6 +849,8 @@ export function ChatMessagesView({
   isLoadingOlder = false,
   privacyMode = false,
   isLockedOut = false,
+  onMarkScreenshotSeen,
+  getCenterMessageIdRef,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -886,6 +865,51 @@ export function ChatMessagesView({
   const anchorRef = useRef<{ msgId: string; offsetFromTop: number } | null>(
     null,
   );
+
+  // Populate getCenterMessageIdRef so the screenshot hook can find the center-visible message
+  useEffect(() => {
+    if (!getCenterMessageIdRef) return;
+    getCenterMessageIdRef.current = () => {
+      const container = scrollContainerRef.current;
+      if (!container) return null;
+      const containerRect = container.getBoundingClientRect();
+      const centerY = containerRect.top + containerRect.height / 2;
+      const els = container.querySelectorAll("[data-msg-id]");
+      let closest: string | null = null;
+      let minDist = Infinity;
+      els.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        const elCenter = rect.top + rect.height / 2;
+        const dist = Math.abs(elCenter - centerY);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = el.getAttribute("data-msg-id");
+        }
+      });
+      return closest;
+    };
+    return () => {
+      getCenterMessageIdRef.current = null;
+    };
+  }, [getCenterMessageIdRef]);
+
+  // Unseen screenshot events from the OTHER slot
+  const unseenScreenshots = useMemo(() => {
+    if (!slotId) return [];
+    return messages.filter(
+      (m) =>
+        m.screenshotEvent &&
+        m.screenshotEvent !== slotId &&
+        !m.screenshotSeenBy?.[slotId],
+    );
+  }, [messages, slotId]);
+
+  const [screenshotNavIndex, setScreenshotNavIndex] = useState(0);
+
+  // Reset nav index when the list changes
+  useEffect(() => {
+    setScreenshotNavIndex(0);
+  }, [unseenScreenshots.length]);
 
   // Window position: index of the first visible message
   const [winStart, setWinStart] = useState(
@@ -1026,6 +1050,21 @@ export function ChatMessagesView({
     }
   }, [scrollToMessageId, scrollToMessage]);
 
+  // Screenshot unseen banner — navigate to next unseen event
+  const handleScreenshotBannerClick = useCallback(() => {
+    if (unseenScreenshots.length === 0) return;
+    const idx = screenshotNavIndex % unseenScreenshots.length;
+    const target = unseenScreenshots[idx];
+    scrollToMessage(target.id);
+    onMarkScreenshotSeen?.(target.id);
+    setScreenshotNavIndex((prev) => prev + 1);
+  }, [
+    unseenScreenshots,
+    screenshotNavIndex,
+    scrollToMessage,
+    onMarkScreenshotSeen,
+  ]);
+
   // Ephemeral video state
   const [activeEphemeralVideo, setActiveEphemeralVideo] = useState<{
     messageId: string;
@@ -1060,10 +1099,14 @@ export function ChatMessagesView({
       onMarkEphemeralViewed(messageId);
       // Start poof animation
       setPoofingMessageIds((prev) => new Set(prev).add(messageId));
-      // After animation completes, delete the message
-      // Don't clear isPoofing — keep bubble hidden until Firebase removes it
-      setTimeout(() => {
-        onDeleteEphemeralMessage(messageId, videoFileId);
+      // After animation completes, expire the message then show ghost
+      setTimeout(async () => {
+        await onDeleteEphemeralMessage(messageId, videoFileId);
+        setPoofingMessageIds((prev) => {
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        });
       }, 1100);
     }
     setActiveEphemeralVideo(null);
@@ -1081,11 +1124,15 @@ export function ChatMessagesView({
       // Always play poof animation
       setPoofingMessageIds((prev) => new Set(prev).add(messageId));
       if (!isMine) {
-        // Recipient: mark viewed + delete after animation
-        // Don't clear isPoofing — keep bubble hidden until Firebase removes it
+        // Recipient: mark viewed + expire after animation
         onMarkEphemeralViewed(messageId);
-        setTimeout(() => {
-          onDeleteEphemeralMessage(messageId, undefined, imageFileId);
+        setTimeout(async () => {
+          await onDeleteEphemeralMessage(messageId, undefined, imageFileId);
+          setPoofingMessageIds((prev) => {
+            const next = new Set(prev);
+            next.delete(messageId);
+            return next;
+          });
         }, 1100);
       } else {
         // Sender: just clear the animation after it plays
@@ -1421,217 +1468,286 @@ export function ChatMessagesView({
   );
 
   return (
-    <div
-      ref={scrollContainerRef}
-      className="flex-1 overflow-y-auto overscroll-contain px-2 py-3 space-y-2"
-      onClick={handleContainerClick}
-    >
-      {messages.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
-          No messages yet. Say hello!
-        </div>
-      )}
-
-      {/* Server-side loading spinner */}
-      {isLoadingOlder && (
-        <div className="w-full py-3 flex justify-center">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-500 border-t-transparent" />
-        </div>
-      )}
-
-      {/* Older messages sentinel */}
-      {hasOlder && !isLoadingOlder && (
-        <div className="w-full py-3 text-center text-xs text-neutral-500 animate-pulse">
-          Loading older messages…
-        </div>
-      )}
-
-      {/* Only render the current window of messages */}
-      {visibleMessages.map((msg) => {
-        const isMine = slotId === msg.slotId;
-        return (
-          <MessageBubble
-            key={msg.id}
-            msg={msg}
-            isMine={isMine}
-            slotId={slotId}
-            themeColors={themeColors}
-            chatTheme={chatTheme}
-            gradientColors={gradientColors}
-            privacyMode={privacyMode}
-            isLockedOut={isLockedOut}
-            isHighlighted={highlightedMsgId === msg.id}
-            isPrivacyHovered={privacyHoveredMsgId === msg.id}
-            isCopied={copiedMsgId === msg.id}
-            isLongPressed={longPressedMsgId === msg.id}
-            isPoofing={poofingMessageIds.has(msg.id)}
-            setPrivacyHoveredMsgId={setPrivacyHoveredMsgId}
-            setCopiedMsgId={setCopiedMsgId}
-            setLongPressedMsgId={setLongPressedMsgId}
-            setDeleteConfirmMsg={setDeleteConfirmMsg}
-            setActiveEphemeralVideo={setActiveEphemeralVideo}
-            setActiveEphemeralPhoto={setActiveEphemeralPhoto}
-            setActiveDrawing={setActiveDrawing}
-            handleSwipeStart={handleSwipeStart}
-            handleLongPressStart={handleLongPressStart}
-            handleLongPressEnd={handleLongPressEnd}
-            setReplyingTo={setReplyingTo}
-            scrollToMessage={stableScrollToMessage}
-            onReact={onReact}
-            onColorChange={onColorChange}
-            onBgEmojisChange={onBgEmojisChange}
-            formatTimestamp={formatTimestamp}
-          />
-        );
-      })}
-
-      {/* Newer messages sentinel */}
-      {hasNewer && (
-        <div className="w-full py-3 text-center text-xs text-neutral-500 animate-pulse">
-          Loading newer messages…
-        </div>
-      )}
-
-      {isOtherTyping && (
-        <div className="flex justify-start">
-          <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
-            <p className="text-[11px] uppercase tracking-wide opacity-70">
-              Typing
-            </p>
-            <div className="mt-1 flex items-center gap-1">
-              <span
-                className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
-                style={{ animationDelay: "0ms" }}
-              />
-              <span
-                className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
-                style={{ animationDelay: "150ms" }}
-              />
-              <span
-                className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
-                style={{ animationDelay: "300ms" }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-      <div ref={bottomRef} />
-
-      {/* Ephemeral Video Player Modal */}
-      {activeEphemeralVideo && (
-        <EphemeralVideoPlayer
-          videoUrl={activeEphemeralVideo.videoUrl}
-          sender={activeEphemeralVideo.sender}
-          onClose={handleEphemeralVideoClose}
-          onViewed={() => {}}
-        />
-      )}
-
-      {/* Ephemeral Photo Viewer Modal */}
-      {activeEphemeralPhoto && (
-        <EphemeralPhotoViewer
-          imageUrl={activeEphemeralPhoto.imageUrl}
-          sender={activeEphemeralPhoto.sender}
-          duration={activeEphemeralPhoto.duration}
-          caption={activeEphemeralPhoto.caption}
-          onClose={handleEphemeralPhotoClose}
-        />
-      )}
-
-      {/* Fullscreen Drawing Playback Overlay */}
-      {activeDrawing && (
-        <div className="fixed inset-0 z-[200] pointer-events-none">
-          <DrawingPlayer
-            strokes={activeDrawing.strokes}
-            duration={activeDrawing.duration}
-            autoPlay
-            showPlayButton
-            fullscreen
-            onComplete={() => {}}
-          />
-          <button
-            type="button"
-            onClick={() => setActiveDrawing(null)}
-            className="pointer-events-auto absolute top-5 right-5 z-[201] w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center transition-colors"
+    <div className="relative flex-1 flex flex-col overflow-hidden">
+      {/* Unseen screenshot banner — fixed at top */}
+      {unseenScreenshots.length > 0 && (
+        <button
+          type="button"
+          onClick={handleScreenshotBannerClick}
+          className="sticky top-0 z-30 w-full flex items-center justify-center gap-1.5 py-1.5 bg-purple-600/90 backdrop-blur-sm text-[11px] text-white font-medium border-b border-purple-400/30 hover:bg-purple-600 transition-colors"
+        >
+          <svg
+            className="w-3 h-3 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <svg
-              className="w-5 h-5 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+          {unseenScreenshots.length} screenshot
+          {unseenScreenshots.length !== 1 ? "s" : ""} haven&apos;t been seen yet
+        </button>
       )}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto overscroll-contain px-2 py-3 space-y-2"
+        onClick={handleContainerClick}
+      >
+        {messages.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-neutral-400">
+            No messages yet. Say hello!
+          </div>
+        )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmMsg && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-xs rounded-2xl border border-red-500/30 bg-gradient-to-br from-neutral-900 to-red-950/20 p-6 space-y-4 shadow-2xl">
-            {/* Header icon */}
-            <div className="flex justify-center">
-              <div className="h-12 w-12 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
-                <svg
-                  className="w-6 h-6 text-red-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+        {/* Server-side loading spinner */}
+        {isLoadingOlder && (
+          <div className="w-full py-3 flex justify-center">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-500 border-t-transparent" />
+          </div>
+        )}
+
+        {/* Older messages sentinel */}
+        {hasOlder && !isLoadingOlder && (
+          <div className="w-full py-3 text-center text-xs text-neutral-500 animate-pulse">
+            Loading older messages…
+          </div>
+        )}
+
+        {/* Only render the current window of messages */}
+        {visibleMessages.map((msg) => {
+          const isMine = slotId === msg.slotId;
+
+          // Screenshot detection system message — full-width purple banner
+          if (msg.screenshotEvent) {
+            return (
+              <div
+                key={msg.id}
+                data-msg-id={msg.id}
+                className="flex justify-center my-1"
+              >
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/50 bg-purple-500/20 px-4 py-1 text-[11px] text-purple-300">
+                  <svg
+                    className="w-3 h-3 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                  {msg.screenshotEvent === "1"
+                    ? "spot 1 took a screenshot of chat!!"
+                    : "spot 2 took a screenshot of chat!!"}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              isMine={isMine}
+              slotId={slotId}
+              themeColors={themeColors}
+              chatTheme={chatTheme}
+              gradientColors={gradientColors}
+              privacyMode={privacyMode}
+              isLockedOut={isLockedOut}
+              isHighlighted={highlightedMsgId === msg.id}
+              isPrivacyHovered={privacyHoveredMsgId === msg.id}
+              isCopied={copiedMsgId === msg.id}
+              isLongPressed={longPressedMsgId === msg.id}
+              isPoofing={poofingMessageIds.has(msg.id)}
+              setPrivacyHoveredMsgId={setPrivacyHoveredMsgId}
+              setCopiedMsgId={setCopiedMsgId}
+              setLongPressedMsgId={setLongPressedMsgId}
+              setDeleteConfirmMsg={setDeleteConfirmMsg}
+              setActiveEphemeralVideo={setActiveEphemeralVideo}
+              setActiveEphemeralPhoto={setActiveEphemeralPhoto}
+              setActiveDrawing={setActiveDrawing}
+              handleSwipeStart={handleSwipeStart}
+              handleLongPressStart={handleLongPressStart}
+              handleLongPressEnd={handleLongPressEnd}
+              setReplyingTo={setReplyingTo}
+              scrollToMessage={stableScrollToMessage}
+              onReact={onReact}
+              onColorChange={onColorChange}
+              onBgEmojisChange={onBgEmojisChange}
+              formatTimestamp={formatTimestamp}
+            />
+          );
+        })}
+
+        {/* Newer messages sentinel */}
+        {hasNewer && (
+          <div className="w-full py-3 text-center text-xs text-neutral-500 animate-pulse">
+            Loading newer messages…
+          </div>
+        )}
+
+        {isOtherTyping && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
+              <p className="text-[11px] uppercase tracking-wide opacity-70">
+                Typing
+              </p>
+              <div className="mt-1 flex items-center gap-1">
+                <span
+                  className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
+                  style={{ animationDelay: "0ms" }}
+                />
+                <span
+                  className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
+                  style={{ animationDelay: "150ms" }}
+                />
+                <span
+                  className="h-2 w-2 rounded-full bg-white/70 animate-bounce"
+                  style={{ animationDelay: "300ms" }}
+                />
               </div>
             </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
 
-            {/* Title */}
-            <h3 className="text-base font-semibold text-white text-center">
-              Delete Message?
-            </h3>
+        {/* Ephemeral Video Player Modal */}
+        {activeEphemeralVideo && (
+          <EphemeralVideoPlayer
+            videoUrl={activeEphemeralVideo.videoUrl}
+            sender={activeEphemeralVideo.sender}
+            onClose={handleEphemeralVideoClose}
+            onViewed={() => {}}
+          />
+        )}
 
-            {/* Description */}
-            <p className="text-sm text-neutral-400 text-center">
-              This message will be permanently deleted. This action cannot be
-              undone.
-            </p>
+        {/* Ephemeral Photo Viewer Modal */}
+        {activeEphemeralPhoto && (
+          <EphemeralPhotoViewer
+            imageUrl={activeEphemeralPhoto.imageUrl}
+            sender={activeEphemeralPhoto.sender}
+            duration={activeEphemeralPhoto.duration}
+            caption={activeEphemeralPhoto.caption}
+            onClose={handleEphemeralPhotoClose}
+          />
+        )}
 
-            {/* Buttons */}
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmMsg(null)}
-                className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10 transition-colors active:scale-[0.98]"
+        {/* Fullscreen Drawing Playback Overlay */}
+        {activeDrawing && (
+          <div className="fixed inset-0 z-[200] pointer-events-none">
+            <DrawingPlayer
+              strokes={activeDrawing.strokes}
+              duration={activeDrawing.duration}
+              autoPlay
+              showPlayButton
+              fullscreen
+              onComplete={() => {}}
+            />
+            <button
+              type="button"
+              onClick={() => setActiveDrawing(null)}
+              className="pointer-events-auto absolute top-5 right-5 z-[201] w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center transition-colors"
+            >
+              <svg
+                className="w-5 h-5 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onDeleteMessage(
-                    deleteConfirmMsg.id,
-                    deleteConfirmMsg.imageFileId,
-                    deleteConfirmMsg.videoFileId,
-                  );
-                  setDeleteConfirmMsg(null);
-                }}
-                className="flex-1 rounded-xl bg-red-500/80 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-500 transition-colors active:scale-[0.98] shadow-lg"
-              >
-                Delete
-              </button>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmMsg && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="mx-4 w-full max-w-xs rounded-2xl border border-red-500/30 bg-gradient-to-br from-neutral-900 to-red-950/20 p-6 space-y-4 shadow-2xl">
+              {/* Header icon */}
+              <div className="flex justify-center">
+                <div className="h-12 w-12 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                  <svg
+                    className="w-6 h-6 text-red-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Title */}
+              <h3 className="text-base font-semibold text-white text-center">
+                Delete Message?
+              </h3>
+
+              {/* Description */}
+              <p className="text-sm text-neutral-400 text-center">
+                This message will be permanently deleted. This action cannot be
+                undone.
+              </p>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmMsg(null)}
+                  className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10 transition-colors active:scale-[0.98]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteMessage(
+                      deleteConfirmMsg.id,
+                      deleteConfirmMsg.imageFileId,
+                      deleteConfirmMsg.videoFileId,
+                    );
+                    setDeleteConfirmMsg(null);
+                  }}
+                  className="flex-1 rounded-xl bg-red-500/80 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-500 transition-colors active:scale-[0.98] shadow-lg"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

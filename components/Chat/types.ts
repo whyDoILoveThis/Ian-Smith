@@ -40,6 +40,7 @@ export type Message = {
   ephemeralDuration?: number; // seconds — for ephemeral photos
   viewedBy?: { "1"?: boolean; "2"?: boolean };
   disappearedFor?: { "1"?: boolean; "2"?: boolean };
+  ephemeralExpired?: "photo" | "video";
   // Reactions
   reactions?: Record<string, { "1"?: boolean; "2"?: boolean }>;
   // Per-message background color override
@@ -49,6 +50,10 @@ export type Message = {
   // Drawing message fields
   drawingData?: RecordedDrawingStroke[];
   drawingDuration?: number;
+  // Screenshot detection system message
+  screenshotEvent?: "1" | "2";
+  screenshotNearMessageId?: string;
+  screenshotSeenBy?: { "1"?: boolean; "2"?: boolean };
 };
 
 // A single stroke in a recorded drawing

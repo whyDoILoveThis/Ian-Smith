@@ -483,7 +483,7 @@ export function ChatInputArea({
               <img
                 src={toProxyUrl(replyingTo.imageUrl)}
                 alt="Reply"
-                className="w-10 h-10 rounded object-cover border border-white/10 flex-shrink-0"
+                className="w-16 h-16 rounded object-cover border border-white/10 flex-shrink-0"
               />
             )}
             <div className={`flex-1 border-l-2 border-${chatTheme}-400 pl-2`}>
