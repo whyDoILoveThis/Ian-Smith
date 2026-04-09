@@ -141,8 +141,6 @@ type RoomSpotsViewProps = {
   onFallbackDetected?: () => void;
   isAdmin?: boolean;
   onScrollToMessage?: (messageId: string) => void;
-  spot1DetectionEnabled?: boolean;
-  onSetSpot1Detection?: (enabled: boolean) => void;
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -183,8 +181,6 @@ export function RoomSpotsView({
   onFallbackDetected,
   isAdmin = false,
   onScrollToMessage,
-  spot1DetectionEnabled = false,
-  onSetSpot1Detection,
 }: RoomSpotsViewProps) {
   // ── State ──────────────────────────────────────────────────────────────
   const [leaveConfirmText, setLeaveConfirmText] = useState("");
@@ -194,7 +190,6 @@ export function RoomSpotsView({
   const [showVideoGallery, setShowVideoGallery] = useState(false);
   const [showIndicatorColorPicker, setShowIndicatorColorPicker] =
     useState(false);
-  const [showHiddenSettings, setShowHiddenSettings] = useState(false);
   const indicatorPickerRef = useRef<HTMLDivElement>(null);
   const indicatorButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -1454,66 +1449,6 @@ export function RoomSpotsView({
             accentColor="text-red-300/80"
           >
             <div className="space-y-3">
-              {/* Tiny settings gear — spot 1 only */}
-              {slotId === "1" && onSetSpot1Detection && (
-                <div className="flex justify-end -mb-2">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowHiddenSettings((p) => !p)}
-                      className="p-1 rounded-full text-neutral-600 hover:text-neutral-400 hover:bg-white/5 transition-colors"
-                    >
-                      <svg
-                        className="w-3 h-3"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                      </svg>
-                    </button>
-                    {showHiddenSettings && (
-                      <div className="absolute right-0 top-6 z-10 rounded-xl border border-white/10 bg-neutral-900/95 backdrop-blur-sm p-2.5 shadow-xl min-w-[100px]">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[10px] text-neutral-400">
-                            Set
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onSetSpot1Detection(!spot1DetectionEnabled)
-                            }
-                            className={`relative w-8 h-[18px] rounded-full transition-colors duration-200 ${
-                              spot1DetectionEnabled
-                                ? "bg-purple-500"
-                                : "bg-neutral-700"
-                            }`}
-                          >
-                            <span
-                              className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform duration-200 ${
-                                spot1DetectionEnabled
-                                  ? "translate-x-[14px]"
-                                  : ""
-                              }`}
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
               <p className="text-[10px] text-neutral-500 text-center leading-relaxed">
                 This clears all messages and images for both users. Type the
                 confirmation phrase to unlock.

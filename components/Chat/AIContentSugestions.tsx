@@ -41,7 +41,6 @@ import {
   useDrawingRecorder,
   useSlots,
   useFCMNotifications,
-  useScreenshotDetection,
 } from "./hooks";
 import {
   LockBoxScreen,
@@ -748,18 +747,6 @@ export default function AIContentSugestions() {
   // Drawing
   const drawing = useDrawing(slotId, roomPath);
 
-  // Screenshot detection
-  const getCenterMessageIdRef = useRef<(() => string | null) | null>(null);
-  const getCenterMessageId = useCallback(
-    () => getCenterMessageIdRef.current?.() ?? null,
-    [],
-  );
-  const screenshotDetection = useScreenshotDetection(
-    slotId,
-    roomPath,
-    getCenterMessageId,
-  );
-
   // Drawing recorder
   const drawingRecorder = useDrawingRecorder();
   const [pendingDrawing, setPendingDrawing] = useState<{
@@ -1194,8 +1181,6 @@ export default function AIContentSugestions() {
               setActiveTab("chat");
               setScrollToMessageId(id + ":" + Date.now());
             }}
-            spot1DetectionEnabled={screenshotDetection.spot1Enabled}
-            onSetSpot1Detection={screenshotDetection.setSpot1Detection}
           />
         ) : (
           <>
@@ -1222,8 +1207,6 @@ export default function AIContentSugestions() {
               isLoadingOlder={firebaseWithSlot.isLoadingOlder}
               privacyMode={privacyMode}
               isLockedOut={session.availability.isFull && !slotId}
-              onMarkScreenshotSeen={chatMessages.markScreenshotSeen}
-              getCenterMessageIdRef={getCenterMessageIdRef}
             />
             <ChatInputArea
               slotId={slotId}

@@ -380,22 +380,7 @@ export function useChatMessages(
     [slotId, roomPath],
   );
 
-  // Mark a screenshot event as seen by current user
-  const markScreenshotSeen = useCallback(
-    async (messageId: string) => {
-      if (!slotId) return;
-      try {
-        const seenRef = ref(
-          rtdb,
-          `${roomPath}/messages/${messageId}/screenshotSeenBy/${slotId}`,
-        );
-        await set(seenRef, true);
-      } catch {
-        // Ignore errors
-      }
-    },
-    [slotId, roomPath],
-  );
+  // Delete ephemeral video completely from Appwrite storage and Firebase
   const deleteEphemeralMessage = useCallback(
     async (messageId: string, videoFileId?: string, imageFileId?: string) => {
       if (!slotId) return;
@@ -545,6 +530,5 @@ export function useChatMessages(
     toggleReaction,
     setMessageBgColor,
     setMessageBgEmojis,
-    markScreenshotSeen,
   };
 }

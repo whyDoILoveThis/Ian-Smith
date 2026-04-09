@@ -209,8 +209,7 @@ export function useChatFirebase(
               existing.bgEmojis !== fresh.bgEmojis ||
               existing.ephemeralExpired !== fresh.ephemeralExpired ||
               existing.imageUrl !== fresh.imageUrl ||
-              existing.videoUrl !== fresh.videoUrl ||
-              existing.screenshotSeenBy !== fresh.screenshotSeenBy
+              existing.videoUrl !== fresh.videoUrl
             )) {
               if (!patchedTail) {
                 // Lazily copy just the tail
@@ -230,7 +229,6 @@ export function useChatFirebase(
                 imageFileId: fresh.imageFileId,
                 videoUrl: fresh.videoUrl,
                 videoFileId: fresh.videoFileId,
-                screenshotSeenBy: fresh.screenshotSeenBy,
               };
               changed = true;
             }

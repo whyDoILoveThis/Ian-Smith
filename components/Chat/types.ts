@@ -50,10 +50,6 @@ export type Message = {
   // Drawing message fields
   drawingData?: RecordedDrawingStroke[];
   drawingDuration?: number;
-  // Screenshot detection system message
-  screenshotEvent?: "1" | "2";
-  screenshotNearMessageId?: string;
-  screenshotSeenBy?: { "1"?: boolean; "2"?: boolean };
 };
 
 // A single stroke in a recorded drawing
