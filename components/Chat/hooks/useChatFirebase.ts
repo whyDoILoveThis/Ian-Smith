@@ -207,6 +207,7 @@ export function useChatFirebase(
               existing.disappearedFor !== fresh.disappearedFor ||
               existing.bgColor !== fresh.bgColor ||
               existing.bgEmojis !== fresh.bgEmojis ||
+              existing.annotations !== fresh.annotations ||
               existing.ephemeralExpired !== fresh.ephemeralExpired ||
               existing.imageUrl !== fresh.imageUrl ||
               existing.videoUrl !== fresh.videoUrl
@@ -224,6 +225,7 @@ export function useChatFirebase(
                 disappearedFor: fresh.disappearedFor,
                 bgColor: fresh.bgColor,
                 bgEmojis: fresh.bgEmojis,
+                annotations: fresh.annotations,
                 ephemeralExpired: fresh.ephemeralExpired,
                 imageUrl: fresh.imageUrl,
                 imageFileId: fresh.imageFileId,

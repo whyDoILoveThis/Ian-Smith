@@ -27,6 +27,9 @@ import ReplyIcon from "@/components/sub/ReplyIcon";
 import { toProxyUrl } from "@/lib/appwriteProxy";
 import { DrawingPlayer } from "./DrawingPlayer";
 import EmojiText from "@/components/ui/EmojiText";
+import { BubbleAnnotationDisplay } from "./BubbleAnnotationDisplay";
+import { BubbleAnnotationEditor } from "./BubbleAnnotationEditor";
+import type { BubbleAnnotations } from "../types";
 
 /** Returns true when the string contains ONLY emoji (and optional whitespace). */
 /** Returns true when the string contains ONLY emoji (and optional whitespace). */
@@ -231,6 +234,8 @@ type MessageBubbleProps = {
     messageId: string,
     data: { emojis: string[]; density: number } | null,
   ) => void;
+  onAnnotate?: (messageId: string) => void;
+  slotNames: Record<string, string>;
   formatTimestamp: (createdAt?: number | object) => string;
 };
 
@@ -264,6 +269,8 @@ const MessageBubble = React.memo(
     onReact,
     onColorChange,
     onBgEmojisChange,
+    onAnnotate,
+    slotNames,
     formatTimestamp,
   }: MessageBubbleProps) {
     const timestamp = formatTimestamp(msg.createdAt);
@@ -332,6 +339,12 @@ const MessageBubble = React.memo(
                   density={msg.bgEmojis.density}
                 />
               )}
+              {/* Annotation overlay (drawing + text on bubble) */}
+              {msg.annotations &&
+              (msg.annotations.strokes?.length ||
+                msg.annotations.textBoxes?.length) ? (
+                <BubbleAnnotationDisplay annotations={msg.annotations} />
+              ) : null}
               {/* Delete button (long-press) */}
               {isMine && isLongPressed && (
                 <button
@@ -396,6 +409,10 @@ const MessageBubble = React.memo(
                 onColorChange={onColorChange}
                 currentBgEmojis={msg.bgEmojis}
                 onBgEmojisChange={onBgEmojisChange}
+                onAnnotate={onAnnotate}
+                slotNames={slotNames}
+                annotations={msg.annotations}
+                messageSender={msg.sender}
               />
               {/* All message content above the bg emoji overlay */}
               <div className="relative" style={{ zIndex: 1 }}>
@@ -809,6 +826,10 @@ type ChatMessagesViewProps = {
     messageId: string,
     data: { emojis: string[]; density: number } | null,
   ) => void;
+  onAnnotationsChange?: (
+    messageId: string,
+    data: BubbleAnnotations | null,
+  ) => void;
   scrollToMessageId?: string | null;
   /** Are there older messages on the server that haven't been fetched yet? */
   hasMoreOnServer?: boolean;
@@ -839,6 +860,7 @@ export function ChatMessagesView({
   onReact,
   onColorChange,
   onBgEmojisChange,
+  onAnnotationsChange,
   scrollToMessageId,
   hasMoreOnServer = false,
   loadOlderFromServer,
@@ -853,7 +875,21 @@ export function ChatMessagesView({
     null,
   );
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [annotatingMsgId, setAnnotatingMsgId] = useState<string | null>(null);
   const isNearBottomRef = useRef(true);
+
+  // Derive slot→name mapping from messages
+  const slotNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.slotId && m.sender && !names[m.slotId]) {
+        names[m.slotId] = m.sender;
+      }
+      if (names["1"] && names["2"]) break;
+    }
+    return names;
+  }, [messages]);
   const isLoadingRef = useRef(false);
   const lastManualScrollTimeRef = useRef(0);
   const anchorRef = useRef<{ msgId: string; offsetFromTop: number } | null>(
@@ -1024,6 +1060,24 @@ export function ChatMessagesView({
     strokes: import("../types").RecordedDrawingStroke[];
     duration: number;
   } | null>(null);
+
+  // Annotation editor: find the bubble DOM element for the annotating message
+  const handleAnnotate = useCallback((messageId: string) => {
+    setAnnotatingMsgId(messageId);
+  }, []);
+
+  const handleAnnotationSave = useCallback(
+    (data: BubbleAnnotations) => {
+      if (annotatingMsgId && onAnnotationsChange) {
+        const isEmpty =
+          (!data.strokes || data.strokes.length === 0) &&
+          (!data.textBoxes || data.textBoxes.length === 0);
+        onAnnotationsChange(annotatingMsgId, isEmpty ? null : data);
+      }
+      setAnnotatingMsgId(null);
+    },
+    [annotatingMsgId, onAnnotationsChange],
+  );
 
   // Handle ephemeral video close - only trigger disappear for recipient, not sender
   const handleEphemeralVideoClose = useCallback(() => {
@@ -1461,6 +1515,8 @@ export function ChatMessagesView({
             onReact={onReact}
             onColorChange={onColorChange}
             onBgEmojisChange={onBgEmojisChange}
+            onAnnotate={onAnnotationsChange ? handleAnnotate : undefined}
+            slotNames={slotNames}
             formatTimestamp={formatTimestamp}
           />
         );
@@ -1477,7 +1533,7 @@ export function ChatMessagesView({
         <div className="flex justify-start">
           <div className="max-w-[80%] rounded-2xl bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
             <p className="text-[11px] uppercase tracking-wide opacity-70">
-              Typing
+              Tweakin
             </p>
             <div className="mt-1 flex items-center gap-1">
               <span
@@ -1551,6 +1607,27 @@ export function ChatMessagesView({
           </button>
         </div>
       )}
+
+      {/* Bubble Annotation Editor */}
+      {annotatingMsgId &&
+        (() => {
+          const msgWrapper = scrollContainerRef.current?.querySelector(
+            `[data-msg-id="${annotatingMsgId}"]`,
+          );
+          const bubbleEl = msgWrapper?.querySelector(
+            ".rounded-2xl.shadow-md",
+          ) as HTMLDivElement | null;
+          const annotatingMsg = messages.find((m) => m.id === annotatingMsgId);
+          if (!bubbleEl) return null;
+          return (
+            <BubbleAnnotationEditor
+              bubbleRef={bubbleEl}
+              existing={annotatingMsg?.annotations}
+              onSave={handleAnnotationSave}
+              onClose={() => setAnnotatingMsgId(null)}
+            />
+          );
+        })()}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmMsg && (

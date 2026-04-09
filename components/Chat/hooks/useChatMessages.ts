@@ -502,6 +502,24 @@ export function useChatMessages(
     [roomPath],
   );
 
+  // Set or clear per-message bubble annotations (drawing + text overlays)
+  const setMessageAnnotations = useCallback(
+    async (messageId: string, data: import("../types").BubbleAnnotations | null) => {
+      const aRef = ref(rtdb, `${roomPath}/messages/${messageId}/annotations`);
+      try {
+        // If empty strokes+textBoxes, clear
+        if (data && (!data.strokes || data.strokes.length === 0) && (!data.textBoxes || data.textBoxes.length === 0)) {
+          await set(aRef, null);
+        } else {
+          await set(aRef, data);
+        }
+      } catch (err) {
+        console.error("Failed to set message annotations:", err);
+      }
+    },
+    [roomPath],
+  );
+
   return {
     messageText,
     setMessageText,
@@ -530,5 +548,6 @@ export function useChatMessages(
     toggleReaction,
     setMessageBgColor,
     setMessageBgEmojis,
+    setMessageAnnotations,
   };
 }

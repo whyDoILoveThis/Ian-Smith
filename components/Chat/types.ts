@@ -50,6 +50,43 @@ export type Message = {
   // Drawing message fields
   drawingData?: RecordedDrawingStroke[];
   drawingDuration?: number;
+  // Per-message bubble annotations (freehand drawing + text boxes over the bubble)
+  annotations?: BubbleAnnotations;
+};
+
+export type AnnotationStroke = {
+  /** Points as fractions 0-1 of bubble width/height */
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+  /** Creation order for interleaved layering with text boxes */
+  zOrder?: number;
+};
+
+export type AnnotationTextBox = {
+  /** Position as fractions 0-1 of bubble width/height */
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  colorLightness: number;
+  fontSize: number;
+  /** Box width as fraction of bubble width */
+  boxWidth: number;
+  borderColor: string;
+  borderStyle: "solid" | "dashed" | "none";
+  borderWidth: number;
+  borderRadius: number;
+  bgColor: string;
+  bgOpacity: number;
+  rotation: number;
+  /** Creation/move order for interleaved layering with strokes */
+  zOrder?: number;
+};
+
+export type BubbleAnnotations = {
+  strokes?: AnnotationStroke[];
+  textBoxes?: AnnotationTextBox[];
 };
 
 // A single stroke in a recorded drawing

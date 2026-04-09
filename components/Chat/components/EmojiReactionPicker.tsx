@@ -4,9 +4,11 @@ import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import type { BubbleAnnotations } from "../types";
 
 // ── Text Reaction helpers ──────────────────────────────────────────
 // Key format:  txt_RRGGBB_<encoded text>
@@ -443,6 +445,10 @@ type EmojiReactionPickerProps = {
     messageId: string,
     data: { emojis: string[]; density: number } | null,
   ) => void;
+  onAnnotate?: (messageId: string) => void;
+  slotNames?: Record<string, string>;
+  annotations?: BubbleAnnotations;
+  messageSender?: string;
 };
 
 export function EmojiReactionPicker({
@@ -455,12 +461,17 @@ export function EmojiReactionPicker({
   onColorChange,
   currentBgEmojis,
   onBgEmojisChange,
+  onAnnotate,
+  slotNames,
+  annotations,
+  messageSender,
 }: EmojiReactionPickerProps) {
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showBgEmojiPicker, setShowBgEmojiPicker] = useState(false);
+  const [showReactionsView, setShowReactionsView] = useState(false);
   const [bgEmojiList, setBgEmojiList] = useState<string[]>(
     currentBgEmojis?.emojis ?? [],
   );
@@ -479,6 +490,7 @@ export function EmojiReactionPicker({
   const textPanelRef = useRef<HTMLDivElement>(null);
   const colorPanelRef = useRef<HTMLDivElement>(null);
   const bgEmojiPanelRef = useRef<HTMLDivElement>(null);
+  const reactionsViewRef = useRef<HTMLDivElement>(null);
 
   // Nudge a popup element so it stays fully inside the viewport
   const clampToViewport = useCallback((el: HTMLDivElement | null) => {
@@ -508,10 +520,25 @@ export function EmojiReactionPicker({
   }, []);
 
   useLayoutEffect(() => {
-    if (showQuickBar && !showFullPicker && !showTextInput) {
+    if (
+      showQuickBar &&
+      !showFullPicker &&
+      !showTextInput &&
+      !showColorPicker &&
+      !showBgEmojiPicker &&
+      !showReactionsView
+    ) {
       clampToViewport(quickBarRef.current);
     }
-  }, [showQuickBar, showFullPicker, showTextInput, clampToViewport]);
+  }, [
+    showQuickBar,
+    showFullPicker,
+    showTextInput,
+    showColorPicker,
+    showBgEmojiPicker,
+    showReactionsView,
+    clampToViewport,
+  ]);
 
   useLayoutEffect(() => {
     if (showFullPicker) {
@@ -539,6 +566,12 @@ export function EmojiReactionPicker({
     }
   }, [showBgEmojiPicker, clampToViewport]);
 
+  useLayoutEffect(() => {
+    if (showReactionsView) {
+      clampToViewport(reactionsViewRef.current);
+    }
+  }, [showReactionsView, clampToViewport]);
+
   // Close on click outside
   useEffect(() => {
     if (
@@ -546,7 +579,8 @@ export function EmojiReactionPicker({
       !showFullPicker &&
       !showTextInput &&
       !showColorPicker &&
-      !showBgEmojiPicker
+      !showBgEmojiPicker &&
+      !showReactionsView
     )
       return;
     const handler = (e: MouseEvent | TouchEvent) => {
@@ -559,6 +593,7 @@ export function EmojiReactionPicker({
         setShowTextInput(false);
         setShowColorPicker(false);
         setShowBgEmojiPicker(false);
+        setShowReactionsView(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -573,6 +608,7 @@ export function EmojiReactionPicker({
     showTextInput,
     showColorPicker,
     showBgEmojiPicker,
+    showReactionsView,
   ]);
 
   const handleEmojiClick = useCallback(
@@ -599,18 +635,26 @@ export function EmojiReactionPicker({
         showFullPicker ||
         showTextInput ||
         showColorPicker ||
-        showBgEmojiPicker
+        showBgEmojiPicker ||
+        showReactionsView
       ) {
         setShowFullPicker(false);
         setShowTextInput(false);
         setShowColorPicker(false);
         setShowBgEmojiPicker(false);
+        setShowReactionsView(false);
         setShowQuickBar(false);
       } else {
         setShowQuickBar((prev) => !prev);
       }
     },
-    [showFullPicker, showTextInput, showColorPicker, showBgEmojiPicker],
+    [
+      showFullPicker,
+      showTextInput,
+      showColorPicker,
+      showBgEmojiPicker,
+      showReactionsView,
+    ],
   );
 
   // Check if current user already reacted with an emoji
@@ -670,7 +714,8 @@ export function EmojiReactionPicker({
         !showFullPicker &&
         !showTextInput &&
         !showColorPicker &&
-        !showBgEmojiPicker && (
+        !showBgEmojiPicker &&
+        !showReactionsView && (
           <div
             ref={quickBarRef}
             className={`pointer-events-auto absolute z-50 bottom-8 w-72 flex flex-wrap items-center gap-2 rounded-3xl bg-neutral-900/95 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg shadow-black/40 ${
@@ -730,7 +775,7 @@ export function EmojiReactionPicker({
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
             </button>
-            {/* Color button to change message bg */}
+            {/* Color button to change message bg (paint bucket icon) */}
             {onColorChange && (
               <button
                 type="button"
@@ -748,8 +793,73 @@ export function EmojiReactionPicker({
                   stroke="currentColor"
                   strokeWidth={2}
                 >
+                  <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  <path d="M12 15v4" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+            {/* Pencil button to annotate/draw on message bubble */}
+            {onAnnotate && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowQuickBar(false);
+                  onAnnotate(messageId);
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
+                title="Draw on bubble"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                </svg>
+              </button>
+            )}
+            {/* Smiley button to view all reactions & annotations */}
+            {((currentReactions && Object.keys(currentReactions).length > 0) ||
+              (annotations &&
+                ((annotations.strokes?.length ?? 0) > 0 ||
+                  (annotations.textBoxes?.length ?? 0) > 0))) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowReactionsView(true);
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/15 transition-all text-neutral-400 hover:text-white border border-white/10 ml-0.5"
+                title="View reactions"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
                   <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="12" r="4" fill="currentColor" />
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                  <line
+                    x1="9"
+                    y1="9"
+                    x2="9.01"
+                    y2="9"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                  />
+                  <line
+                    x1="15"
+                    y1="9"
+                    x2="15.01"
+                    y2="9"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                  />
                 </svg>
               </button>
             )}
@@ -1116,6 +1226,208 @@ export function EmojiReactionPicker({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Reactions viewer panel */}
+      {showReactionsView && (
+        <div
+          ref={reactionsViewRef}
+          className={`pointer-events-auto absolute z-50 bottom-8 w-72 max-h-[550px] overflow-y-auto rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-xl shadow-black/50 ${
+            isMine ? "left-0" : "right-0"
+          }`}
+        >
+          <div className="sticky top-0 z-10 bg-neutral-900/95 backdrop-blur-md border-b border-white/10 px-3 py-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowReactionsView(false);
+              }}
+              className="text-xs text-neutral-400 hover:text-white transition-colors flex items-center gap-1"
+            >
+              <svg
+                className="w-3 h-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back
+            </button>
+            <span className="text-xs text-neutral-500">
+              Reactions & Annotations
+            </span>
+          </div>
+
+          {/* Reactions section */}
+          {currentReactions && Object.keys(currentReactions).length > 0 && (
+            <div className="px-3 pt-2 pb-1">
+              <p className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+                Reactions
+              </p>
+              <div className="flex flex-col gap-1">
+                {Object.entries(currentReactions)
+                  .map(([key, users]) => {
+                    const count = (users["1"] ? 1 : 0) + (users["2"] ? 1 : 0);
+                    const iReacted = slotId ? !!users[slotId] : false;
+                    const textData = isTextReaction(key)
+                      ? decodeTextReaction(key)
+                      : null;
+                    const reactorNames: string[] = [];
+                    if (users["1"] && slotNames?.["1"])
+                      reactorNames.push(slotNames["1"]);
+                    if (users["2"] && slotNames?.["2"])
+                      reactorNames.push(slotNames["2"]);
+                    return { key, count, iReacted, textData, reactorNames };
+                  })
+                  .filter((r) => r.count > 0)
+                  .map(({ key, count, iReacted, textData, reactorNames }) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onReact(messageId, key);
+                        }}
+                        className={`inline-flex items-center gap-1 shrink-0 transition-all duration-150 hover:scale-105 ${
+                          textData
+                            ? `px-2 py-0.5 rounded-full text-sm font-medium border ${iReacted ? "border-[3px]" : ""}`
+                            : `px-1.5 py-0.5 rounded-full text-xs ${iReacted ? "border-[3px] border-white/20 text-white bg-white/8" : "bg-white/8 border border-white/10 text-neutral-300 hover:bg-white/15"}`
+                        }`}
+                        style={
+                          textData
+                            ? {
+                                backgroundColor: textData.color + "30",
+                                color: textData.color,
+                                borderColor: textData.color + "50",
+                              }
+                            : undefined
+                        }
+                      >
+                        {textData ? (
+                          <span className="leading-none">
+                            {textData.text === ":/" ? ":&#47;" : textData.text}
+                          </span>
+                        ) : (
+                          <span className="emoji text-sm leading-none">
+                            {key === ":/" ? ":&#47;" : key}
+                          </span>
+                        )}
+                      </button>
+                      <span className="text-[11px] text-neutral-400 truncate">
+                        {reactorNames.length > 0
+                          ? reactorNames.join(", ")
+                          : `${count} reactor${count > 1 ? "s" : ""}`}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Annotations section */}
+          {annotations &&
+            ((annotations.strokes?.length ?? 0) > 0 ||
+              (annotations.textBoxes?.length ?? 0) > 0) && (
+              <div className="px-3 pt-2 pb-2 border-t border-white/10">
+                <p className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+                  Annotations
+                </p>
+
+                {/* Stroke drawing preview */}
+                {(annotations.strokes?.length ?? 0) > 0 && (
+                  <div className="mb-2">
+                    <div
+                      className="w-full max-h-32 rounded-lg bg-white/5 border border-white/10 overflow-hidden"
+                      style={{ aspectRatio: "5/3" }}
+                    >
+                      <svg
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="xMidYMid meet"
+                        className="w-full h-full"
+                      >
+                        {annotations.strokes!.map((stroke, si) => {
+                          if (stroke.points.length < 2) return null;
+                          const d = stroke.points
+                            .map((p, pi) =>
+                              pi === 0
+                                ? `M${p.x * 100} ${p.y * 100}`
+                                : `L${p.x * 100} ${p.y * 100}`,
+                            )
+                            .join(" ");
+                          return (
+                            <path
+                              key={si}
+                              d={d}
+                              fill="none"
+                              stroke={stroke.color}
+                              strokeWidth={Math.max(0.8, stroke.width * 0.35)}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          );
+                        })}
+                      </svg>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px] text-neutral-500">
+                        {annotations.strokes!.length} stroke
+                        {annotations.strokes!.length > 1 ? "s" : ""}
+                      </span>
+                      {messageSender && (
+                        <span className="text-[10px] text-neutral-500">
+                          by {messageSender}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Text boxes */}
+                {annotations.textBoxes?.map((tb, i) => (
+                  <div key={i} className="flex items-center gap-2 mb-1.5">
+                    <div
+                      className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0 border"
+                      style={{
+                        backgroundColor:
+                          tb.bgColor +
+                          Math.round(tb.bgOpacity * 255)
+                            .toString(16)
+                            .padStart(2, "0"),
+                        color: tb.color,
+                        borderColor: tb.borderColor + "80",
+                        borderStyle:
+                          tb.borderStyle === "none" ? "solid" : tb.borderStyle,
+                        borderWidth: tb.borderStyle === "none" ? 0 : 1,
+                      }}
+                    >
+                      T
+                    </div>
+                    <span className="text-[11px] text-neutral-400 truncate flex-1">
+                      {tb.text || "(empty)"}
+                    </span>
+                    {messageSender && (
+                      <span className="text-[10px] text-neutral-500 shrink-0">
+                        {messageSender}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+          {/* Empty state */}
+          {(!currentReactions || Object.keys(currentReactions).length === 0) &&
+            (!annotations ||
+              ((annotations.strokes?.length ?? 0) === 0 &&
+                (annotations.textBoxes?.length ?? 0) === 0)) && (
+              <div className="px-3 py-4 text-center text-xs text-neutral-500">
+                No reactions or annotations yet
+              </div>
+            )}
         </div>
       )}
 
