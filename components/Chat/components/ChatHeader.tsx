@@ -363,7 +363,7 @@ export function ChatHeader({
           <span className="text-sm font-semibold text-white flex items-center gap-1.5">
             {activeTab === "chat" ? (
               <span>
-                Chat <span className="text-[8px]">v3.4</span>
+                Chat <span className="text-[8px]">v3.5</span>
               </span>
             ) : (
               <span>

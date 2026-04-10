@@ -129,6 +129,31 @@ export function BubbleAnnotationEditor({
   const isDrawingRef = useRef(false);
   const currentPointsRef = useRef<{ x: number; y: number }[]>([]);
 
+  // ── Fullscreen mode ──────────────────────────────────────────
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const isFullscreenRef = useRef(false);
+  const bubbleCloneRef = useRef<HTMLDivElement | null>(null);
+  const [fsTransform, setFsTransform] = useState({
+    scale: 1,
+    tx: 0,
+    ty: 0,
+    rotation: 0,
+  });
+  const fsTransformRef = useRef({ scale: 1, tx: 0, ty: 0, rotation: 0 });
+  const isPinchingRef = useRef(false);
+  const pinchRef = useRef<{
+    startDist: number;
+    startAngle: number;
+    startScale: number;
+    startRot: number;
+    startTx: number;
+    startTy: number;
+    midX: number;
+    midY: number;
+  } | null>(null);
+  const isSpaceDownRef = useRef(false);
+  const isFsPanningRef = useRef(false);
+
   // Bubble dimensions – keep in sync with the actual element
   const [bubbleRect, setBubbleRect] = useState<DOMRect | null>(null);
 
@@ -136,6 +161,7 @@ export function BubbleAnnotationEditor({
     const syncOverlay = () => {
       const rect = bubbleRef.getBoundingClientRect();
       setBubbleRect(rect);
+      if (isFullscreenRef.current) return;
       // Directly sync overlay position to avoid React state delay
       // The -8 corrects for a persistent offset between the overlay
       // and the actual bubble (caused by the bubble's py-2 padding
@@ -216,6 +242,22 @@ export function BubbleAnnotationEditor({
   // ── Drawing handlers (touch + mouse) ───────────────────────────
   const getRelPos = useCallback(
     (clientX: number, clientY: number) => {
+      if (isFullscreenRef.current) {
+        const t = fsTransformRef.current;
+        const bw = bubbleRef.offsetWidth;
+        const bh = bubbleRef.offsetHeight;
+        const a = (clientX - t.tx - window.innerWidth / 2) / t.scale;
+        const b = (clientY - t.ty - window.innerHeight / 2) / t.scale;
+        const rad = (t.rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const x = cos * a + sin * b + bw / 2;
+        const y = -sin * a + cos * b + bh / 2;
+        return {
+          x: Math.max(0, Math.min(1, x / bw)),
+          y: Math.max(0, Math.min(1, y / bh)),
+        };
+      }
       const r = bubbleRef.getBoundingClientRect();
       return {
         x: Math.max(0, Math.min(1, (clientX - r.left) / r.width)),
@@ -286,7 +328,7 @@ export function BubbleAnnotationEditor({
   // Touch handlers
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
-      if (mode !== "draw") return;
+      if (mode !== "draw" || isPinchingRef.current) return;
       e.preventDefault();
       e.stopPropagation();
       const t = e.touches[0];
@@ -297,7 +339,7 @@ export function BubbleAnnotationEditor({
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (mode !== "draw") return;
+      if (mode !== "draw" || isPinchingRef.current) return;
       e.preventDefault();
       e.stopPropagation();
       const t = e.touches[0];
@@ -318,7 +360,8 @@ export function BubbleAnnotationEditor({
   // Mouse handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (mode !== "draw") return;
+      if (mode !== "draw" || isFsPanningRef.current || isSpaceDownRef.current)
+        return;
       e.preventDefault();
       startDraw(e.clientX, e.clientY);
     },
@@ -425,12 +468,23 @@ export function BubbleAnnotationEditor({
     const handleMove = (clientX: number, clientY: number) => {
       const d = dragRef.current;
       if (!d) return;
-      const r = bubbleRef.getBoundingClientRect();
-      const dx = (clientX - d.startX) / r.width;
-      const dy = (clientY - d.startY) / r.height;
+      let dxPx = clientX - d.startX;
+      let dyPx = clientY - d.startY;
+      if (isFullscreenRef.current) {
+        const t = fsTransformRef.current;
+        const rad = (t.rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const rx = (cos * dxPx + sin * dyPx) / t.scale;
+        const ry = (-sin * dxPx + cos * dyPx) / t.scale;
+        dxPx = rx;
+        dyPx = ry;
+      }
+      const bw = bubbleRef.offsetWidth;
+      const bh = bubbleRef.offsetHeight;
       updateTextBox(d.idx, {
-        x: Math.max(0, Math.min(1, d.origX + dx)),
-        y: Math.max(0, Math.min(1, d.origY + dy)),
+        x: Math.max(0, Math.min(1, d.origX + dxPx / bw)),
+        y: Math.max(0, Math.min(1, d.origY + dyPx / bh)),
       });
     };
 
@@ -488,6 +542,191 @@ export function BubbleAnnotationEditor({
     onClose();
   }, [onSave, onClose]);
 
+  // ── Fullscreen toggle ──────────────────────────────────────
+  const toggleFullscreen = useCallback(() => {
+    const entering = !isFullscreenRef.current;
+    isFullscreenRef.current = entering;
+    if (entering) {
+      // Clone the bubble DOM node for pixel-perfect background
+      const clone = bubbleRef.cloneNode(true) as HTMLDivElement;
+      clone.style.position = "absolute";
+      clone.style.top = "0";
+      clone.style.left = "0";
+      clone.style.width = `${bubbleRef.offsetWidth}px`;
+      clone.style.height = `${bubbleRef.offsetHeight}px`;
+      clone.style.pointerEvents = "none";
+      clone.style.margin = "0";
+      clone.style.boxSizing = "border-box";
+      // Copy computed background since theme classes won't cascade into the clone's detached context
+      const cs = getComputedStyle(bubbleRef);
+      clone.style.background = cs.background;
+      clone.style.color = cs.color;
+      bubbleCloneRef.current = clone;
+      const bw = bubbleRef.offsetWidth;
+      const bh = bubbleRef.offsetHeight;
+      const pad = 120;
+      const maxW = window.innerWidth - pad * 2;
+      const maxH = window.innerHeight - pad * 2;
+      const scale = Math.min(maxW / bw, maxH / bh, 4);
+      const t = { scale, tx: 0, ty: 0, rotation: 0 };
+      fsTransformRef.current = t;
+      setFsTransform(t);
+    } else {
+      bubbleCloneRef.current = null;
+      const t = { scale: 1, tx: 0, ty: 0, rotation: 0 };
+      fsTransformRef.current = t;
+      setFsTransform(t);
+    }
+    setIsFullscreen(entering);
+  }, [bubbleRef]);
+
+  // ── Fullscreen gesture handlers ───────────────────────────────
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    // Pinch-to-zoom/rotate/pan (touch)
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        if (isDrawingRef.current) {
+          isDrawingRef.current = false;
+          currentPointsRef.current = [];
+          redrawCanvas();
+        }
+        isPinchingRef.current = true;
+        const [a, b] = [e.touches[0], e.touches[1]];
+        const dx = b.clientX - a.clientX;
+        const dy = b.clientY - a.clientY;
+        const ft = fsTransformRef.current;
+        pinchRef.current = {
+          startDist: Math.hypot(dx, dy),
+          startAngle: Math.atan2(dy, dx),
+          startScale: ft.scale,
+          startRot: ft.rotation,
+          startTx: ft.tx,
+          startTy: ft.ty,
+          midX: (a.clientX + b.clientX) / 2,
+          midY: (a.clientY + b.clientY) / 2,
+        };
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isPinchingRef.current || e.touches.length < 2) return;
+      e.preventDefault();
+      const p = pinchRef.current;
+      if (!p) return;
+      const [a, b] = [e.touches[0], e.touches[1]];
+      const dx = b.clientX - a.clientX;
+      const dy = b.clientY - a.clientY;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      const newScale = Math.max(
+        0.3,
+        Math.min(10, p.startScale * (dist / p.startDist)),
+      );
+      const midX = (a.clientX + b.clientX) / 2;
+      const midY = (a.clientY + b.clientY) / 2;
+      const nt = {
+        scale: newScale,
+        tx: p.startTx + (midX - p.midX),
+        ty: p.startTy + (midY - p.midY),
+        rotation: p.startRot + ((angle - p.startAngle) * 180) / Math.PI,
+      };
+      fsTransformRef.current = nt;
+      setFsTransform(nt);
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        isPinchingRef.current = false;
+        pinchRef.current = null;
+      }
+    };
+
+    // Wheel zoom / Alt+wheel rotate (desktop)
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const ft = fsTransformRef.current;
+      if (e.altKey) {
+        const nt = {
+          ...ft,
+          rotation: ft.rotation + (e.deltaY > 0 ? -3 : 3),
+        };
+        fsTransformRef.current = nt;
+        setFsTransform(nt);
+        return;
+      }
+      const factor = e.deltaY > 0 ? 0.92 : 1.08;
+      const newScale = Math.max(0.3, Math.min(10, ft.scale * factor));
+      const vcx = window.innerWidth / 2;
+      const vcy = window.innerHeight / 2;
+      const ratio = newScale / ft.scale;
+      const nt = {
+        scale: newScale,
+        tx: (e.clientX - vcx) * (1 - ratio) + ft.tx * ratio,
+        ty: (e.clientY - vcy) * (1 - ratio) + ft.ty * ratio,
+        rotation: ft.rotation,
+      };
+      fsTransformRef.current = nt;
+      setFsTransform(nt);
+    };
+
+    // Space + drag for pan (desktop)
+    let panStart = { x: 0, y: 0, tx: 0, ty: 0 };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        isSpaceDownRef.current = true;
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        isSpaceDownRef.current = false;
+        isFsPanningRef.current = false;
+      }
+    };
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button === 1 || (e.button === 0 && isSpaceDownRef.current)) {
+        e.preventDefault();
+        isFsPanningRef.current = true;
+        const ft = fsTransformRef.current;
+        panStart = { x: e.clientX, y: e.clientY, tx: ft.tx, ty: ft.ty };
+      }
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isFsPanningRef.current) return;
+      const nt = {
+        ...fsTransformRef.current,
+        tx: panStart.tx + (e.clientX - panStart.x),
+        ty: panStart.ty + (e.clientY - panStart.y),
+      };
+      fsTransformRef.current = nt;
+      setFsTransform(nt);
+    };
+    const onMouseUp = () => {
+      isFsPanningRef.current = false;
+    };
+
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd, { passive: true });
+    document.addEventListener("wheel", onWheel, { passive: false });
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keyup", onKeyUp);
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("wheel", onWheel);
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keyup", onKeyUp);
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [isFullscreen, redrawCanvas]);
+
   if (!bubbleRect) return null;
 
   const editingBox = editingTextIdx !== null ? textBoxes[editingTextIdx] : null;
@@ -519,177 +758,225 @@ export function BubbleAnnotationEditor({
 
   // Toolbar (above bubble if room, else pushed down but still in viewport)
   const TOOLBAR_H = 52;
-  const TOOLBAR_W = 290; // intrinsic width of toolbar buttons
+  const TOOLBAR_W = 330; // intrinsic width of toolbar buttons
   // Let toolbar use its intrinsic width; just clamp to viewport
-  const toolbarTop = Math.max(
-    PAD,
-    Math.min(bubbleRect.top - TOOLBAR_H, vh - TOOLBAR_H - PAD),
-  );
+  const toolbarTop = isFullscreen
+    ? PAD
+    : Math.max(PAD, Math.min(bubbleRect.top - TOOLBAR_H, vh - TOOLBAR_H - PAD));
   const bubbleCenterX = bubbleRect.left + bubbleRect.width / 2;
-  const toolbarLeft = Math.max(
-    PAD,
-    Math.min(bubbleCenterX - TOOLBAR_W / 2, vw - TOOLBAR_W - PAD),
-  );
+  const toolbarLeft = isFullscreen
+    ? Math.max(PAD, (vw - TOOLBAR_W) / 2)
+    : Math.max(
+        PAD,
+        Math.min(bubbleCenterX - TOOLBAR_W / 2, vw - TOOLBAR_W - PAD),
+      );
 
   // Bottom panel (below bubble, scrollable if tight on space)
   const BP_MIN_W = 300;
   const bpWidth = Math.min(Math.max(bubbleRect.width, BP_MIN_W), vw - PAD * 2);
-  const bpLeft = Math.max(
-    PAD,
-    Math.min(bubbleCenterX - bpWidth / 2, vw - bpWidth - PAD),
-  );
+  const bpLeft = isFullscreen
+    ? Math.max(PAD, (vw - bpWidth) / 2)
+    : Math.max(PAD, Math.min(bubbleCenterX - bpWidth / 2, vw - bpWidth - PAD));
   const spaceBelow = vh - bubbleRect.bottom - PAD;
   const spaceAbove = bubbleRect.top - TOOLBAR_H - PAD * 2;
   const placeBelow = spaceBelow >= 120;
-  const bpTop = placeBelow
-    ? bubbleRect.bottom + PAD
-    : Math.max(PAD, toolbarTop - Math.min(spaceAbove, 400) - PAD);
-  const bpMaxH = placeBelow
-    ? vh - bpTop - PAD
-    : Math.min(spaceAbove, toolbarTop - PAD - bpTop);
+  const bpTop = isFullscreen
+    ? vh - Math.min(280, vh * 0.35) - PAD
+    : placeBelow
+      ? bubbleRect.bottom + PAD
+      : Math.max(PAD, toolbarTop - Math.min(spaceAbove, 400) - PAD);
+  const bpMaxH = isFullscreen
+    ? Math.min(280, vh * 0.35)
+    : placeBelow
+      ? vh - bpTop - PAD
+      : Math.min(spaceAbove, toolbarTop - PAD - bpTop);
 
   return (
-    <div className="fixed inset-0 z-[400] pointer-events-none">
-      {/* Semi-transparent backdrop */}
-      <div className="absolute inset-0 bg-black/50 pointer-events-none" />
-
-      {/* Annotation overlay positioned exactly over the bubble */}
+    <div
+      className={`fixed inset-0 z-[400] ${isFullscreen ? "" : "pointer-events-none"}`}
+    >
+      {/* Backdrop */}
       <div
-        ref={overlayRef}
-        className="absolute"
-        style={{
-          top: bubbleRect.top - 8,
-          left: bubbleRect.left,
-          width: bubbleRect.width,
-          height: bubbleRect.height,
-          borderRadius: "1rem",
-          overflow: "hidden",
-          zIndex: 0,
-          pointerEvents: "auto",
-        }}
-        onClick={(e) => e.stopPropagation()}
+        className={`absolute inset-0 pointer-events-none ${isFullscreen ? "bg-black" : "bg-black/50"}`}
+      />
+
+      {/* Transform wrapper (fullscreen: centered + scaled; normal: passthrough) */}
+      <div
+        style={
+          isFullscreen
+            ? {
+                position: "absolute" as const,
+                left: "50%",
+                top: "50%",
+                transform: `translate(-50%, -50%) translate(${fsTransform.tx}px, ${fsTransform.ty}px) scale(${fsTransform.scale}) rotate(${fsTransform.rotation}deg)`,
+                transformOrigin: "center center",
+                width: bubbleRef.offsetWidth,
+                height: bubbleRef.offsetHeight,
+                pointerEvents: "auto" as const,
+              }
+            : undefined
+        }
       >
-        {/* Interleaved layers: strokes (SVG) and text boxes sorted by zOrder */}
-        {sortedLayers.map((layer) => {
-          if (layer.kind === "stroke") {
-            const stroke = layer.stroke;
-            if (stroke.points.length < 2) return null;
-            const bw = bubbleRef.offsetWidth;
-            const bh = bubbleRef.offsetHeight;
-            const d = stroke.points
-              .map((p, pi) =>
-                pi === 0
-                  ? `M${p.x * bw} ${p.y * bh}`
-                  : `L${p.x * bw} ${p.y * bh}`,
-              )
-              .join(" ");
-            return (
-              <svg
-                key={`s-${layer.idx}`}
-                className="absolute inset-0 pointer-events-none"
-                viewBox={`0 0 ${bw} ${bh}`}
-                style={{ zIndex: layer.z }}
-              >
-                <path
-                  d={d}
-                  fill="none"
-                  stroke={stroke.color}
-                  strokeWidth={stroke.width}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            );
-          }
-          // Text box
-          const box = layer.box;
-          const idx = layer.idx;
-          return (
-            <div
-              key={`t-${idx}`}
-              className="absolute"
-              style={{
-                left: `${box.x * 100}%`,
-                top: `${box.y * 100}%`,
-                width: `${box.boxWidth * 100}%`,
-                transform: box.rotation
-                  ? `rotate(${box.rotation}deg)`
-                  : undefined,
-                cursor: mode === "text" ? "move" : "pointer",
-                touchAction: "none",
-                pointerEvents: mode === "draw" ? "none" : "auto",
-                zIndex: layer.z,
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                handleTextDragStart(
-                  idx,
-                  e.touches[0].clientX,
-                  e.touches[0].clientY,
-                );
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                handleTextDragStart(idx, e.clientX, e.clientY);
-              }}
-            >
-              <div
-                style={{
-                  color: adjustHexLightness(box.color, box.colorLightness),
-                  fontSize: `${box.fontSize}px`,
-                  lineHeight: 1.3,
-                  borderColor:
-                    box.borderStyle === "none"
-                      ? "transparent"
-                      : box.borderColor,
-                  borderStyle:
-                    box.borderStyle === "none" ? "none" : box.borderStyle,
-                  borderWidth:
-                    box.borderStyle === "none" ? 0 : `${box.borderWidth}px`,
-                  borderRadius: `${box.borderRadius}px`,
-                  backgroundColor: hexToRgba(box.bgColor, box.bgOpacity),
-                  padding: "2px 4px",
-                  wordBreak: "break-word",
-                  userSelect: "none",
-                }}
-                className={
-                  editingTextIdx === idx
-                    ? "ring-1 ring-white/50 ring-dashed"
-                    : ""
-                }
-              >
-                {box.text}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Active-drawing canvas — on top only in draw mode */}
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0"
-          style={{
-            touchAction: "none",
-            cursor: mode === "draw" ? "crosshair" : "default",
-            zIndex: 999999,
-            pointerEvents: mode === "draw" ? "auto" : "none",
-          }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-        />
-
-        {/* Dashed border highlighting the editable region */}
+        {/* Annotation overlay */}
         <div
-          className="absolute inset-0 border-2 border-dashed border-white/40 rounded-2xl pointer-events-none"
-          style={{ zIndex: 1000000 }}
-        />
+          ref={overlayRef}
+          className={isFullscreen ? "relative" : "absolute"}
+          style={
+            isFullscreen
+              ? {
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: "1rem",
+                  overflow: "hidden",
+                }
+              : {
+                  top: bubbleRect.top - 8,
+                  left: bubbleRect.left,
+                  width: bubbleRect.width,
+                  height: bubbleRect.height,
+                  borderRadius: "1rem",
+                  overflow: "hidden",
+                  zIndex: 0,
+                  pointerEvents: "auto" as const,
+                }
+          }
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Bubble content clone (fullscreen only) */}
+          {isFullscreen && (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ zIndex: -1, borderRadius: "1rem" }}
+              ref={(el) => {
+                if (el && bubbleCloneRef.current) {
+                  el.innerHTML = "";
+                  el.appendChild(bubbleCloneRef.current);
+                }
+              }}
+            />
+          )}
+          {/* Interleaved layers: strokes (SVG) and text boxes sorted by zOrder */}
+          {sortedLayers.map((layer) => {
+            if (layer.kind === "stroke") {
+              const stroke = layer.stroke;
+              if (stroke.points.length < 2) return null;
+              const bw = bubbleRef.offsetWidth;
+              const bh = bubbleRef.offsetHeight;
+              const d = stroke.points
+                .map((p, pi) =>
+                  pi === 0
+                    ? `M${p.x * bw} ${p.y * bh}`
+                    : `L${p.x * bw} ${p.y * bh}`,
+                )
+                .join(" ");
+              return (
+                <svg
+                  key={`s-${layer.idx}`}
+                  className="absolute inset-0 pointer-events-none"
+                  viewBox={`0 0 ${bw} ${bh}`}
+                  style={{ zIndex: layer.z }}
+                >
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={stroke.color}
+                    strokeWidth={stroke.width}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              );
+            }
+            // Text box
+            const box = layer.box;
+            const idx = layer.idx;
+            return (
+              <div
+                key={`t-${idx}`}
+                className="absolute"
+                style={{
+                  left: `${box.x * 100}%`,
+                  top: `${box.y * 100}%`,
+                  width: `${box.boxWidth * 100}%`,
+                  transform: box.rotation
+                    ? `rotate(${box.rotation}deg)`
+                    : undefined,
+                  cursor: mode === "text" ? "move" : "pointer",
+                  touchAction: "none",
+                  pointerEvents: mode === "draw" ? "none" : "auto",
+                  zIndex: layer.z,
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleTextDragStart(
+                    idx,
+                    e.touches[0].clientX,
+                    e.touches[0].clientY,
+                  );
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleTextDragStart(idx, e.clientX, e.clientY);
+                }}
+              >
+                <div
+                  style={{
+                    color: adjustHexLightness(box.color, box.colorLightness),
+                    fontSize: `${box.fontSize}px`,
+                    lineHeight: 1.3,
+                    borderColor:
+                      box.borderStyle === "none"
+                        ? "transparent"
+                        : box.borderColor,
+                    borderStyle:
+                      box.borderStyle === "none" ? "none" : box.borderStyle,
+                    borderWidth:
+                      box.borderStyle === "none" ? 0 : `${box.borderWidth}px`,
+                    borderRadius: `${box.borderRadius}px`,
+                    backgroundColor: hexToRgba(box.bgColor, box.bgOpacity),
+                    padding: "2px 4px",
+                    wordBreak: "break-word",
+                    userSelect: "none",
+                  }}
+                  className={
+                    editingTextIdx === idx
+                      ? "ring-1 ring-white/50 ring-dashed"
+                      : ""
+                  }
+                >
+                  {box.text}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Active-drawing canvas — on top only in draw mode */}
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0"
+            style={{
+              touchAction: "none",
+              cursor: mode === "draw" ? "crosshair" : "default",
+              zIndex: 999999,
+              pointerEvents: mode === "draw" ? "auto" : "none",
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          />
+
+          {/* Dashed border highlighting the editable region */}
+          <div
+            className="absolute inset-0 border-2 border-dashed border-white/40 rounded-2xl pointer-events-none"
+            style={{ zIndex: 1000000 }}
+          />
+        </div>
       </div>
 
       {/* ── Toolbar ─────────────────────────────────────────────── */}
@@ -788,6 +1075,38 @@ export function BubbleAnnotationEditor({
           </button>
 
           <div className="w-px h-5 bg-white/10" />
+
+          {/* Fullscreen */}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-all"
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          >
+            <svg
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              {isFullscreen ? (
+                <>
+                  <polyline points="4 14 4 20 10 20" />
+                  <polyline points="20 10 20 4 14 4" />
+                  <polyline points="14 20 20 20 20 14" />
+                  <polyline points="10 4 4 4 4 10" />
+                </>
+              ) : (
+                <>
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <polyline points="21 15 21 21 15 21" />
+                  <polyline points="3 9 3 3 9 3" />
+                </>
+              )}
+            </svg>
+          </button>
 
           {/* Save */}
           <button
