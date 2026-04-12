@@ -46,11 +46,33 @@ let _transformers: HFTransformers | null = null;
 
 async function getTransformers(): Promise<HFTransformers> {
   if (!_transformers) {
-    _transformers = await import(
-      "@huggingface/transformers"
-    ) as unknown as HFTransformers;
+    console.log("[modelLoader] Starting dynamic import of @huggingface/transformers…");
+    console.time("[modelLoader] import duration");
+    try {
+      const mod = await import(
+        "@huggingface/transformers"
+      );
+      console.timeEnd("[modelLoader] import duration");
+      console.log("[modelLoader] TRY-BRANCH — import resolved");
+      _transformers = mod as unknown as HFTransformers;
+      console.log("[modelLoader] assigned OK");
+    } catch (e) {
+      console.timeEnd("[modelLoader] import duration");
+      console.log("[modelLoader] CATCH-BRANCH — import FAILED");
+      console.log("[modelLoader] error type:", typeof e);
+      console.log("[modelLoader] error toString:", String(e));
+      console.log("[modelLoader] error message:", (e as Error)?.message ?? "no message");
+      console.log("[modelLoader] error name:", (e as Error)?.name ?? "no name");
+      try { console.log("[modelLoader] error stack:", (e as Error)?.stack ?? "no stack"); } catch { console.log("[modelLoader] could not get stack"); }
+      try { console.log("[modelLoader] JSON:", JSON.stringify(e)); } catch { console.log("[modelLoader] not JSON-able"); }
+      throw e;
+    }
     _transformers.env.allowLocalModels = false;
     _transformers.env.allowRemoteModels = true;
+    console.log("[modelLoader] env configured:", JSON.stringify({
+      allowLocalModels: _transformers.env.allowLocalModels,
+      allowRemoteModels: _transformers.env.allowRemoteModels,
+    }));
   }
   return _transformers;
 }
@@ -83,21 +105,40 @@ export async function getModel(
   onProgress?: ProgressCallback,
 ) {
   // Return cached instance
-  if (instances.has(key)) return instances.get(key)!;
+  if (instances.has(key)) {
+    console.log(`[modelLoader] Cache hit for "${key}"`);
+    return instances.get(key)!;
+  }
 
   // Return in-flight promise if already loading
-  if (loading.has(key)) return loading.get(key)!;
+  if (loading.has(key)) {
+    console.log(`[modelLoader] Already loading "${key}", awaiting…`);
+    return loading.get(key)!;
+  }
 
+  console.log(`[modelLoader] Loading transformers module…`);
   const t = await getTransformers();
+  console.log(`[modelLoader] Transformers loaded. Creating pipeline "${MODELS[key].task}" with model "${MODELS[key].model}"…`);
   const { task, model } = MODELS[key];
 
+  const wrappedProgress: ProgressCallback = (info) => {
+    console.log(`[modelLoader] progress:`, info.status, info.file ?? "", info.progress ?? "");
+    onProgress?.(info);
+  };
+
   const promise = t.pipeline(task, model, {
-    progress_callback: onProgress,
+    progress_callback: wrappedProgress,
     dtype: "fp32",
   }).then((pipe: unknown) => {
+    console.log(`[modelLoader] Pipeline "${key}" ready!`);
     instances.set(key, pipe);
     loading.delete(key);
     return pipe;
+  }).catch((err: unknown) => {
+    console.error(`[modelLoader] Pipeline "${key}" FAILED:`, err);
+    console.error(`[modelLoader] Stack:`, (err as Error).stack);
+    loading.delete(key);
+    throw err;
   });
 
   loading.set(key, promise);

@@ -40,11 +40,22 @@ const nextConfig = {
           "onnxruntime-web",
         ];
       } else {
-        // Client: prevent onnxruntime-node (native addon) from being bundled
+        // Client: prevent onnxruntime-node (native addon) from being bundled.
         config.resolve.alias = {
           ...config.resolve.alias,
           "onnxruntime-node": false,
         };
+        // onnxruntime-web's webgpu bundle uses static
+        //   new URL("*.wasm", import.meta.url)
+        // patterns. Webpack transforms these into its RelativeURL
+        // constructor which crashes ("url.replace is not a function").
+        // Disable URL dependency parsing for that file so the browser's
+        // native URL constructor is used instead. WASM ultimately loads
+        // from CDN because @huggingface/transformers overrides the path.
+        config.module.rules.push({
+          test: /ort\.webgpu\.bundle\.min\.mjs$/,
+          parser: { url: false },
+        });
         config.module.rules.push({
           test: /\.node$/,
           use: "null-loader",

@@ -215,14 +215,11 @@ export default function TattooSegmenter() {
     setCurrentStep("segmentation");
 
     try {
-      // Convert base64 to object URL for the segmentation function
-      const blob = await fetch(`data:image/png;base64,${inputBase64}`).then(
-        (r) => r.blob(),
-      );
-      const url = URL.createObjectURL(blob);
+      // Pass data URL directly — blob URLs cause issues with HF transformers caching
+      const dataUrl = `data:image/png;base64,${inputBase64}`;
 
       const result = await runSegmentation(
-        url,
+        dataUrl,
         sourceImage.width,
         sourceImage.height,
         (info) => {
@@ -243,7 +240,6 @@ export default function TattooSegmenter() {
         },
       );
 
-      URL.revokeObjectURL(url);
       updateStep("segmentation", {
         progress: 90,
         message: "Generating ink mask…",

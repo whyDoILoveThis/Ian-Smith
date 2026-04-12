@@ -9,7 +9,28 @@
 import React, { useCallback, useState } from "react";
 import { useUnwrapStore } from "../store";
 import type { DepthMapResult } from "../types";
-import { getModel, getRawImage, type ProgressCallback } from "../modelLoader";
+import { getModel, type ProgressCallback } from "../modelLoader";
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+
+/** Convert a blob: URL (or any image src) to a data-URL so the
+ *  HF transformers pipeline can process it without hitting
+ *  browser-only blob-URL limitations in its caching layer. */
+async function toDataURL(src: string): Promise<string> {
+  if (src.startsWith("data:")) return src;
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  await new Promise<void>((res, rej) => {
+    img.onload = () => res();
+    img.onerror = rej;
+    img.src = src;
+  });
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  c.getContext("2d")!.drawImage(img, 0, 0);
+  return c.toDataURL("image/png");
+}
 
 /* ── Real depth estimation via Depth-Anything-V2 ────────────── */
 async function estimateDepth(
@@ -17,22 +38,60 @@ async function estimateDepth(
   onProgress?: ProgressCallback,
 ): Promise<DepthMapResult> {
   // 1. Load the depth-estimation pipeline (downloads model on first run)
-  const depthPipe = await getModel("depth", onProgress);
+  console.log("[DepthMapper] Step 1: loading model…");
+  let depthPipe: unknown;
+  try {
+    depthPipe = await getModel("depth", onProgress);
+    console.log("[DepthMapper] Model loaded OK, type:", typeof depthPipe);
+  } catch (e) {
+    console.error("[DepthMapper] MODEL LOAD ERROR:", e);
+    throw e;
+  }
 
-  // 2. Load the image into a RawImage for the pipeline
-  const RawImage = await getRawImage();
-  const rawImg = await RawImage.fromURL(imgSrc);
+  // 2. Convert blob URL → data URL
+  console.log(
+    "[DepthMapper] Step 2: converting to data URL, src type:",
+    typeof imgSrc,
+    "starts with:",
+    imgSrc?.slice(0, 30),
+  );
+  let dataUrl: string;
+  try {
+    dataUrl = await toDataURL(imgSrc);
+    console.log(
+      "[DepthMapper] Data URL ready, length:",
+      dataUrl.length,
+      "starts with:",
+      dataUrl.slice(0, 30),
+    );
+  } catch (e) {
+    console.error("[DepthMapper] DATA URL CONVERSION ERROR:", e);
+    throw e;
+  }
 
   // 3. Run Depth-Anything-V2-Small inference
-  const output = await (depthPipe as Function)(rawImg);
+  console.log("[DepthMapper] Step 3: running inference…");
+  let output: unknown;
+  try {
+    output = await (depthPipe as Function)(dataUrl);
+    console.log(
+      "[DepthMapper] Inference OK, output keys:",
+      output ? Object.keys(output as object) : "null",
+    );
+  } catch (e) {
+    console.error("[DepthMapper] INFERENCE ERROR:", e);
+    console.error("[DepthMapper] Full stack:", (e as Error).stack);
+    throw e;
+  }
 
   // 4. Extract depth data — output format varies by library version:
   //    - { predicted_depth: RawImage }  → .width, .height, .data
   //    - { predicted_depth: Tensor }    → .dims [H, W], .data
   //    - [ { predicted_depth } ]        → array wrapper
-  const depthObj = Array.isArray(output)
-    ? (output[0].predicted_depth ?? output[0])
-    : (output.predicted_depth ?? output);
+  const out = output as any;
+  const depthObj = Array.isArray(out)
+    ? (out[0].predicted_depth ?? out[0])
+    : (out.predicted_depth ?? out);
 
   // Get dimensions — try .width/.height, then .dims, then .size
   let w: number;
@@ -60,17 +119,17 @@ async function estimateDepth(
     h = Math.round(Array.isArray(sz) ? sz[sz.length - 2] : sz);
     raw = depthObj.data;
   } else {
-    // Last resort: use input image dimensions
-    const ri = rawImg as any;
-    const inputW = Math.round(
-      ri?.width ?? ri?.dims?.[ri.dims.length - 1] ?? 256,
-    );
-    const inputH = Math.round(
-      ri?.height ?? ri?.dims?.[ri.dims.length - 2] ?? 256,
-    );
+    // Last resort: load the source image to get its dimensions
+    const tmpImg = new Image();
+    tmpImg.crossOrigin = "anonymous";
+    await new Promise<void>((res, rej) => {
+      tmpImg.onload = () => res();
+      tmpImg.onerror = rej;
+      tmpImg.src = imgSrc;
+    });
     raw = depthObj.data ?? depthObj;
-    w = inputW;
-    h = inputH;
+    w = tmpImg.naturalWidth || 256;
+    h = tmpImg.naturalHeight || 256;
   }
 
   // Safety: ensure valid integer dimensions
