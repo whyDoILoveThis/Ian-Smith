@@ -28,6 +28,7 @@
     "face-api.js": "^0.22.2",
     "firebase": "^10.12.3",
     "framer-motion": "^12.23.12",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.408.0",
     "next": "14.2.5",
     "next-themes": "^0.3.0",

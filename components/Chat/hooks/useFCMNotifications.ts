@@ -288,6 +288,71 @@ export function useFCMNotifications({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomPath, slotId, fcmEnabled, isUnlocked]);
 
+  // ── Refresh token on focus / visibility / online ───────────────────
+  // FCM tokens can be silently invalidated by the browser (e.g. after
+  // long idle periods, browser updates, or when storage is cleared).
+  // To make sure background pushes keep arriving, re-fetch the token
+  // and re-register it whenever the user comes back to the app.
+  useEffect(() => {
+    if (!fcmEnabled || !isUnlocked || !slotId || !roomPath) return;
+    if (typeof window === "undefined") return;
+
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidKey) return;
+
+    let lastRefresh = 0;
+    const REFRESH_COOLDOWN_MS = 60_000; // don't refresh more than once a minute
+
+    const refresh = async (reason: string) => {
+      const now = Date.now();
+      if (now - lastRefresh < REFRESH_COOLDOWN_MS) return;
+      lastRefresh = now;
+
+      if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+
+      try {
+        const token = await getFCMToken(vapidKey);
+        if (!token) {
+          console.warn("[FCM] Token refresh returned null on", reason);
+          return;
+        }
+        if (token !== tokenRef.current) {
+          console.log("[FCM] Token rotated on", reason);
+        }
+        await registerToken(token);
+      } catch (err) {
+        console.warn("[FCM] Token refresh failed on", reason, err);
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh("visibilitychange");
+    };
+    const onFocus = () => refresh("focus");
+    const onOnline = () => refresh("online");
+    const onPageShow = (e: PageTransitionEvent) => {
+      // bfcache restore — token may be stale
+      if (e.persisted) refresh("pageshow-bfcache");
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("pageshow", onPageShow);
+
+    // Also do a one-time refresh shortly after mount in case the
+    // initial registration above used a cached/expired token.
+    const initial = setTimeout(() => refresh("mount"), 2000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("pageshow", onPageShow);
+      clearTimeout(initial);
+    };
+  }, [fcmEnabled, isUnlocked, slotId, roomPath, registerToken]);
+
   // ── NO unmount cleanup ─────────────────────────────────────────────
   // Intentionally NOT removing the token on unmount.  The FCM token must
   // persist in RTDB so that the other user can send pushes even after

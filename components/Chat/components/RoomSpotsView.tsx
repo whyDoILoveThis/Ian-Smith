@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { ref, get, query, orderByKey, update } from "firebase/database";
+import {
+  ref,
+  get,
+  push,
+  query,
+  orderByKey,
+  update,
+  set,
+} from "firebase/database";
 import { rtdb } from "@/lib/firebaseConfig";
 import { RING_COLORS, THEME_COLORS } from "../constants";
 import type { Message, Slots, TttState, ThemeColors } from "../types";
@@ -10,6 +18,7 @@ import { ColorWheelPicker } from "./ColorWheelPicker";
 import { PhotoGalleryOverlay } from "./PhotoGalleryOverlay";
 import { DrawingGalleryOverlay } from "./DrawingGalleryOverlay";
 import { VideoGalleryOverlay } from "./VideoGalleryOverlay";
+import EmojiText from "@/components/ui/EmojiText";
 
 // ─── Tic-Tac-Toe winning line overlay ───────────────────────────────────────
 function WinningLineOverlay({
@@ -95,6 +104,30 @@ function Section({
   );
 }
 
+type JsonBackupScope = "room" | "messages";
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function deepMergeJson(
+  current: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...current };
+
+  for (const [key, incomingValue] of Object.entries(incoming)) {
+    const currentValue = merged[key];
+    if (isPlainObject(currentValue) && isPlainObject(incomingValue)) {
+      merged[key] = deepMergeJson(currentValue, incomingValue);
+    } else {
+      merged[key] = incomingValue;
+    }
+  }
+
+  return merged;
+}
+
 // ─── Props ──────────────────────────────────────────────────────────────────
 type RoomSpotsViewProps = {
   slots: Slots;
@@ -110,7 +143,7 @@ type RoomSpotsViewProps = {
   isLeaving: boolean;
   error: string | null;
   handleJoin: (passkey?: string) => void;
-  handleLeave: () => void;
+  handleLeave: (keepMedia?: boolean) => void;
   tttState: TttState | null;
   handleTttMove: (index: number) => void;
   handleTttReset: () => void;
@@ -224,6 +257,7 @@ export function RoomSpotsView({
 
   const LEAVE_CONFIRMATION = "yesireallywanttoactuallyleavefrfr";
   const canLeave = leaveConfirmText === LEAVE_CONFIRMATION;
+  const [keepMedia, setKeepMedia] = useState(false);
 
   // Join passkey
   const [joinPasskey, setJoinPasskey] = useState("");
@@ -272,6 +306,32 @@ export function RoomSpotsView({
   >([]);
   const [smLogs, setSmLogs] = useState<string[]>([]);
   const smLogsEndRef = useRef<HTMLDivElement | null>(null);
+  const smImportInputRef = useRef<HTMLInputElement | null>(null);
+  const [smImportScope, setSmImportScope] = useState<JsonBackupScope>("room");
+  const [smImportLoading, setSmImportLoading] = useState(false);
+  const [smPendingImport, setSmPendingImport] = useState<{
+    data: Record<string, unknown>;
+    fileName: string;
+    messageCount: number;
+    scope: JsonBackupScope;
+    duplicateKeys: string[];
+    newKeys: string[];
+    step: "choose-mode" | "choose-duplicate-action";
+  } | null>(null);
+  const [smDupBusy, setSmDupBusy] = useState(false);
+  const [smDupProgress, setSmDupProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  const [smDupResult, setSmDupResult] = useState<string | null>(null);
+  const [smDuplicateGroups, setSmDuplicateGroups] = useState<
+    Array<{
+      signature: string;
+      keepId: string;
+      duplicateIds: string[];
+      preview: string;
+    }>
+  >([]);
 
   // Source file browser state
   const [showSrcBrowser, setShowSrcBrowser] = useState(false);
@@ -290,6 +350,11 @@ export function RoomSpotsView({
   const [srcSelected, setSrcSelected] = useState<Set<string>>(new Set());
   const [srcLoading, setSrcLoading] = useState(false);
   const [srcDeleting, setSrcDeleting] = useState(false);
+  const [srcDownloading, setSrcDownloading] = useState(false);
+  const [srcDownloadProgress, setSrcDownloadProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [srcResult, setSrcResult] = useState<string | null>(null);
 
   // Spot name editing
@@ -320,6 +385,553 @@ export function RoomSpotsView({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showIndicatorColorPicker]);
+
+  const handleExportConvoJson = useCallback(
+    async (scope: JsonBackupScope) => {
+      setSmResult(null);
+      try {
+        const exportPath =
+          scope === "messages" ? `${roomPath}/messages` : roomPath;
+        const snap = await get(ref(rtdb, exportPath));
+        const payload = {
+          type: "firebase-rtdb-convo-backup",
+          version: 1,
+          scope,
+          exportedAt: new Date().toISOString(),
+          roomPath,
+          data: snap.val() || {},
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        const safeRoomName = roomPath.replace(/[^a-z0-9_-]+/gi, "-");
+        anchor.href = url;
+        anchor.download =
+          scope === "messages"
+            ? `${safeRoomName || "conversation"}-messages-backup.json`
+            : `${safeRoomName || "conversation"}-backup.json`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        setSmResult(
+          scope === "messages"
+            ? "✅ Messages JSON exported."
+            : "✅ Conversation JSON exported.",
+        );
+      } catch {
+        setSmResult(
+          scope === "messages"
+            ? "❌ Failed to export messages JSON."
+            : "❌ Failed to export conversation JSON.",
+        );
+      }
+    },
+    [roomPath],
+  );
+
+  const finalizeImportConvoJson = useCallback(
+    async (
+      scope: JsonBackupScope,
+      data: Record<string, unknown>,
+      mode: "overwrite" | "merge",
+      duplicateAction: "replace" | "add" | "skip" = "replace",
+      duplicateKeys: string[] = [],
+    ) => {
+      setSmBusy(true);
+      setSmResult(null);
+      try {
+        // Build a messages payload respecting the duplicateAction
+        const applyDuplicateAction = (
+          messagesData: Record<string, unknown>,
+        ): Record<string, unknown> => {
+          if (duplicateKeys.length === 0 || duplicateAction === "replace") {
+            return messagesData;
+          }
+          if (duplicateAction === "skip") {
+            const filtered: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(messagesData)) {
+              if (!duplicateKeys.includes(k)) filtered[k] = v;
+            }
+            return filtered;
+          }
+          // "add" — re-key duplicates under fresh push IDs
+          const reKeyed: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(messagesData)) {
+            if (duplicateKeys.includes(k)) {
+              const newKey = push(ref(rtdb, `${roomPath}/messages`)).key ?? k;
+              reKeyed[newKey] = v;
+            } else {
+              reKeyed[k] = v;
+            }
+          }
+          return reKeyed;
+        };
+
+        // ── Helper: sanitize a value so no full key path from root exceeds 768 bytes ──
+        // Firebase measures the actual path string length including all "/" separators.
+        // We track it by passing the real path string down each level and stringify
+        // any subtree whose child path would exceed the limit.
+        const RTDB_MAX_KEY_PATH = 760; // 8-byte safety margin
+
+        const sanitizeValue = (
+          value: unknown,
+          currentPath: string,
+        ): unknown => {
+          if (value === null || value === undefined) return value;
+          if (typeof value !== "object") return value;
+          const obj = value as Record<string, unknown>;
+          const safe: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(obj)) {
+            const childPath = `${currentPath}/${k}`;
+            if (childPath.length > RTDB_MAX_KEY_PATH) {
+              // Serialize this entire subtree as a compact JSON string leaf
+              safe[k] = JSON.stringify(v);
+            } else if (v !== null && typeof v === "object") {
+              safe[k] = sanitizeValue(v, childPath);
+            } else {
+              safe[k] = v;
+            }
+          }
+          return safe;
+        };
+
+        // Helper: write messages one-at-a-time (still in 50-parallel chunks) with progress
+        const writeMessagesInBatches = async (
+          messagesPayload: Record<string, unknown>,
+        ) => {
+          const entries = Object.entries(messagesPayload);
+          const BATCH = 50;
+          let failed = 0;
+          setSmProgress({ done: 0, total: entries.length, failed: 0 });
+          for (let i = 0; i < entries.length; i += BATCH) {
+            const chunk = entries.slice(i, i + BATCH);
+            await Promise.all(
+              chunk.map(async ([msgId, msgValue]) => {
+                const basePath = `${roomPath}/messages/${msgId}`;
+                const safeValue = sanitizeValue(msgValue, basePath);
+                try {
+                  await set(ref(rtdb, basePath), safeValue);
+                } catch (e) {
+                  // Field-by-field fallback: serialize every object field as a string
+                  if (
+                    e instanceof Error &&
+                    e.message.includes("key path longer")
+                  ) {
+                    const fields = Object.entries(
+                      safeValue as Record<string, unknown>,
+                    );
+                    for (const [field, fval] of fields) {
+                      try {
+                        await set(
+                          ref(rtdb, `${basePath}/${field}`),
+                          typeof fval === "object" && fval !== null
+                            ? JSON.stringify(fval)
+                            : fval,
+                        );
+                      } catch {
+                        failed++;
+                      }
+                    }
+                  } else {
+                    failed++;
+                  }
+                }
+              }),
+            );
+            setSmProgress({
+              done: Math.min(i + BATCH, entries.length),
+              total: entries.length,
+              failed,
+            });
+          }
+        };
+
+        if (scope === "messages") {
+          const payload = applyDuplicateAction(data);
+          const count = Object.keys(payload).length;
+          await writeMessagesInBatches(payload);
+          setSmResult(`✅ Imported ${count} message${count === 1 ? "" : "s"}.`);
+          return;
+        }
+
+        if (mode === "merge") {
+          // Apply duplicate action to the messages subtree before merging
+          const messagesInData = isPlainObject(data.messages)
+            ? (data.messages as Record<string, unknown>)
+            : null;
+          const mergeData = messagesInData
+            ? { ...data, messages: applyDuplicateAction(messagesInData) }
+            : data;
+
+          const currentSnap = await get(ref(rtdb, roomPath));
+          const currentData = isPlainObject(currentSnap.val())
+            ? (currentSnap.val() as Record<string, unknown>)
+            : {};
+          const mergedData = deepMergeJson(currentData, mergeData);
+          await set(ref(rtdb, roomPath), mergedData);
+          setSmResult("✅ Conversation JSON merged into the current convo.");
+          return;
+        }
+
+        // Overwrite — clear room first, write top-level keys, then batch-upload messages
+        const { messages: messagesOverwrite, ...rootData } = data;
+        await set(ref(rtdb, roomPath), null);
+        for (const [key, value] of Object.entries(rootData)) {
+          await set(ref(rtdb, `${roomPath}/${key}`), value);
+        }
+        if (isPlainObject(messagesOverwrite)) {
+          await writeMessagesInBatches(
+            messagesOverwrite as Record<string, unknown>,
+          );
+        }
+        setSmResult(
+          "✅ Conversation JSON imported and overwrote the current convo.",
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Import failed.";
+        setSmResult(`❌ ${msg}`);
+      } finally {
+        setSmBusy(false);
+        setSmProgress(null);
+        setSmPendingImport(null);
+        if (smImportInputRef.current) {
+          smImportInputRef.current.value = "";
+        }
+      }
+    },
+    [roomPath],
+  );
+
+  const handleImportConvoJson = useCallback(
+    async (file: File, requestedScope: JsonBackupScope) => {
+      setSmResult(null);
+      setSmImportLoading(true);
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text) as
+          | {
+              type?: string;
+              version?: number;
+              scope?: JsonBackupScope;
+              roomPath?: string;
+              data?: unknown;
+            }
+          | Record<string, unknown>;
+        const fileScope =
+          parsed && typeof parsed === "object" && "scope" in parsed
+            ? ((parsed as { scope?: JsonBackupScope }).scope ?? "room")
+            : "room";
+        const importedData =
+          parsed && typeof parsed === "object" && "data" in parsed
+            ? (parsed as { data?: unknown }).data
+            : parsed;
+
+        if (!importedData || typeof importedData !== "object") {
+          throw new Error("Invalid JSON backup file.");
+        }
+
+        // Resolve the messages object from the import
+        const importedMessages: Record<string, unknown> | null =
+          requestedScope === "messages"
+            ? fileScope === "messages"
+              ? isPlainObject(importedData)
+                ? importedData
+                : null
+              : isPlainObject(importedData) &&
+                  isPlainObject(importedData.messages)
+                ? importedData.messages
+                : null
+            : isPlainObject(importedData) &&
+                isPlainObject(importedData.messages)
+              ? importedData.messages
+              : null;
+
+        if (requestedScope === "messages" && !importedMessages) {
+          throw new Error(
+            "This file does not contain a valid messages backup.",
+          );
+        }
+
+        if (requestedScope === "room" && !isPlainObject(importedData)) {
+          throw new Error(
+            "This file does not contain a valid conversation backup.",
+          );
+        }
+
+        // Fetch current messages to detect duplicates
+        const currentMsgsSnap = await get(ref(rtdb, `${roomPath}/messages`));
+        const currentMsgKeys = new Set<string>(
+          currentMsgsSnap.val() && isPlainObject(currentMsgsSnap.val())
+            ? Object.keys(currentMsgsSnap.val() as Record<string, unknown>)
+            : [],
+        );
+
+        const importedMsgKeys = importedMessages
+          ? Object.keys(importedMessages)
+          : [];
+        const duplicateKeys = importedMsgKeys.filter((k) =>
+          currentMsgKeys.has(k),
+        );
+        const newKeys = importedMsgKeys.filter((k) => !currentMsgKeys.has(k));
+
+        const data =
+          requestedScope === "messages"
+            ? (importedMessages as Record<string, unknown>)
+            : (importedData as Record<string, unknown>);
+
+        setSmPendingImport({
+          data,
+          fileName: file.name,
+          messageCount: importedMsgKeys.length,
+          scope: requestedScope,
+          duplicateKeys,
+          newKeys,
+          step:
+            requestedScope === "room"
+              ? "choose-mode"
+              : "choose-duplicate-action",
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Import failed.";
+        setSmResult(`❌ ${msg}`);
+      } finally {
+        setSmImportLoading(false);
+        if (smImportInputRef.current) {
+          smImportInputRef.current.value = "";
+        }
+      }
+    },
+    [roomPath],
+  );
+
+  const handleDetectDuplicateMessages = useCallback(async () => {
+    setSmDupBusy(true);
+    setSmDupResult(null);
+    setSmDuplicateGroups([]);
+    setSmDupProgress(null);
+
+    const addLog = (msg: string) => {
+      setSmLogs((prev) => [...prev, msg]);
+      setTimeout(
+        () => smLogsEndRef.current?.scrollIntoView({ behavior: "smooth" }),
+        50,
+      );
+    };
+
+    try {
+      addLog("Scanning messages for duplicate content...");
+      const snap = await get(
+        query(ref(rtdb, `${roomPath}/messages`), orderByKey()),
+      );
+      const val = isPlainObject(snap.val())
+        ? (snap.val() as Record<string, Record<string, unknown>>)
+        : {};
+      const entries = Object.entries(val);
+
+      if (entries.length === 0) {
+        setSmDupResult("No messages found in this room.");
+        addLog("No messages found to scan.");
+        return;
+      }
+
+      setSmDupProgress({ done: 0, total: entries.length });
+
+      const groups = new Map<string, { ids: string[]; preview: string }>();
+      const normalizeCreatedAt = (value: unknown): number | string | null => {
+        if (typeof value === "number" || typeof value === "string") {
+          return value;
+        }
+        if (
+          value &&
+          typeof value === "object" &&
+          "seconds" in (value as Record<string, unknown>)
+        ) {
+          const seconds = (value as { seconds?: unknown }).seconds;
+          return typeof seconds === "number" ? seconds : null;
+        }
+        return null;
+      };
+
+      const previewForMessage = (msg: Record<string, unknown>): string => {
+        if (typeof msg.text === "string" && msg.text.trim().length > 0) {
+          const text = msg.text.trim();
+          return `Text: ${text.length > 48 ? `${text.slice(0, 48)}...` : text}`;
+        }
+        if (
+          typeof msg.imageFileId === "string" ||
+          typeof msg.imageUrl === "string"
+        ) {
+          return "Image message";
+        }
+        if (
+          typeof msg.videoFileId === "string" ||
+          typeof msg.videoUrl === "string"
+        ) {
+          return "Video message";
+        }
+        if (Array.isArray(msg.drawingData) && msg.drawingData.length > 0) {
+          return "Drawing message";
+        }
+        return "Message";
+      };
+
+      for (let i = 0; i < entries.length; i++) {
+        const [msgId, msg] = entries[i];
+        const signature = JSON.stringify({
+          slotId: typeof msg.slotId === "string" ? msg.slotId : "",
+          sender: typeof msg.sender === "string" ? msg.sender : "",
+          text: typeof msg.text === "string" ? msg.text : "",
+          imageUrl: typeof msg.imageUrl === "string" ? msg.imageUrl : "",
+          imageFileId:
+            typeof msg.imageFileId === "string" ? msg.imageFileId : "",
+          videoUrl: typeof msg.videoUrl === "string" ? msg.videoUrl : "",
+          videoFileId:
+            typeof msg.videoFileId === "string" ? msg.videoFileId : "",
+          createdAt: normalizeCreatedAt(msg.createdAt),
+          replyToId: typeof msg.replyToId === "string" ? msg.replyToId : "",
+          replyToSender:
+            typeof msg.replyToSender === "string" ? msg.replyToSender : "",
+          replyToText:
+            typeof msg.replyToText === "string" ? msg.replyToText : "",
+          replyToImageUrl:
+            typeof msg.replyToImageUrl === "string" ? msg.replyToImageUrl : "",
+          isEphemeral: msg.isEphemeral === true,
+          ephemeralDuration:
+            typeof msg.ephemeralDuration === "number"
+              ? msg.ephemeralDuration
+              : null,
+          ephemeralExpired:
+            typeof msg.ephemeralExpired === "string"
+              ? msg.ephemeralExpired
+              : null,
+          drawingData: Array.isArray(msg.drawingData) ? msg.drawingData : null,
+          drawingDuration:
+            typeof msg.drawingDuration === "number"
+              ? msg.drawingDuration
+              : null,
+          bgColor: typeof msg.bgColor === "string" ? msg.bgColor : "",
+          bgEmojis: msg.bgEmojis ?? null,
+          annotations: msg.annotations ?? null,
+        });
+
+        const existing = groups.get(signature);
+        if (existing) {
+          existing.ids.push(msgId);
+        } else {
+          groups.set(signature, {
+            ids: [msgId],
+            preview: previewForMessage(msg),
+          });
+        }
+
+        if ((i + 1) % 25 === 0 || i + 1 === entries.length) {
+          setSmDupProgress({ done: i + 1, total: entries.length });
+        }
+      }
+
+      const duplicateGroups = Array.from(groups.entries())
+        .filter(([, group]) => group.ids.length > 1)
+        .map(([signature, group]) => ({
+          signature,
+          keepId: group.ids[0],
+          duplicateIds: group.ids.slice(1),
+          preview: group.preview,
+        }));
+
+      setSmDuplicateGroups(duplicateGroups);
+      const duplicateCount = duplicateGroups.reduce(
+        (sum, group) => sum + group.duplicateIds.length,
+        0,
+      );
+
+      if (duplicateCount === 0) {
+        setSmDupResult("✅ No duplicates found.");
+        addLog("✅ Duplicate scan complete — none found.");
+      } else {
+        setSmDupResult(
+          `✅ Found ${duplicateCount} duplicate message${duplicateCount === 1 ? "" : "s"} across ${duplicateGroups.length} group${duplicateGroups.length === 1 ? "" : "s"}.`,
+        );
+        addLog(
+          `✅ Found ${duplicateCount} duplicates across ${duplicateGroups.length} groups.`,
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown";
+      setSmDupResult(`❌ Error detecting duplicates: ${msg}`);
+      addLog(`❌ Duplicate scan failed: ${msg}`);
+    } finally {
+      setSmDupBusy(false);
+      setSmDupProgress(null);
+    }
+  }, [roomPath]);
+
+  const handleDeleteDuplicateMessage = useCallback(
+    async (groupIndex: number, msgId: string) => {
+      setSmDupBusy(true);
+      setSmDupResult(null);
+      try {
+        await update(ref(rtdb, `${roomPath}/messages`), {
+          [msgId]: null,
+        } as Record<string, null>);
+
+        setSmDuplicateGroups((prev) =>
+          prev
+            .map((group, idx) =>
+              idx === groupIndex
+                ? {
+                    ...group,
+                    duplicateIds: group.duplicateIds.filter(
+                      (id) => id !== msgId,
+                    ),
+                  }
+                : group,
+            )
+            .filter((group) => group.duplicateIds.length > 0),
+        );
+
+        setSmDupResult("✅ Duplicate message deleted.");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown";
+        setSmDupResult(`❌ Failed to delete duplicate: ${msg}`);
+      } finally {
+        setSmDupBusy(false);
+      }
+    },
+    [roomPath],
+  );
+
+  const handleDeleteAllDuplicateMessages = useCallback(async () => {
+    setSmDupBusy(true);
+    setSmDupResult(null);
+    try {
+      const updates: Record<string, null> = {};
+      for (const group of smDuplicateGroups) {
+        for (const dupId of group.duplicateIds) {
+          updates[dupId] = null;
+        }
+      }
+
+      const totalToDelete = Object.keys(updates).length;
+      if (totalToDelete === 0) {
+        setSmDupResult("No duplicates to delete.");
+        return;
+      }
+
+      await update(ref(rtdb, `${roomPath}/messages`), updates);
+      setSmDuplicateGroups([]);
+      setSmDupResult(
+        `✅ Deleted ${totalToDelete} duplicate message${totalToDelete === 1 ? "" : "s"}.`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown";
+      setSmDupResult(`❌ Failed to delete all duplicates: ${msg}`);
+    } finally {
+      setSmDupBusy(false);
+    }
+  }, [roomPath, smDuplicateGroups]);
 
   // (photo/drawing ready states are remembered once loaded)
 
@@ -431,19 +1043,22 @@ export function RoomSpotsView({
         >
           <span>📋 Update Notes</span>
           <span className="relative flex items-center">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] animate-pulse" />
-            <span className="absolute -right-3 -top-1 h-4 w-4 rounded-full bg-emerald-500 text-[9px] font-bold text-white flex items-center justify-center leading-none">
+            <span
+              className={`text-[10px] transition-transform duration-200 ${showUpdateNotes ? "rotate-180" : ""}`}
+            >
+              ▼
+            </span>
+            <span className="flex text-[9px] justify-center items-center w-3.5 h-3.5 rounded-full bg-emerald-500 font-bold text-white">
               3
             </span>
-          </span>
-          <span
-            className={`text-[10px] transition-transform duration-200 ${showUpdateNotes ? "rotate-180" : ""}`}
-          >
-            ▼
+            <span className="flex animate-pulse text-[9px] justify-center items-center w-2 h-2 -translate-y-1 rounded-full bg-emerald-500 font-bold text-white"></span>
           </span>
         </button>
         {showUpdateNotes && (
-          <div className="rounded-2xl border border-violet-500/30 bg-violet-500/[0.08] p-4 space-y-2 text-xs text-violet-300 leading-relaxed animate-in slide-in-from-top-1 duration-150">
+          <EmojiText
+            as="div"
+            className="rounded-2xl border border-violet-500/30 bg-violet-500/[0.08] p-4 space-y-2 text-xs text-violet-300 leading-relaxed animate-in slide-in-from-top-1 duration-150"
+          >
             {[
               {
                 icon: "⌨️",
@@ -467,14 +1082,14 @@ export function RoomSpotsView({
                 isNew: true,
               },
               {
-                icon: "�",
+                icon: "👥",
                 color: "text-violet-400",
                 title: "Privacy Mode",
                 desc: "Toggle privacy mode to hide messages until you hover — perfect for discreet viewing.",
                 isNew: true,
               },
               {
-                icon: "�📷",
+                icon: "📷",
                 color: "text-emerald-400",
                 title: "Find All Media",
                 desc: "Scan the entire DB for every photo & drawing — counts update in the badge.",
@@ -551,7 +1166,7 @@ export function RoomSpotsView({
                 </p>
               </div>
             ))}
-          </div>
+          </EmojiText>
         )}
 
         {/* ═══════════════════════════════════════════════════════════════
@@ -937,7 +1552,7 @@ export function RoomSpotsView({
                     ? "Searching..."
                     : photosReady
                       ? `Open Gallery (${allPhotoMessages.filter((m) => m.imageUrl).length})`
-                      : "Find All Photos"}
+                      : "Find All"}
                 </button>
               </div>
 
@@ -990,7 +1605,7 @@ export function RoomSpotsView({
                     ? "Searching..."
                     : drawingsReady
                       ? `Open Gallery (${allDrawingMessages.filter((m) => m.drawingData && m.drawingData.length > 0).length})`
-                      : "Find All Drawings"}
+                      : "Find All"}
                 </button>
               </div>
 
@@ -1041,7 +1656,7 @@ export function RoomSpotsView({
                     ? "Searching..."
                     : videosReady
                       ? `Open Gallery (${allVideoMessages.filter((m) => m.videoUrl && !m.isEphemeral).length})`
-                      : "Find All Videos"}
+                      : "Find All"}
                 </button>
               </div>
             </div>
@@ -1463,9 +2078,46 @@ export function RoomSpotsView({
               <p className="text-[10px] text-neutral-600 text-center font-mono">
                 yesireallywanttoactuallyleavefrfr
               </p>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div
+                  onClick={() => setKeepMedia((v) => !v)}
+                  className="relative flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors"
+                  style={{
+                    border: keepMedia
+                      ? "1.5px solid #ef4444"
+                      : "1.5px solid #4b4b55",
+                    background: keepMedia
+                      ? "rgba(239,68,68,0.18)"
+                      : "transparent",
+                  }}
+                >
+                  {keepMedia && (
+                    <svg
+                      className="w-2.5 h-2.5 text-red-400"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                    >
+                      <path
+                        d="M2 6l3 3 5-5"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <span
+                  className="text-[11px] font-medium"
+                  style={{ color: keepMedia ? "#f87171" : "#6b7280" }}
+                  onClick={() => setKeepMedia((v) => !v)}
+                >
+                  Keep Media
+                </span>
+              </label>
               <button
                 onClick={() => {
-                  handleLeave();
+                  handleLeave(keepMedia);
                   setLeaveConfirmText("");
                 }}
                 disabled={!canLeave || isLeaving}
@@ -1923,7 +2575,7 @@ export function RoomSpotsView({
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] text-[#616B7C]">
-                        {smProgress.done} / {smProgress.total} files
+                        {smProgress.done} / {smProgress.total} items
                         {smProgress.failed > 0 && (
                           <span className="text-[#FF6B6B] ml-1">
                             · {smProgress.failed} failed
@@ -2008,6 +2660,139 @@ export function RoomSpotsView({
               </div>
             )}
 
+            {/* Duplicate Detection */}
+            {(smDupProgress || smDupResult || smDuplicateGroups.length > 0) && (
+              <div className="px-5 pb-2 space-y-2">
+                {smDupProgress && (
+                  <div className="space-y-1.5">
+                    <div
+                      className="w-full h-1.5 rounded-full overflow-hidden"
+                      style={{ background: "#2D2D31" }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all duration-300 ease-out"
+                        style={{
+                          width: `${smDupProgress.total > 0 ? Math.round((smDupProgress.done / smDupProgress.total) * 100) : 0}%`,
+                          background:
+                            "linear-gradient(90deg, #FD366E, #FE9567)",
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-[#616B7C]">
+                        Scanning {smDupProgress.done} / {smDupProgress.total}{" "}
+                        messages
+                      </p>
+                      <p className="text-[10px] font-medium text-[#FD366E] tabular-nums">
+                        {Math.round(
+                          (smDupProgress.done / smDupProgress.total) * 100,
+                        )}
+                        %
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {smDupResult && (
+                  <div
+                    className={`rounded-lg px-3 py-2 text-[11px] text-center ${
+                      smDupResult.startsWith("✅")
+                        ? "text-emerald-400"
+                        : "text-[#FD366E]"
+                    }`}
+                    style={{
+                      background: smDupResult.startsWith("✅")
+                        ? "rgba(52,211,153,0.08)"
+                        : "rgba(253,54,110,0.08)",
+                      border: smDupResult.startsWith("✅")
+                        ? "1px solid rgba(52,211,153,0.15)"
+                        : "1px solid rgba(253,54,110,0.15)",
+                    }}
+                  >
+                    {smDupResult}
+                  </div>
+                )}
+
+                {smDuplicateGroups.length > 0 && (
+                  <div
+                    className="rounded-lg overflow-hidden"
+                    style={{
+                      background: "#111114",
+                      border: "1px solid #2D2D31",
+                    }}
+                  >
+                    <div
+                      className="px-2.5 py-1.5 flex items-center justify-between"
+                      style={{ borderBottom: "1px solid #2D2D31" }}
+                    >
+                      <span className="text-[9px] font-medium text-[#616B7C] uppercase tracking-wider">
+                        Duplicate Groups ({smDuplicateGroups.length})
+                      </span>
+                      <button
+                        type="button"
+                        disabled={smDupBusy}
+                        onClick={() => {
+                          void handleDeleteAllDuplicateMessages();
+                        }}
+                        className="rounded px-2 py-1 text-[9px] font-semibold text-white disabled:opacity-50"
+                        style={{
+                          background: "rgba(253,54,110,0.18)",
+                          border: "1px solid rgba(253,54,110,0.25)",
+                        }}
+                      >
+                        Delete All Dups
+                      </button>
+                    </div>
+                    <div className="max-h-[170px] overflow-y-auto p-2 space-y-2">
+                      {smDuplicateGroups.map((group, groupIndex) => (
+                        <div
+                          key={group.signature}
+                          className="rounded-md p-2"
+                          style={{
+                            background: "#1C1C21",
+                            border: "1px solid #2D2D31",
+                          }}
+                        >
+                          <p className="text-[10px] text-[#C3C8D4] leading-relaxed">
+                            {group.preview} · keep {group.keepId.slice(0, 8)}...
+                          </p>
+                          <div className="mt-1.5 space-y-1">
+                            {group.duplicateIds.map((dupId) => (
+                              <div
+                                key={dupId}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <span className="text-[9px] text-[#818999] font-mono">
+                                  {dupId}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={smDupBusy}
+                                  onClick={() => {
+                                    void handleDeleteDuplicateMessage(
+                                      groupIndex,
+                                      dupId,
+                                    );
+                                  }}
+                                  className="rounded px-1.5 py-1 text-[9px] font-medium text-[#FFD5DF] disabled:opacity-50"
+                                  style={{
+                                    background: "rgba(253,54,110,0.12)",
+                                    border: "1px solid rgba(253,54,110,0.2)",
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Check Missing */}
             {smMissing.length > 0 && !smBusy && (
               <div className="px-5 pb-2">
@@ -2029,6 +2814,35 @@ export function RoomSpotsView({
               className="px-5 pb-5 pt-3 flex flex-col gap-2"
               style={{ borderTop: "1px solid #2D2D31" }}
             >
+              <button
+                type="button"
+                disabled={smBusy || smDupBusy}
+                onClick={() => {
+                  void handleDetectDuplicateMessages();
+                }}
+                className="w-full rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                style={{
+                  background: "#1C1C21",
+                  border: "1px solid #2D2D31",
+                  boxShadow:
+                    "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+                }}
+              >
+                {smDupBusy ? "Detecting Duplicates..." : "Detect Duplicates"}
+              </button>
+
+              <input
+                ref={smImportInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  void handleImportConvoJson(file, smImportScope);
+                }}
+              />
+
               {/* Check / Migrate Missing row */}
               <div className="flex gap-2">
                 <button
@@ -2394,6 +3208,128 @@ export function RoomSpotsView({
                 🗂️ Browse Source Files
               </button>
 
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={smBusy}
+                  onClick={() => {
+                    void handleExportConvoJson("room");
+                  }}
+                  className="flex-1 rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+                  }}
+                >
+                  Extract JSON
+                </button>
+                <button
+                  type="button"
+                  disabled={smBusy || smImportLoading}
+                  onClick={() => {
+                    setSmImportScope("room");
+                    smImportInputRef.current?.click();
+                  }}
+                  className="flex-1 rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+                  }}
+                >
+                  {smImportLoading && smImportScope === "room" ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <svg
+                        className="h-3 w-3 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Analyzing...
+                    </span>
+                  ) : (
+                    "Import JSON"
+                  )}
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={smBusy}
+                  onClick={() => {
+                    void handleExportConvoJson("messages");
+                  }}
+                  className="flex-1 rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+                  }}
+                >
+                  Extract Messages JSON
+                </button>
+                <button
+                  type="button"
+                  disabled={smBusy || smImportLoading}
+                  onClick={() => {
+                    setSmImportScope("messages");
+                    smImportInputRef.current?.click();
+                  }}
+                  className="flex-1 rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                  style={{
+                    background: "#1C1C21",
+                    border: "1px solid #2D2D31",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+                  }}
+                >
+                  {smImportLoading && smImportScope === "messages" ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <svg
+                        className="h-3 w-3 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Analyzing...
+                    </span>
+                  ) : (
+                    "Import Messages JSON"
+                  )}
+                </button>
+              </div>
+
               {/* Cancel / Start row */}
               <div className="flex gap-2">
                 <button
@@ -2662,6 +3598,231 @@ export function RoomSpotsView({
         </div>
       )}
 
+      {smPendingImport && (
+        <div className="fixed inset-0 z-[320] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div
+            className="mx-4 w-full max-w-sm rounded-2xl p-0 overflow-hidden"
+            style={{
+              background: "#19191D",
+              border: "1px solid #2D2D31",
+              boxShadow:
+                "0 25px 50px -12px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.04)",
+            }}
+          >
+            {/* Step 1: choose overwrite vs merge (room scope only) */}
+            {smPendingImport.step === "choose-mode" && (
+              <>
+                <div
+                  className="px-5 pt-5 pb-3"
+                  style={{
+                    borderBottom: "1px solid #2D2D31",
+                    background:
+                      "linear-gradient(180deg, rgba(253,54,110,0.06) 0%, transparent 100%)",
+                  }}
+                >
+                  <h3 className="text-sm font-semibold text-white text-center">
+                    Overwrite Or Merge?
+                  </h3>
+                  <p className="mt-2 text-[11px] text-[#818999] text-center leading-relaxed">
+                    You are about to overwrite the convo. Would you like to
+                    merge instead?
+                  </p>
+                  <p className="mt-2 text-[10px] text-[#616B7C] text-center leading-relaxed">
+                    {smPendingImport.fileName}
+                    {smPendingImport.messageCount > 0
+                      ? ` · ${smPendingImport.messageCount} imported messages`
+                      : ""}
+                  </p>
+                </div>
+                <div className="px-5 py-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    disabled={smBusy}
+                    onClick={() => {
+                      if (smPendingImport.duplicateKeys.length > 0) {
+                        setSmPendingImport({
+                          ...smPendingImport,
+                          step: "choose-duplicate-action",
+                        });
+                      } else {
+                        void finalizeImportConvoJson(
+                          smPendingImport.scope,
+                          smPendingImport.data,
+                          "merge",
+                        );
+                      }
+                    }}
+                    className="w-full rounded-lg px-3 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-50"
+                    style={{
+                      background: "linear-gradient(135deg, #FD366E, #FE9567)",
+                      boxShadow:
+                        "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    Merge Instead
+                  </button>
+                  <button
+                    type="button"
+                    disabled={smBusy}
+                    onClick={() => {
+                      void finalizeImportConvoJson(
+                        smPendingImport.scope,
+                        smPendingImport.data,
+                        "overwrite",
+                      );
+                    }}
+                    className="w-full rounded-lg px-3 py-2.5 text-xs font-medium text-[#FFD5DF] transition-colors disabled:opacity-50"
+                    style={{
+                      background: "rgba(253,54,110,0.12)",
+                      border: "1px solid rgba(253,54,110,0.2)",
+                    }}
+                  >
+                    Overwrite Convo
+                  </button>
+                  <button
+                    type="button"
+                    disabled={smBusy}
+                    onClick={() => {
+                      setSmPendingImport(null);
+                      setSmResult("Import cancelled.");
+                    }}
+                    className="w-full rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                    style={{
+                      background: "#1C1C21",
+                      border: "1px solid #2D2D31",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2: handle duplicates */}
+            {smPendingImport.step === "choose-duplicate-action" && (
+              <>
+                <div
+                  className="px-5 pt-5 pb-3"
+                  style={{
+                    borderBottom: "1px solid #2D2D31",
+                    background:
+                      "linear-gradient(180deg, rgba(253,54,110,0.06) 0%, transparent 100%)",
+                  }}
+                >
+                  <h3 className="text-sm font-semibold text-white text-center">
+                    {smPendingImport.duplicateKeys.length} Duplicate
+                    {smPendingImport.duplicateKeys.length === 1 ? "" : "s"}{" "}
+                    Found
+                  </h3>
+                  <p className="mt-2 text-[11px] text-[#818999] text-center leading-relaxed">
+                    Found {smPendingImport.duplicateKeys.length} duplicate
+                    {smPendingImport.duplicateKeys.length === 1
+                      ? ""
+                      : "s"} and {smPendingImport.newKeys.length} new message
+                    {smPendingImport.newKeys.length === 1 ? "" : "s"}. How
+                    should duplicates be handled?
+                  </p>
+                  <p className="mt-2 text-[10px] text-[#616B7C] text-center leading-relaxed">
+                    {smPendingImport.fileName}
+                  </p>
+                </div>
+                <div className="px-5 py-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    disabled={smBusy}
+                    onClick={() => {
+                      void finalizeImportConvoJson(
+                        smPendingImport.scope,
+                        smPendingImport.data,
+                        "merge",
+                        "replace",
+                        smPendingImport.duplicateKeys,
+                      );
+                    }}
+                    className="w-full rounded-lg px-3 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-50"
+                    style={{
+                      background: "linear-gradient(135deg, #FD366E, #FE9567)",
+                      boxShadow:
+                        "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    Replace — overwrite duplicates
+                  </button>
+                  <button
+                    type="button"
+                    disabled={smBusy}
+                    onClick={() => {
+                      void finalizeImportConvoJson(
+                        smPendingImport.scope,
+                        smPendingImport.data,
+                        "merge",
+                        "add",
+                        smPendingImport.duplicateKeys,
+                      );
+                    }}
+                    className="w-full rounded-lg px-3 py-2.5 text-xs font-medium text-[#FFD5DF] transition-colors disabled:opacity-50"
+                    style={{
+                      background: "rgba(253,54,110,0.12)",
+                      border: "1px solid rgba(253,54,110,0.2)",
+                    }}
+                  >
+                    Add — keep both (new ID for duplicates)
+                  </button>
+                  <button
+                    type="button"
+                    disabled={smBusy}
+                    onClick={() => {
+                      void finalizeImportConvoJson(
+                        smPendingImport.scope,
+                        smPendingImport.data,
+                        "merge",
+                        "skip",
+                        smPendingImport.duplicateKeys,
+                      );
+                    }}
+                    className="w-full rounded-lg px-3 py-2.5 text-xs font-medium text-[#C3C8D4] transition-colors disabled:opacity-50"
+                    style={{
+                      background: "#1C1C21",
+                      border: "1px solid #2D2D31",
+                    }}
+                  >
+                    Skip — ignore duplicates, only add new
+                  </button>
+                  {smPendingImport.scope === "room" && (
+                    <button
+                      type="button"
+                      disabled={smBusy}
+                      onClick={() =>
+                        setSmPendingImport({
+                          ...smPendingImport,
+                          step: "choose-mode",
+                        })
+                      }
+                      className="w-full rounded-lg px-3 py-2.5 text-xs font-medium text-[#616B7C] transition-colors disabled:opacity-50"
+                    >
+                      ← Back
+                    </button>
+                  )}
+                  {smPendingImport.scope !== "room" && (
+                    <button
+                      type="button"
+                      disabled={smBusy}
+                      onClick={() => {
+                        setSmPendingImport(null);
+                        setSmResult("Import cancelled.");
+                      }}
+                      className="w-full rounded-lg px-3 py-2.5 text-xs font-medium text-[#616B7C] transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Browse Source Files Modal */}
       {showSrcBrowser && (
         <div className="fixed inset-0 z-[301] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -2913,10 +4074,179 @@ export function RoomSpotsView({
 
             {/* Delete Selected button */}
             {srcSelected.size > 0 && (
-              <div className="mt-3">
+              <div className="mt-3 flex flex-col gap-2">
+                {/* Download progress bar */}
+                {srcDownloadProgress && (
+                  <div className="space-y-1">
+                    <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-400 rounded-full transition-all duration-200"
+                        style={{
+                          width: `${Math.round(
+                            (srcDownloadProgress.done /
+                              Math.max(1, srcDownloadProgress.total)) *
+                              100,
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-neutral-400 text-center">
+                      Downloading {srcDownloadProgress.done} /{" "}
+                      {srcDownloadProgress.total}
+                    </p>
+                  </div>
+                )}
+
+                {/* Download Selected button */}
                 <button
                   type="button"
-                  disabled={srcDeleting}
+                  disabled={srcDownloading || srcDeleting}
+                  onClick={async () => {
+                    setSrcDownloading(true);
+                    setSrcResult(null);
+                    setSrcDownloadProgress({
+                      done: 0,
+                      total: srcSelected.size,
+                    });
+                    try {
+                      const { default: JSZip } = await import("jszip");
+                      const zip = new JSZip();
+                      const selectedFiles = srcFiles.filter((f) =>
+                        srcSelected.has(f.$id),
+                      );
+                      // Track filename collisions
+                      const usedNames = new Map<string, number>();
+                      const failed: string[] = [];
+                      let done = 0;
+
+                      // Download files with limited concurrency (4 at a time)
+                      const CONCURRENCY = 4;
+                      let cursor = 0;
+                      const next = async (): Promise<void> => {
+                        const i = cursor++;
+                        if (i >= selectedFiles.length) return;
+                        const file = selectedFiles[i];
+                        try {
+                          const res = await fetch(file.previewUrl);
+                          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                          const blob = await res.blob();
+                          // Guarantee a unique name in the zip
+                          let name = file.name || file.$id;
+                          // Append extension based on mime type if missing
+                          if (!/\.[a-z0-9]{2,5}$/i.test(name)) {
+                            const extFromMime = file.mimeType
+                              .split("/")[1]
+                              ?.split(";")[0];
+                            if (extFromMime) name += `.${extFromMime}`;
+                          }
+                          const count = usedNames.get(name) || 0;
+                          usedNames.set(name, count + 1);
+                          if (count > 0) {
+                            const dot = name.lastIndexOf(".");
+                            const stem = dot > 0 ? name.slice(0, dot) : name;
+                            const ext = dot > 0 ? name.slice(dot) : "";
+                            name = `${stem} (${count})${ext}`;
+                          }
+                          zip.file(name, blob);
+                        } catch (err) {
+                          console.warn("Failed to download", file.$id, err);
+                          failed.push(file.name || file.$id);
+                        } finally {
+                          done++;
+                          setSrcDownloadProgress({
+                            done,
+                            total: selectedFiles.length,
+                          });
+                        }
+                        return next();
+                      };
+                      await Promise.all(
+                        Array.from(
+                          {
+                            length: Math.min(CONCURRENCY, selectedFiles.length),
+                          },
+                          () => next(),
+                        ),
+                      );
+
+                      const zipBlob = await zip.generateAsync(
+                        { type: "blob" },
+                        (meta) => {
+                          // Map zip generation 0–100 onto same progress bar
+                          setSrcDownloadProgress({
+                            done: Math.round(
+                              (meta.percent / 100) * selectedFiles.length,
+                            ),
+                            total: selectedFiles.length,
+                          });
+                        },
+                      );
+
+                      const url = URL.createObjectURL(zipBlob);
+                      const a = document.createElement("a");
+                      const ts = new Date()
+                        .toISOString()
+                        .replace(/[:.]/g, "-")
+                        .slice(0, 19);
+                      a.href = url;
+                      a.download = `appwrite-files-${ts}.zip`;
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+                      setSrcResult(
+                        failed.length > 0
+                          ? `Downloaded ${selectedFiles.length - failed.length}, ${failed.length} failed`
+                          : `✅ Downloaded ${selectedFiles.length} files`,
+                      );
+                    } catch (err) {
+                      setSrcResult(
+                        `Error: ${err instanceof Error ? err.message : "Unknown"}`,
+                      );
+                    } finally {
+                      setSrcDownloading(false);
+                      setSrcDownloadProgress(null);
+                    }
+                  }}
+                  className="w-full rounded-lg px-3 py-2.5 text-xs font-semibold text-white transition-colors disabled:opacity-40"
+                  style={{
+                    background: "#10b981",
+                    boxShadow:
+                      "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)",
+                  }}
+                >
+                  {srcDownloading ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <svg
+                        className="h-3.5 w-3.5 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Zipping...
+                    </span>
+                  ) : (
+                    `⬇️ Download ${srcSelected.size} as Zip`
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={srcDeleting || srcDownloading}
                   onClick={async () => {
                     if (
                       !confirm(

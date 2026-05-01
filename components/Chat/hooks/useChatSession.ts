@@ -267,21 +267,24 @@ export function useChatSession(
     });
   }, [roomPath]);
 
-  const handleLeave = useCallback(async () => {
+  const handleLeave = useCallback(async (keepMedia = false) => {
     if (!slotId || isLeaving) return;
     setIsLeaving(true);
 
     try {
       const messagesList = await clearAllMessages();
-      const imageFileIds = messagesList
-        .map((msg) => msg.imageFileId)
-        .filter((id): id is string => Boolean(id));
 
-      await Promise.all(
-        imageFileIds.map((fileId) =>
-          appwrImgDelete(fileId).catch(() => undefined),
-        ),
-      );
+      if (!keepMedia) {
+        const imageFileIds = messagesList
+          .map((msg) => msg.imageFileId)
+          .filter((id): id is string => Boolean(id));
+
+        await Promise.all(
+          imageFileIds.map((fileId) =>
+            appwrImgDelete(fileId).catch(() => undefined),
+          ),
+        );
+      }
 
       await remove(ref(rtdb, `${roomPath}/messages`));
       await remove(ref(rtdb, `${roomPath}/slots/${slotId}`));

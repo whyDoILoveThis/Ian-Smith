@@ -39,6 +39,11 @@ messaging.onBackgroundMessage((payload) => {
   const body = notification.body || data.body || "You have a new message";
   const tag = data.tag || "fcm-msg-" + Date.now();
 
+  // Mark tag SYNCHRONOUSLY before any await so the generic `push`
+  // listener (which may fire for the same FCM push) sees it and skips.
+  recentNotifTags[tag] = true;
+  setTimeout(function () { delete recentNotifTags[tag]; }, 10000);
+
   return self.clients
     .matchAll({ type: "window", includeUncontrolled: true })
     .then((clients) => {
@@ -46,9 +51,6 @@ messaging.onBackgroundMessage((payload) => {
         (c) => c.visibilityState === "visible" && c.focused
       );
       if (hasFocusedClient) return; // foreground handler handles it
-      // Mark tag so the VAPID push handler won't show a duplicate
-      recentNotifTags[tag] = true;
-      setTimeout(function() { delete recentNotifTags[tag]; }, 10000);
       return self.registration.showNotification(title, {
         body,
         tag,
@@ -63,7 +65,7 @@ messaging.onBackgroundMessage((payload) => {
 
 // ── PWA Caching ──────────────────────────────────────────────────────
 
-const CACHE_NAME = "pwa-cache-v4"; // bumped to install notification dedup fix
+const CACHE_NAME = "pwa-cache-v5"; // bumped: skip FCM-shaped payloads in generic push listener
 const OFFLINE_URLS = ["/"];
 
 // Install — cache the offline shell
@@ -127,14 +129,32 @@ var recentNotifTags = {};
 
 self.addEventListener("push", (event) => {
   console.log("[SW] VAPID push event received");
-  var data = { title: "New Message", body: "You have a new message", tag: "msg" };
+
+  // Detect FCM-shaped payloads and SKIP — the firebase-messaging SDK's
+  // onBackgroundMessage handler above already shows a notification for
+  // these. Without this guard we would show a duplicate generic
+  // "New Message" notification for every FCM push.
+  var rawPayload = null;
   try {
-    if (event.data) {
-      data = event.data.json();
-    }
+    if (event.data) rawPayload = event.data.json();
   } catch (e) {
-    // use defaults
+    // not JSON — likely text or empty
   }
+
+  if (rawPayload && (
+    // FCM v1 webpush envelope shape
+    typeof rawPayload.from === "string" ||
+    rawPayload.fcmMessageId ||
+    rawPayload.collapse_key ||
+    // FCM data payloads are nested under .data with a notification field absent
+    (rawPayload.data && (rawPayload.data.title || rawPayload.data.body) &&
+     !rawPayload.title && !rawPayload.body)
+  )) {
+    console.log("[SW] Skipping push — FCM payload, handled by onBackgroundMessage");
+    return;
+  }
+
+  var data = rawPayload || { title: "New Message", body: "You have a new message", tag: "msg" };
 
   var tag = data.tag || "msg-" + Date.now();
 
