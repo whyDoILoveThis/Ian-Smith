@@ -6,6 +6,7 @@ export const LINKS = [
    // { name: "Blogs", href: LINK_MY_BLOGS, tagline: "Read my latest blog posts", target: "_blank" },
     { name: "C++ Zone", href: "/its-cpp", tagline: "Explore C++ projects and tutorials", target: "_blank" },
     { name: "Time", href: "/its-time", tagline: "Check the current time gigantically fullscreen", target: "_blank" },
+    { name: "GTA SA Cheats", href: "/gtasacheats", tagline: "All the PC cheats for gta San Andreas", target: "_blank" },
     { name: "Chat", href: "/about", tagline: "Join the chat and connect with others", target: "_self" },
     { name: "ItsPaint", href: "/itspaint", tagline: "Fully featured browser based paint application", target: "_blank" },
     { name: "PathLockV2", href: "/pathlockv2/2p1", tagline: "Visual dish alignment tool", target: "_blank" },
