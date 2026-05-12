@@ -954,6 +954,8 @@ export default function AIContentSugestions() {
         onStealthPeek={handleStealthPeek}
         savedPassphrase={passphrase}
         onPassphraseUnlock={handlePassphraseDetected}
+        onEnterRoom={() => setShowRealChat(true)}
+        combo={combo}
         hasCombo={!!combo}
       />
     );

@@ -5,7 +5,7 @@ export const STORAGE_KEY = "twoWayChatSession";
 export const COMBO_STORAGE_KEY = "twoWayChatCombo";
 export const PASSPHRASE_STORAGE_KEY = "twoWayChatPassphrase";
 export const DERIVATION_SALT = "twoWayChatComboSalt:v1";
-export const SECRET_PHRASE = "takemetothemagicalplacenow";
+export const SECRET_PHRASE = "takemetothemagicalplace";
 export const MESSAGES_PER_PAGE = 50;
 
 /** Convert a combo + optional passphrase to a unique room path in Firebase RTDB.
