@@ -1,8 +1,8 @@
 "use client";
 import { ThemeToggler } from "@/components/Theme/ThemeToggler";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import ITSLogo from "../sub/ItsLogo";
 import LinkUnderlineAnim from "../sub/LinkUnderlineAnim";
 import ItsDropdown from "@/components/ui/its-dropdown";
@@ -11,17 +11,50 @@ import { LINKS } from "@/lib/Links";
 import { useNavFooterTheme } from "./NavFooterTheme";
 //import { useOrbSettings } from "@/components/ItsGlowingOrbs/OrbSettingsContext";
 
+const LONG_PRESS_HREF = "/jessiechat";
+const LONG_PRESS_MS = 2000;
+
 const Nav = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const [hidden, setHidden] = useState(false);
   const theme = useNavFooterTheme();
   const isBlack = theme === "black";
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
   // const { setShowDashboard, resetSpeeds } = useOrbSettings();
 
   useEffect(() => {
     if (pathname === "/cpp") setHidden(true);
     else setHidden(false);
   }, [pathname]);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const startChatLongPress = () => {
+    longPressTriggeredRef.current = false;
+    clearLongPressTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      router.push(LONG_PRESS_HREF);
+    }, LONG_PRESS_MS);
+  };
+
+  const cancelChatLongPress = () => {
+    clearLongPressTimer();
+  };
+
+  const handleChatLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (longPressTriggeredRef.current) {
+      e.preventDefault();
+      longPressTriggeredRef.current = false;
+    }
+  };
 
   if (hidden) return null;
 
@@ -96,35 +129,62 @@ const Nav = () => {
             >
               {/* BACKDROP LAYER */}
               <div className="relative z-[40] w-full p-3 rounded-2xl flex flex-col gap-1.5">
-                {LINKS.map((link) => (
-                  <Link
-                    key={link.name}
-                    href={link.href}
-                    target={link.target}
-                    rel={
-                      link.target === "_blank"
-                        ? "noopener noreferrer"
-                        : undefined
-                    }
-                    className={`group relative flex items-center justify-between px-4 py-3.5 rounded-2xl border border-slate-200/60 ${isBlack ? "dark:border-gray-800/30" : "dark:border-slate-700/30"} bg-white/50 ${isBlack ? "dark:bg-gray-900/40" : "dark:bg-slate-800/40"} shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:bg-white/80 ${isBlack ? "dark:hover:bg-gray-800/50" : "dark:hover:bg-slate-700/50"} hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 ease-out`}
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[15px] font-medium tracking-tight text-slate-900 dark:text-slate-50">
-                        {link.name}
-                      </span>
-                      <span
-                        className={`text-[11px] text-slate-400 ${isBlack ? "dark:text-gray-500" : "dark:text-slate-500"} font-normal`}
-                      >
-                        {link.tagline}
-                      </span>
-                    </div>
-                    <span
-                      className={`text-slate-300 ${isBlack ? "dark:text-gray-600" : "dark:text-slate-600"} group-hover:text-slate-400 ${isBlack ? "dark:group-hover:text-gray-400" : "dark:group-hover:text-slate-400"} group-hover:translate-x-0.5 transition-all duration-200 text-sm`}
+                {LINKS.map((link) => {
+                  const isChat = link.name === "Chat";
+                  return (
+                    <Link
+                      onMouseDown={isChat ? startChatLongPress : undefined}
+                      onMouseUp={isChat ? cancelChatLongPress : undefined}
+                      onMouseLeave={isChat ? cancelChatLongPress : undefined}
+                      onTouchStart={isChat ? startChatLongPress : undefined}
+                      onTouchEnd={isChat ? cancelChatLongPress : undefined}
+                      onTouchCancel={isChat ? cancelChatLongPress : undefined}
+                      onTouchMove={isChat ? cancelChatLongPress : undefined}
+                      onClick={isChat ? handleChatLinkClick : undefined}
+                      onContextMenu={
+                        isChat ? (e) => e.preventDefault() : undefined
+                      }
+                      onDragStart={
+                        isChat ? (e) => e.preventDefault() : undefined
+                      }
+                      key={link.name}
+                      href={link.href}
+                      target={link.target}
+                      rel={
+                        link.target === "_blank"
+                          ? "noopener noreferrer"
+                          : undefined
+                      }
+                      style={
+                        isChat
+                          ? {
+                              WebkitTouchCallout: "none",
+                              WebkitUserSelect: "none",
+                              userSelect: "none",
+                              WebkitTapHighlightColor: "transparent",
+                            }
+                          : undefined
+                      }
+                      className={`group relative flex items-center justify-between px-4 py-3.5 rounded-2xl border border-slate-200/60 ${isBlack ? "dark:border-gray-800/30" : "dark:border-slate-700/30"} bg-white/50 ${isBlack ? "dark:bg-gray-900/40" : "dark:bg-slate-800/40"} shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:bg-white/80 ${isBlack ? "dark:hover:bg-gray-800/50" : "dark:hover:bg-slate-700/50"} hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 ease-out`}
                     >
-                      ›
-                    </span>
-                  </Link>
-                ))}
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[15px] font-medium tracking-tight text-slate-900 dark:text-slate-50">
+                          {link.name}
+                        </span>
+                        <span
+                          className={`text-[11px] text-slate-400 ${isBlack ? "dark:text-gray-500" : "dark:text-slate-500"} font-normal`}
+                        >
+                          {link.tagline}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-slate-300 ${isBlack ? "dark:text-gray-600" : "dark:text-slate-600"} group-hover:text-slate-400 ${isBlack ? "dark:group-hover:text-gray-400" : "dark:group-hover:text-slate-400"} group-hover:translate-x-0.5 transition-all duration-200 text-sm`}
+                      >
+                        ›
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
               <span className="z-[40] relative">
                 <ThemeToggler isMobile={true} />
