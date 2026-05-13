@@ -72,10 +72,13 @@ function CheatCard({
           title={`${meta.label} — ${meta.description}`}
         />
         <div className="min-w-0">
-          <div className="font-mono text-sm font-bold tracking-wider text-white sm:text-base">
+          <div className="text-sm font-bold tracking-tight text-white sm:text-base">
+            {highlight(cheat.name, query)}
+          </div>
+          <div className="mt-0.5 font-mono text-[14px] font-semibold tracking-wider text-white/70">
             {highlight(cheat.code, query)}
           </div>
-          <div className="mt-0.5 text-xs text-white/60 sm:text-sm">
+          <div className="mt-1 text-xs text-white/50 sm:text-sm">
             {highlight(cheat.description, query)}
           </div>
         </div>
@@ -117,6 +120,7 @@ function SectionBlock({
       if (!q) return true;
       return (
         c.code.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q) ||
         c.description.toLowerCase().includes(q)
       );
     });
@@ -184,6 +188,7 @@ export default function GTASACheatsApp() {
       for (const c of s.cheats) {
         if (
           c.code.toLowerCase().includes(q) ||
+          c.name.toLowerCase().includes(q) ||
           c.description.toLowerCase().includes(q)
         ) {
           results.push({ cheat: c, section: s });
@@ -311,7 +316,7 @@ export default function GTASACheatsApp() {
                     setShowSuggestions(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
-                  placeholder="Search cheats by code or effect…"
+                  placeholder="Search by name, code, or effect…"
                   className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 pl-10 pr-10 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/30 focus:bg-white/[0.07] focus:ring-2 focus:ring-white/10"
                 />
                 {query && (
@@ -353,10 +358,13 @@ export default function GTASACheatsApp() {
                                 className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`}
                               />
                               <div className="min-w-0 flex-1">
-                                <div className="font-mono text-sm font-semibold text-white">
+                                <div className="text-sm font-semibold text-white">
+                                  {highlight(cheat.name, query)}
+                                </div>
+                                <div className="font-mono text-[11px] font-semibold tracking-wider text-white/60">
                                   {highlight(cheat.code, query)}
                                 </div>
-                                <div className="text-xs text-white/50">
+                                <div className="text-xs text-white/40">
                                   {highlight(cheat.description, query)}
                                 </div>
                               </div>
@@ -465,6 +473,7 @@ export default function GTASACheatsApp() {
                 if (!q) return true;
                 return (
                   c.code.toLowerCase().includes(q) ||
+                  c.name.toLowerCase().includes(q) ||
                   c.description.toLowerCase().includes(q)
                 );
               }).length === 0,
